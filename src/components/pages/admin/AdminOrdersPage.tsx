@@ -103,7 +103,42 @@ export default function AdminOrdersPage() {
       const res = await fetch(`/api/orders?${params.toString()}`)
       if (res.ok) {
         const data = await res.json()
-        setOrders(extractItems(data))
+        // Map API field names to the Order interface expected by this component
+        const rawOrders = extractItems<Record<string, unknown>>(data)
+        const mapped: Order[] = rawOrders.map((o) => {
+          const items = (o.items as Array<Record<string, unknown>>) || []
+          const subtotal = items.reduce((sum, it) => sum + (Number(it.price) || 0) * (Number(it.quantity) || 0), 0)
+          return {
+            id: o.id as string,
+            orderNumber: o.orderNumber as string,
+            userId: o.userId as string,
+            customerName: (o.guestName as string) || (o.user as Record<string, unknown> | undefined)?.name as string || '—',
+            customerEmail: (o.guestEmail as string) || (o.user as Record<string, unknown> | undefined)?.email as string || '',
+            customerPhone: (o.guestPhone as string) || (o.user as Record<string, unknown> | undefined)?.phone as string || '',
+            items: items.map((it) => ({
+              id: it.id as string,
+              productId: (it.productId as string) || '',
+              productName: it.productName as string,
+              quantity: it.quantity as number,
+              unit: it.unit as string,
+              price: it.price as number,
+              total: (Number(it.price) || 0) * (Number(it.quantity) || 0),
+              ...(it.image ? { image: it.image as string } : {}),
+            })),
+            subtotal,
+            deliveryCharge: Number(o.deliveryCharge) || 0,
+            discount: Number(o.discountAmount) || 0,
+            total: Number(o.totalAmount) || 0,
+            status: (o.orderStatus as string) || 'pending',
+            paymentMethod: (o.paymentMethod as string) || 'cod',
+            paymentStatus: (o.paymentStatus as string) || 'pending',
+            shippingAddress: (o.guestAddress as string) || '',
+            note: (o.orderNote as string) || '',
+            createdAt: o.createdAt as string,
+            updatedAt: o.updatedAt as string,
+          }
+        })
+        setOrders(mapped)
       }
     } catch {
       toast.error('Failed to fetch orders')
@@ -538,11 +573,11 @@ export default function AdminOrdersPage() {
                   </p>
                 </div>
                 <div className="rounded-xl border p-3 text-center">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Print</p>
-                  <Badge variant="secondary" className="text-[11px] bg-emerald-100 text-emerald-800">
-                    Ready
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Items</p>
+                  <Badge variant="secondary" className="text-[11px] bg-blue-100 text-blue-800">
+                    {selectedOrder.items?.length ?? 0}
                   </Badge>
-                  <p className="text-[10px] text-muted-foreground mt-1">5 document types</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">products</p>
                 </div>
               </div>
 
@@ -570,6 +605,7 @@ export default function AdminOrdersPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-12"></TableHead>
                       <TableHead>Product</TableHead>
                       <TableHead>Price</TableHead>
                       <TableHead>Qty</TableHead>
@@ -579,7 +615,16 @@ export default function AdminOrdersPage() {
                   <TableBody>
                     {(selectedOrder.items ?? []).map((item) => (
                       <TableRow key={item.id}>
-                        <TableCell className="text-sm">{item.productName}</TableCell>
+                        <TableCell>
+                          {item.image ? (
+                            <img src={item.image} alt={item.productName} className="h-10 w-10 rounded-lg object-cover border" />
+                          ) : (
+                            <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                              <Package className="size-4 text-muted-foreground" />
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm font-medium">{item.productName}</TableCell>
                         <TableCell className="text-sm">৳{item.price}</TableCell>
                         <TableCell className="text-sm">{item.quantity} {item.unit}</TableCell>
                         <TableCell className="text-sm font-medium">৳{item.total}</TableCell>

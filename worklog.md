@@ -717,3 +717,82 @@ Script `/tmp/seed-reviews.ts` + `/tmp/fix-reviews.ts`:
 4. **Add a search results page** with filter UI improvements (price slider, sort dropdown)
 5. **Improve admin orders page** (view order details, update status)
 6. **Add a wishlist page** test (add items, view wishlist, move to cart)
+
+---
+Task ID: CRON-R5
+Agent: main-orchestrator (webDevReview cycle 5)
+Task: QA customer flows, fix admin orders crash, add product gallery images
+
+## Current Project Status Assessment
+QA via agent-browser confirmed customer flows work:
+- ✅ Customer login (customer@test.com) works, token stored
+- ✅ Add to wishlist works, navbar badge updates (0→1 items)
+- ✅ Wishlist page shows product image, name, price, Add to Cart button
+- ✅ Homepage Recently Viewed section appears after browsing products
+- ✅ Product detail page shows reviews (rating summary + breakdown + cards)
+
+Critical bug found and fixed:
+- ❌ Admin Orders page crashed with "Application error: a client-side exception" when opening the order detail dialog
+- Root cause: API field name mismatch — API returns `totalAmount`, `orderStatus`, `guestAddress`, `orderNote`, `discountAmount` but the AdminOrdersPage expected `total`, `status`, `shippingAddress`, `note`, `discount`. The `subtotal` field didn't exist in the API at all. Calling `.toLocaleString()` on null/undefined caused the crash.
+
+## Completed Modifications
+
+### 1. Fixed admin orders crash (critical bug)
+File: `src/components/pages/admin/AdminOrdersPage.tsx`
+- Added field mapping in `fetchOrders` that transforms the raw API response to the Order interface:
+  - `totalAmount` → `total`
+  - `discountAmount` → `discount`
+  - `orderStatus` → `status`
+  - `guestName` / `user.name` → `customerName`
+  - `guestEmail` / `user.email` → `customerEmail`
+  - `guestPhone` / `user.phone` → `customerPhone`
+  - `guestAddress` → `shippingAddress`
+  - `orderNote` → `note`
+  - Calculated `subtotal` from items (price × quantity sum)
+  - Mapped order items including `productId` and `total` (price × quantity)
+- Verified: admin orders page now loads, shows 1 order row, detail dialog opens with correct data (order number, production flow progress bar, customer info, shipping address, order items)
+
+### 2. Improved admin order detail dialog
+File: `src/components/pages/admin/AdminOrdersPage.tsx`
+- Replaced "Print" status card (referenced removed print system "5 document types") with "Items" card showing the item count
+- Added product image thumbnails to the Order Items table (h-10 w-10 rounded-lg, with Package icon fallback when no image)
+
+### 3. Generated and seeded product gallery images
+- Generated 5 additional product images (different angles) using the Image Generation skill:
+  - Basmati Rice: 2 extra angles (grains in bowl, cooked biryani)
+  - Ghee: 2 extra angles (jar close-up, drizzling)
+  - Honey: 1 extra angle (dripping dipper)
+- Seeded to DB as ProductImage records (sortOrder: 1, isFeatured: false)
+- Total ProductImages: 13 (was 8)
+- Verified: Product detail page for Basmati Rice shows vertical thumbnail strip with 3 images, main image, and gallery navigation arrows
+- VLM confirms: "high and professional quality", "clean e-commerce design patterns (main image + vertical thumbnails)"
+
+### 4. Verified customer flows
+- Customer login: POST /api/auth/login → 200, token stored in localStorage
+- Wishlist: add to wishlist → navbar badge updates (0→1), wishlist page shows product with image/name/price/Add to Cart
+- Product detail reviews: rating summary (5.0 ★), rating breakdown, review cards with customer avatar/name/date/comment
+- Recently Viewed: appears on homepage after visiting a product
+
+## Verification Results
+- ✅ ESLint: 0 errors
+- ✅ TypeScript: 0 src errors
+- ✅ Admin orders page loads (was crashing before fix)
+- ✅ Order detail dialog opens with correct data (order number, status flow, items, customer info, totals)
+- ✅ Product detail gallery shows multiple images with thumbnail navigation
+- ✅ Customer login + wishlist flow works end-to-end
+- ✅ 0 HTTP 404/500 errors in dev.log
+- ✅ DB state: 8 products, 13 ProductImages, 8 reviews, 1 order
+
+## Unresolved Issues / Risks
+1. **Order items have no images**: The test order was created via API without product images in the order items. New orders placed through the checkout flow will include product images (the checkout sends the product image URL).
+2. **Dev server memory**: Can die under rapid edit cycles. Stable when left running.
+3. **Dormant Prisma models**: LoyaltyPoint, PrintQueue, etc. remain in schema (harmless).
+4. **Radix Tabs JS click**: `element.click()` doesn't trigger Radix tab switches. Native agent-browser `click @ref` works.
+
+## Priority Recommendations for Next Phase
+1. **Test the full checkout flow in the browser** (add to cart → checkout → fill delivery → select payment → place order → order confirmation)
+2. **Add order confirmation page** test (verify order details after placing)
+3. **Add customer order history** (customer can view their past orders)
+4. **Improve product detail page** — add "Frequently Bought Together" section with add-all-to-cart
+5. **Add a search results page** with filter UI (price slider, sort dropdown, category filter)
+6. **Add admin customer detail** view (view customer's orders, addresses)
