@@ -57,6 +57,7 @@ import { Progress } from '@/components/ui/progress'
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from '@/components/ui/breadcrumb'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableRow, TableCell } from '@/components/ui/table'
+import { Checkbox } from '@/components/ui/checkbox'
 import { useAppStore, type CartItem, type WishlistItem } from '@/lib/store'
 import { extractItems } from '@/lib/api'
 import ProductCard from '@/components/shared/ProductCard'
@@ -295,6 +296,7 @@ export default function ProductDetailPage() {
   const [relatedProducts, setRelatedProducts] = useState<RelatedProduct[]>([])
   const [alsoViewedProducts, setAlsoViewedProducts] = useState<RelatedProduct[]>([])
   const [frequentlyBoughtTogether, setFrequentlyBoughtTogether] = useState<RelatedProduct[]>([])
+  const [selectedBundleItems, setSelectedBundleItems] = useState<Set<string>>(new Set())
   const [recentlyViewedProducts, setRecentlyViewedProducts] = useState<RelatedProduct[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
   const [loading, setLoading] = useState(true)
@@ -381,6 +383,14 @@ export default function ProductDetailPage() {
       .catch(() => setProduct(null))
       .finally(() => setLoading(false))
   }, [productId, addRecentlyViewed])
+
+  // Reset Frequently-Bought-Together selection whenever the product changes.
+  // The current product is always pre-selected and cannot be removed.
+  useEffect(() => {
+    if (product?.id) {
+      setSelectedBundleItems(new Set([product.id]))
+    }
+  }, [product?.id])
 
   // Fetch recently viewed products
   useEffect(() => {
@@ -546,6 +556,24 @@ export default function ProductDetailPage() {
   const freeShippingProgress = Math.min(100, (cartTotal / freeShippingThreshold) * 100)
   const isFreeShipping = cartTotal >= freeShippingThreshold
 
+  // ── Frequently Bought Together selection ──
+  // Current product is always selected and cannot be toggled off.
+  const toggleBundleItem = (id: string) => {
+    if (!product || id === product.id) return
+    setSelectedBundleItems((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  const bundleTotal =
+    (selectedBundleItems.has(product.id) ? effectivePrice : 0) +
+    frequentlyBoughtTogether
+      .filter((p) => selectedBundleItems.has(p.id))
+      .reduce((sum, p) => sum + (p.discountPrice != null ? p.discountPrice : p.price ?? 0), 0)
+  const selectedBundleCount = selectedBundleItems.size
+
   // Stock level percentage (for progress bar visualization)
   const maxStockDisplay = 50
   const stockLevelPercent = inStock ? Math.min(100, (product.stock / maxStockDisplay) * 100) : 0
@@ -640,6 +668,49 @@ export default function ProductDetailPage() {
     }
     addToCompare(product.id)
     toast.success('Added to comparison')
+  }
+
+  const handleAddBundleToCart = async () => {
+    if (!product) return
+    const items: Array<Omit<CartItem, 'id'>> = []
+    if (selectedBundleItems.has(product.id)) {
+      items.push({
+        productId: product.id,
+        productName: product.name,
+        price: product.price,
+        discountPrice: product.discountPrice,
+        quantity: 1,
+        unit: product.unit,
+        image: images[0]?.url || '/placeholder.png',
+        stock: product.stock,
+      })
+    }
+    for (const p of frequentlyBoughtTogether) {
+      if (selectedBundleItems.has(p.id)) {
+        items.push({
+          productId: p.id,
+          productName: p.name,
+          price: p.price,
+          discountPrice: p.discountPrice,
+          quantity: 1,
+          unit: p.unit,
+          image: p.images?.[0]?.url || '/placeholder.png',
+          stock: p.stock,
+        })
+      }
+    }
+    if (items.length === 0) {
+      toast.error('Please select at least one item')
+      return
+    }
+    try {
+      for (const item of items) {
+        await addToCart(item)
+      }
+      toast.success(`${items.length} item${items.length === 1 ? '' : 's'} added to cart`)
+    } catch {
+      toast.error('Failed to add items to cart')
+    }
   }
 
   const handleShare = (platform: string) => {
@@ -1480,79 +1551,118 @@ export default function ProductDetailPage() {
             <section>
               <div className="flex items-center gap-2 mb-6">
                 <div className="h-8 w-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                  <Package className="h-4 w-4 text-emerald-600" />
+                  <Users className="h-4 w-4 text-emerald-600" />
                 </div>
                 <h2 className="text-xl md:text-2xl font-bold">Frequently Bought Together</h2>
               </div>
               <Card className="shadow-sm hover:shadow-md transition-shadow">
                 <CardContent className="p-5">
-                  <div className="flex items-center gap-4 overflow-x-auto pb-2 scrollbar-hide">
-                    {/* Current product */}
-                    <div className="flex-shrink-0 w-36 sm:w-40">
-                      <div className="relative aspect-square rounded-xl overflow-hidden bg-muted/30 border-2 border-emerald-500 shadow-sm">
-                        <Image src={images[0]?.url || '/placeholder.png'} alt={product.name} fill className="object-cover" sizes="160px" />
-                        <div className="absolute top-1.5 left-1.5">
-                          <Badge className="bg-emerald-600 text-primary-foreground text-[10px] h-5">This item</Badge>
-                        </div>
-                      </div>
-                      <p className="text-xs font-medium mt-2 line-clamp-1">{product.name}</p>
-                      <p className="text-sm font-bold text-emerald-600">৳{(effectivePrice ?? 0).toLocaleString()}</p>
-                    </div>
-
-                    {frequentlyBoughtTogether.map((p) => {
-                      const pPrice = p.discountPrice != null ? p.discountPrice : (p.price ?? 0)
-                      const pImage = p.images?.[0]?.url
-                      return (
-                        <div key={p.id} className="flex items-center gap-4 flex-shrink-0">
-                          <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-                            <Plus className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex flex-col lg:flex-row lg:items-stretch gap-6">
+                    {/* ── Product cards row ── */}
+                    <div className="flex items-start gap-3 overflow-x-auto pb-2 scrollbar-hide flex-1">
+                      {/* Current product — always selected, not deselectable */}
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.92 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.3, ease: 'easeOut' }}
+                        className="flex-shrink-0"
+                      >
+                        <div className="relative w-32 rounded-xl border-2 border-emerald-500 bg-emerald-50/40 dark:bg-emerald-900/10 p-2.5 shadow-sm">
+                          <div className="absolute -top-2 -left-2 z-10">
+                            <Checkbox
+                              checked
+                              disabled
+                              className="h-5 w-5 rounded-md border-emerald-500 bg-emerald-500 text-white data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                            />
                           </div>
-                          <button className="w-36 sm:w-40 group" onClick={() => navigate('product-detail', { id: p.id })}>
-                            <div className="relative aspect-square rounded-xl overflow-hidden bg-muted/30 border border-border/50 group-hover:border-emerald-500/30 group-hover:shadow-md transition-all duration-300">
-                              {pImage ? (
-                                <Image src={pImage} alt={p.name} fill className="object-cover group-hover:scale-105 transition-transform duration-300" sizes="160px" />
-                              ) : (
-                                <div className="flex items-center justify-center h-full">
-                                  <Package className="h-8 w-8 text-muted-foreground/30" />
-                                </div>
-                              )}
-                            </div>
-                            <p className="text-xs font-medium mt-2 line-clamp-1 group-hover:text-emerald-600 transition-colors">{p.name}</p>
-                            <p className="text-sm font-bold text-emerald-600">৳{(pPrice ?? 0).toLocaleString()}</p>
-                          </button>
+                          <div className="relative h-16 w-16 mx-auto rounded-lg overflow-hidden bg-muted/30">
+                            <Image
+                              src={images[0]?.url || '/placeholder.png'}
+                              alt={product.name}
+                              fill
+                              className="object-cover"
+                              sizes="64px"
+                            />
+                          </div>
+                          <p className="text-sm font-medium mt-2 line-clamp-2 leading-tight h-8">{product.name}</p>
+                          <p className="text-sm text-emerald-600 font-bold">৳{(effectivePrice ?? 0).toLocaleString()}</p>
+                          <Badge className="mt-1.5 bg-emerald-600 text-primary-foreground text-[9px] h-4 px-1">This item</Badge>
                         </div>
-                      )
-                    })}
-                  </div>
+                      </motion.div>
 
-                  {/* Total price & Add all */}
-                  <div className="mt-5 pt-5 border-t flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div className="text-center sm:text-left">
-                      <p className="text-sm text-muted-foreground">Bundle total price</p>
-                      <p className="text-2xl font-bold text-emerald-600">
-                        ৳{((effectivePrice ?? 0) + frequentlyBoughtTogether.reduce((sum, p) => {
-                          return sum + (p.discountPrice != null ? (p.discountPrice ?? 0) : (p.price ?? 0))
-                        }, 0)).toLocaleString()}
-                      </p>
+                      {/* Related products with toggles */}
+                      {frequentlyBoughtTogether.map((p, idx) => {
+                        const pPrice = p.discountPrice != null ? p.discountPrice : (p.price ?? 0)
+                        const pImage = p.images?.[0]?.url
+                        const isSelected = selectedBundleItems.has(p.id)
+                        return (
+                          <motion.div
+                            key={p.id}
+                            initial={{ opacity: 0, scale: 0.92 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ duration: 0.3, delay: 0.08 + idx * 0.08, ease: 'easeOut' }}
+                            className="flex items-start gap-3 flex-shrink-0"
+                          >
+                            <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center mt-6 flex-shrink-0">
+                              <Plus className="h-4 w-4 text-muted-foreground" />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => toggleBundleItem(p.id)}
+                              aria-pressed={isSelected}
+                              className={`w-32 text-left rounded-xl border-2 p-2.5 transition-all duration-200 ${
+                                isSelected
+                                  ? 'border-emerald-500 bg-emerald-50/40 dark:bg-emerald-900/10 shadow-sm'
+                                  : 'border-border/60 opacity-70 hover:opacity-100 hover:border-emerald-500/40'
+                              }`}
+                            >
+                              <div className="flex justify-end -mt-1 mb-1">
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={() => toggleBundleItem(p.id)}
+                                  className={`h-5 w-5 rounded-md ${
+                                    isSelected
+                                      ? 'border-emerald-500 bg-emerald-500 text-white data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600'
+                                      : 'border-muted-foreground/40'
+                                  }`}
+                                />
+                              </div>
+                              <div className="relative h-16 w-16 mx-auto rounded-lg overflow-hidden bg-muted/30">
+                                {pImage ? (
+                                  <Image src={pImage} alt={p.name} fill className="object-cover" sizes="64px" />
+                                ) : (
+                                  <div className="flex items-center justify-center h-full">
+                                    <Package className="h-6 w-6 text-muted-foreground/30" />
+                                  </div>
+                                )}
+                              </div>
+                              <p className="text-sm font-medium mt-2 line-clamp-2 leading-tight h-8">{p.name}</p>
+                              <p className="text-sm text-emerald-600 font-bold">৳{(pPrice ?? 0).toLocaleString()}</p>
+                            </button>
+                          </motion.div>
+                        )
+                      })}
                     </div>
-                    <Button
-                      className="h-11 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700"
-                      onClick={async () => {
-                        const items = [
-                          { productId: product.id, productName: product.name, price: product.price, discountPrice: product.discountPrice, unit: product.unit, image: images[0]?.url || '/placeholder.png', stock: product.stock },
-                          ...frequentlyBoughtTogether.map((p) => ({
-                            productId: p.id, productName: p.name, price: p.price, discountPrice: p.discountPrice, unit: p.unit, image: p.images?.[0]?.url || '/placeholder.png', stock: p.stock,
-                          })),
-                        ]
-                        for (const item of items) {
-                          await addToCart({ ...item, quantity: 1 })
-                        }
-                        toast.success(`${items.length} items added to cart`)
-                      }}
-                    >
-                      <ShoppingCart className="h-4 w-4 mr-2" />
-                      Add All to Cart
-                    </Button>
+
+                    {/* ── Total + Add to cart ── */}
+                    <div className="flex-shrink-0 lg:w-60 border-t lg:border-t-0 lg:border-l lg:pl-6 pt-5 lg:pt-0 flex flex-col justify-center">
+                      <div className="text-center lg:text-left">
+                        <p className="text-sm text-muted-foreground">
+                          {selectedBundleCount} item{selectedBundleCount === 1 ? '' : 's'} selected
+                        </p>
+                        <p className="text-2xl font-bold text-emerald-600 leading-tight">
+                          ৳{bundleTotal.toLocaleString()}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Bundle price for all selected</p>
+                      </div>
+                      <Button
+                        onClick={handleAddBundleToCart}
+                        className="h-12 w-full mt-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-base font-semibold"
+                      >
+                        <ShoppingCart className="h-4 w-4 mr-2" />
+                        Add Selected to Cart
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
