@@ -17,7 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAppStore, type CartItem } from '@/lib/store'
-import { extractItems } from '@/lib/api'
+import { extractItems, authFetch } from '@/lib/api'
 import { toast } from 'sonner'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -52,9 +52,10 @@ const statusConfig: Record<string, {
   gradient: string
 }> = {
   pending: { color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200', icon: Clock, label: 'Pending', dotColor: 'bg-amber-400', gradient: 'from-amber-500 to-amber-600' },
-  confirmed: { color: 'text-teal-700', bg: 'bg-teal-50', border: 'border-teal-200', icon: CheckCircle2, label: 'Confirmed', dotColor: 'bg-teal-400', gradient: 'from-teal-500 to-teal-600' },
-  processing: { color: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-200', icon: Package, label: 'Processing', dotColor: 'bg-orange-400', gradient: 'from-orange-500 to-orange-600' },
-  shipped: { color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200', icon: Truck, label: 'Shipped', dotColor: 'bg-purple-400', gradient: 'from-purple-500 to-purple-600' },
+  confirmed: { color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200', icon: CheckCircle2, label: 'Confirmed', dotColor: 'bg-blue-400', gradient: 'from-blue-500 to-blue-600' },
+  processing: { color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200', icon: Package, label: 'Processing', dotColor: 'bg-blue-400', gradient: 'from-blue-500 to-blue-600' },
+  packed: { color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200', icon: PackageCheck, label: 'Packed', dotColor: 'bg-blue-400', gradient: 'from-blue-500 to-blue-600' },
+  shipped: { color: 'text-teal-700', bg: 'bg-teal-50', border: 'border-teal-200', icon: Truck, label: 'Shipped', dotColor: 'bg-teal-400', gradient: 'from-teal-500 to-teal-600' },
   delivered: { color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200', icon: PackageCheck, label: 'Delivered', dotColor: 'bg-emerald-400', gradient: 'from-emerald-500 to-emerald-600' },
   cancelled: { color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200', icon: XCircle, label: 'Cancelled', dotColor: 'bg-red-400', gradient: 'from-red-500 to-red-600' },
   refunded: { color: 'text-gray-700', bg: 'bg-gray-50', border: 'border-gray-200', icon: RotateCcw, label: 'Refunded', dotColor: 'bg-gray-400', gradient: 'from-gray-500 to-gray-600' },
@@ -175,13 +176,64 @@ function EmptyOrdersIllustration({ isFiltered, onBrowse }: { isFiltered: boolean
         <p className="text-gray-500 mb-8 max-w-sm mx-auto text-sm leading-relaxed">
           {isFiltered
             ? 'Try adjusting your search or filter criteria to find what you\'re looking for.'
-            : 'Start shopping to see your orders here! Browse our fresh products and place your first order.'}
+            : 'You haven\'t placed any orders yet. Start shopping to see your orders here!'}
         </p>
         <Button onClick={onBrowse} className="rounded-full px-8 bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-200 font-semibold">
           <ShoppingBag className="h-4 w-4 mr-2" />
-          Browse Products
+          Start Shopping
         </Button>
       </motion.div>
+    </div>
+  )
+}
+
+// ─── Login Prompt (shown when user is not authenticated) ──────────────────────
+
+function LoginPrompt({ onLogin }: { onLogin: () => void }) {
+  return (
+    <div className="min-h-[70vh] flex items-center justify-center px-4 py-16 bg-gradient-to-b from-gray-50 to-white">
+      <div className="text-center max-w-md">
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+        >
+          <div className="relative mx-auto mb-8">
+            <div className="h-40 w-40 rounded-full bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center mx-auto shadow-inner">
+              <div className="h-28 w-28 rounded-full bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center">
+                <Package className="h-12 w-12 text-emerald-400" />
+              </div>
+            </div>
+            <motion.div
+              animate={{ y: [-5, 5, -5] }}
+              transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+              className="absolute top-2 right-2 h-4 w-4 rounded-full bg-amber-300 opacity-60"
+            />
+            <motion.div
+              animate={{ y: [5, -5, 5] }}
+              transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
+              className="absolute bottom-4 left-4 h-3 w-3 rounded-full bg-emerald-400 opacity-60"
+            />
+          </div>
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <h2 className="text-2xl font-bold text-gray-800 mb-3">Please Log In</h2>
+          <p className="text-gray-500 mb-8 text-sm leading-relaxed">
+            You need to be logged in to view your order history. Please sign in to see your past orders, track shipments, and reorder your favorite products.
+          </p>
+          <Button
+            onClick={onLogin}
+            className="rounded-full px-8 bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-200 font-semibold"
+          >
+            <Package className="h-4 w-4 mr-2" />
+            Login to View Orders
+          </Button>
+        </motion.div>
+      </div>
     </div>
   )
 }
@@ -189,30 +241,38 @@ function EmptyOrdersIllustration({ isFiltered, onBrowse }: { isFiltered: boolean
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function OrdersPage() {
-  const { navigate, isAuthenticated, user, addToCart } = useAppStore()
+  const { navigate, isAuthenticated, addToCart } = useAppStore()
   const [orders, setOrders] = useState<Order[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(isAuthenticated)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
-  const ordersPerPage = 5
+  const ordersPerPage = 8
 
   useEffect(() => {
+    // If not authenticated, skip fetching — the LoginPrompt is shown instead.
     if (!isAuthenticated) {
-      navigate('login')
       return
     }
-    if (user?.id) {
-      fetch(`/api/orders?userId=${user.id}`)
-        .then((r) => r.json())
-        .then((data) => {
-          const ords = extractItems<Order>(data)
-          setOrders(ords)
-        })
-        .catch(() => {})
-        .finally(() => setLoading(false))
-    }
-  }, [isAuthenticated, user?.id, navigate])
+    // The /api/orders endpoint filters by the JWT token automatically for
+    // customers (and returns all orders for admins), so no userId query param
+    // is needed. We use authFetch to attach the Authorization header.
+    authFetch(`/api/orders`)
+      .then((r) => r.json())
+      .then((data) => {
+        const ords = extractItems<Order>(data)
+        setOrders(ords)
+      })
+      .catch(() => {
+        setOrders([])
+      })
+      .finally(() => setLoading(false))
+  }, [isAuthenticated])
+
+  // Show the login prompt UI when the user is not authenticated (do NOT
+  // auto-redirect — let the user choose to log in).
+  // NOTE: All hooks below must run before this early return to satisfy the
+  // React Rules of Hooks (hooks must be called in the same order every render).
 
   const filteredOrders = useMemo(() => {
     let filtered = orders
@@ -240,9 +300,8 @@ export default function OrdersPage() {
     currentPage * ordersPerPage
   )
 
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [activeTab, searchQuery])
+  // Note: pagination resets are handled by the tab/search onChange handlers
+  // which call setCurrentPage(1) directly (event handlers, not effects).
 
   const handleReorder = async (order: Order) => {
     if (!order.items?.length) return
@@ -281,7 +340,11 @@ export default function OrdersPage() {
     return counts
   }, [orders])
 
-  if (!isAuthenticated) return null
+  // Show the login prompt UI when the user is not authenticated (do NOT
+  // auto-redirect — let the user choose to log in).
+  if (!isAuthenticated) {
+    return <LoginPrompt onLogin={() => navigate('login')} />
+  }
 
   const tabs = [
     { value: 'all', label: 'All' },
@@ -403,17 +466,17 @@ export default function OrdersPage() {
               size="icon"
               className="h-11 w-11 bg-white border-gray-200 shadow-sm rounded-xl"
               onClick={() => {
-                if (user?.id) {
-                  setLoading(true)
-                  fetch(`/api/orders?userId=${user.id}`)
-                    .then((r) => r.json())
-                    .then((data) => {
-                      const ords = extractItems<Order>(data)
-                      setOrders(ords)
-                    })
-                    .catch(() => {})
-                    .finally(() => setLoading(false))
-                }
+                setLoading(true)
+                authFetch(`/api/orders`)
+                  .then((r) => r.json())
+                  .then((data) => {
+                    const ords = extractItems<Order>(data)
+                    setOrders(ords)
+                  })
+                  .catch(() => {
+                    setOrders([])
+                  })
+                  .finally(() => setLoading(false))
               }}
             >
               <RefreshCw className="h-4 w-4" />
@@ -468,160 +531,177 @@ export default function OrdersPage() {
                 <span className="font-semibold text-gray-800">{filteredOrders.length}</span> orders
               </p>
             </div>
-            <AnimatePresence mode="popLayout">
-              {paginatedOrders.map((order, idx) => {
-                const config = statusConfig[order.orderStatus] || statusConfig.pending
-                const StatusIcon = config.icon
-                const estDelivery = getEstimatedDelivery(order.createdAt, order.orderStatus)
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <AnimatePresence mode="popLayout">
+                {paginatedOrders.map((order, idx) => {
+                  const config = statusConfig[order.orderStatus] || statusConfig.pending
+                  const StatusIcon = config.icon
+                  const estDelivery = getEstimatedDelivery(order.createdAt, order.orderStatus)
+                  const itemCount = order.items?.length || 0
+                  const safeOrderNumber = order.orderNumber || '—'
+                  const safePaymentStatus = order.paymentStatus
+                    ? order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)
+                    : '—'
 
-                return (
-                  <motion.div
-                    key={order.id}
-                    layout
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ delay: idx * 0.05, duration: 0.3 }}
-                  >
-                    <Card
-                      className="hover:shadow-xl transition-all duration-300 border-0 shadow-md overflow-hidden bg-white cursor-pointer group"
-                      onClick={() => navigate('order-detail', { id: order.id })}
+                  return (
+                    <motion.div
+                      key={order.id}
+                      layout
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ delay: idx * 0.05, duration: 0.3 }}
                     >
-                      <CardContent className="p-0">
-                        {/* Order header with status */}
-                        <div className={`px-5 py-3.5 border-b ${config.bg} ${config.border} flex items-center justify-between`}>
-                          <div className="flex items-center gap-3">
-                            <div className={`h-10 w-10 rounded-xl bg-gradient-to-br ${config.gradient} flex items-center justify-center shadow-sm`}>
-                              <StatusIcon className="h-5 w-5 text-white" />
-                            </div>
-                            <div>
-                              <span className={`text-sm font-bold ${config.color}`}>
-                                {config.label}
-                              </span>
-                              <div className="flex items-center gap-2 text-[11px] text-gray-500 mt-0.5">
-                                <span className="font-mono font-semibold">#{order.orderNumber}</span>
+                      <Card
+                        className="hover:shadow-xl transition-all duration-300 border-0 shadow-md overflow-hidden bg-white cursor-pointer group h-full flex flex-col"
+                        onClick={() => navigate('order-detail', { id: order.id })}
+                      >
+                        <CardContent className="p-0 flex flex-col h-full">
+                          {/* Order header with status */}
+                          <div className={`px-5 py-3.5 border-b ${config.bg} ${config.border} flex items-center justify-between`}>
+                            <div className="flex items-center gap-3">
+                              <div className={`h-10 w-10 rounded-xl bg-gradient-to-br ${config.gradient} flex items-center justify-center shadow-sm flex-shrink-0`}>
+                                <StatusIcon className="h-5 w-5 text-white" />
+                              </div>
+                              <div className="min-w-0">
+                                <Badge className={`text-[10px] border-0 font-semibold ${config.color} ${config.bg}`}>
+                                  {config.label}
+                                </Badge>
+                                <div className="flex items-center gap-2 text-[11px] text-gray-500 mt-0.5">
+                                  <span className="font-mono font-semibold truncate">#{safeOrderNumber}</span>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span className="flex items-center gap-1.5 text-xs text-gray-500 font-medium">
-                              <CalendarDays className="h-3 w-3" />
-                              {new Date(order.createdAt).toLocaleDateString('en-BD', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric',
-                              })}
-                            </span>
-                            <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all" />
-                          </div>
-                        </div>
-
-                        <div className="p-5">
-                          {/* Timeline */}
-                          <OrderTimeline status={order.orderStatus} />
-
-                          {/* Items preview */}
-                          <div className="flex items-center gap-4 mt-4 mb-3">
-                            <div className="flex -space-x-2.5">
-                              {order.items?.slice(0, 4).map((item, itemIdx) => (
-                                <div
-                                  key={itemIdx}
-                                  className="h-12 w-12 rounded-xl bg-gray-100 border-2 border-white overflow-hidden shadow-sm"
-                                >
-                                  {item.image ? (
-                                    <Image src={item.image} alt={item.productName} className="h-full w-full object-cover" width={48} height={48} />
-                                  ) : (
-                                    <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
-                                      <Package className="h-5 w-5 text-gray-300" />
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                              {(order.items?.length || 0) > 4 && (
-                                <div className="h-12 w-12 rounded-xl bg-emerald-50 border-2 border-white flex items-center justify-center shadow-sm">
-                                  <span className="text-[10px] font-bold text-emerald-600">
-                                    +{(order.items?.length || 0) - 4}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-gray-900 truncate">
-                                {order.items?.map((i) => i.productName).join(', ') || 'No items'}
-                              </p>
-                              <p className="text-xs text-gray-500 mt-0.5">
-                                {order.items?.length || 0} item{(order.items?.length || 0) !== 1 ? 's' : ''}
-                              </p>
+                            <div className="flex items-center gap-3 flex-shrink-0">
+                              <span className="flex items-center gap-1.5 text-xs text-gray-500 font-medium">
+                                <CalendarDays className="h-3 w-3" />
+                                {order.createdAt
+                                  ? new Date(order.createdAt).toLocaleDateString('en-BD', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      year: 'numeric',
+                                    })
+                                  : '—'}
+                              </span>
+                              <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all" />
                             </div>
                           </div>
 
-                          {/* Estimated delivery */}
-                          {estDelivery && (
-                            <div className="flex items-center gap-2 text-xs text-gray-500 mb-3 bg-emerald-50/50 rounded-lg px-3 py-2 w-fit">
-                              <Truck className="h-3.5 w-3.5 text-emerald-500" />
-                              <span>Est. delivery: <span className="font-semibold text-gray-700">{estDelivery}</span></span>
-                            </div>
-                          )}
+                          <div className="p-5 flex flex-col flex-1">
+                            {/* Timeline */}
+                            <OrderTimeline status={order.orderStatus} />
 
-                          {/* Bottom row */}
-                          <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-[10px] border-gray-200 text-gray-500 font-medium">
-                                {order.paymentMethod === 'cod' ? (
-                                  <><Banknote className="h-2.5 w-2.5 mr-1" /> COD</>
-                                ) : (
-                                  <><Wallet className="h-2.5 w-2.5 mr-1" /> Online</>
+                            {/* Items preview */}
+                            <div className="flex items-center gap-4 mt-4 mb-3">
+                              <div className="flex -space-x-2.5 flex-shrink-0">
+                                {order.items?.slice(0, 4).map((item, itemIdx) => (
+                                  <div
+                                    key={itemIdx}
+                                    className="h-12 w-12 rounded-xl bg-gray-100 border-2 border-white overflow-hidden shadow-sm"
+                                  >
+                                    {item.image ? (
+                                      <Image src={item.image} alt={item.productName} className="h-full w-full object-cover" width={48} height={48} />
+                                    ) : (
+                                      <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+                                        <Package className="h-5 w-5 text-gray-300" />
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                                {itemCount > 4 && (
+                                  <div className="h-12 w-12 rounded-xl bg-emerald-50 border-2 border-white flex items-center justify-center shadow-sm">
+                                    <span className="text-[10px] font-bold text-emerald-600">
+                                      +{itemCount - 4}
+                                    </span>
+                                  </div>
                                 )}
-                              </Badge>
-                              <Badge
-                                className={`text-[10px] border-0 font-semibold ${
-                                  order.paymentStatus === 'paid'
-                                    ? 'bg-emerald-100 text-emerald-700'
-                                    : order.paymentStatus === 'pending'
-                                    ? 'bg-amber-100 text-amber-700'
-                                    : 'bg-gray-100 text-gray-600'
-                                }`}
-                              >
-                                {order.paymentStatus}
-                              </Badge>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-gray-900 truncate">
+                                  {order.items?.map((i) => i.productName).join(', ') || 'No items'}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                  {itemCount} item{itemCount !== 1 ? 's' : ''}
+                                </p>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                              <span className="font-extrabold text-emerald-700 text-lg">
+
+                            {/* Estimated delivery */}
+                            {estDelivery && (
+                              <div className="flex items-center gap-2 text-xs text-gray-500 mb-3 bg-emerald-50/50 rounded-lg px-3 py-2 w-fit">
+                                <Truck className="h-3.5 w-3.5 text-emerald-500" />
+                                <span>Est. delivery: <span className="font-semibold text-gray-700">{estDelivery}</span></span>
+                              </div>
+                            )}
+
+                            {/* Bottom row */}
+                            <div className="flex items-center justify-between pt-4 border-t border-gray-100 mt-auto gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Badge variant="outline" className="text-[10px] border-gray-200 text-gray-500 font-medium">
+                                  {order.paymentMethod === 'cod' ? (
+                                    <><Banknote className="h-2.5 w-2.5 mr-1" /> COD</>
+                                  ) : (
+                                    <><Wallet className="h-2.5 w-2.5 mr-1" /> Online</>
+                                  )}
+                                </Badge>
+                                <Badge
+                                  className={`text-[10px] border-0 font-semibold ${
+                                    order.paymentStatus === 'paid'
+                                      ? 'bg-emerald-100 text-emerald-700'
+                                      : order.paymentStatus === 'pending'
+                                      ? 'bg-amber-100 text-amber-700'
+                                      : 'bg-gray-100 text-gray-600'
+                                  }`}
+                                >
+                                  {safePaymentStatus}
+                                </Badge>
+                              </div>
+                              <span className="font-extrabold text-emerald-700 text-xl whitespace-nowrap">
                                 ৳{(order.totalAmount ?? 0).toLocaleString()}
                               </span>
-                              <div className="flex items-center gap-1.5">
-                                {(order.orderStatus === 'shipped' || order.orderStatus === 'processing') && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 text-xs rounded-lg border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-semibold"
-                                    onClick={(e) => { e.stopPropagation(); handleTrack(order.id) }}
-                                  >
-                                    <Eye className="h-3 w-3 mr-1" />
-                                    Track
-                                  </Button>
-                                )}
-                                {order.orderStatus === 'delivered' && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 text-xs rounded-lg border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-semibold"
-                                    onClick={(e) => { e.stopPropagation(); handleReorder(order) }}
-                                  >
-                                    <RotateCcw className="h-3 w-3 mr-1" />
-                                    Reorder
-                                  </Button>
-                                )}
-                              </div>
+                            </div>
+
+                            {/* Action row: View Details + secondary actions */}
+                            <div className="flex items-center gap-2 mt-3 flex-wrap">
+                              <Button
+                                size="sm"
+                                className="h-9 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold flex-1 min-w-[120px]"
+                                onClick={(e) => { e.stopPropagation(); navigate('order-detail', { id: order.id }) }}
+                              >
+                                <Eye className="h-3.5 w-3.5 mr-1.5" />
+                                View Details
+                              </Button>
+                              {(order.orderStatus === 'shipped' || order.orderStatus === 'processing') && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-9 text-xs rounded-lg border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-semibold"
+                                  onClick={(e) => { e.stopPropagation(); handleTrack(order.id) }}
+                                >
+                                  <Truck className="h-3.5 w-3.5 mr-1" />
+                                  Track
+                                </Button>
+                              )}
+                              {order.orderStatus === 'delivered' && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-9 text-xs rounded-lg border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-semibold"
+                                  onClick={(e) => { e.stopPropagation(); handleReorder(order) }}
+                                >
+                                  <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                                  Reorder
+                                </Button>
+                              )}
                             </div>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                )
-              })}
-            </AnimatePresence>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  )
+                })}
+              </AnimatePresence>
+            </div>
 
             {/* ─── Pagination ──────────────────────────────────────────────── */}
             {renderPagination()}

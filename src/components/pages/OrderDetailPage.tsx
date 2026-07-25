@@ -47,6 +47,7 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { useAppStore, type CartItem } from '@/lib/store'
+import { authFetch } from '@/lib/api'
 import { toast } from 'sonner'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -138,12 +139,41 @@ function getStepIndex(status: string): number {
 }
 
 function formatPaymentMethod(method: string): string {
+  if (!method) return '—'
   const map: Record<string, string> = {
     cod: 'Cash on Delivery',
     online: 'SSLCommerz Payment Gateway',
     card: 'Card Payment',
   }
   return map[method] || method.charAt(0).toUpperCase() + method.slice(1)
+}
+
+// ─── Null-safety helpers ──────────────────────────────────────────────────────
+// These mirror the fixes applied to the admin orders page: the API may return
+// null/undefined for numeric fields (subtotal, discountAmount, deliveryCharge,
+// totalAmount, item.price, item.quantity), and calling .toLocaleString() on
+// null/undefined throws "Cannot read properties of null". The helpers below
+// coerce to safe numbers/strings so the page never crashes on missing data.
+
+function safeNum(value: unknown): number {
+  const n = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(n) ? n : 0
+}
+
+function safeStr(value: unknown, fallback = '—'): string {
+  if (value === null || value === undefined) return fallback
+  const s = String(value)
+  return s.length > 0 ? s : fallback
+}
+
+function titleCase(value: unknown, fallback = '—'): string {
+  const s = safeStr(value, '')
+  if (!s) return fallback
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+function formatBDT(value: unknown): string {
+  return `৳${safeNum(value).toLocaleString()}`
 }
 
 // ─── Vertical Timeline ────────────────────────────────────────────────────────
@@ -218,7 +248,9 @@ function VerticalTimeline({ currentStatus, createdAt }: { currentStatus: string;
               {idx === 0 && (
                 <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
                   <Clock className="h-3 w-3" />
-                  {new Date(createdAt).toLocaleDateString('en-BD', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  {createdAt
+                    ? new Date(createdAt).toLocaleDateString('en-BD', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                    : '—'}
                 </p>
               )}
             </div>
@@ -243,7 +275,7 @@ export default function OrderDetailPage() {
 
   const fetchOrder = useCallback(async (id: string) => {
     try {
-      const r = await fetch(`/api/orders/${id}`)
+      const r = await authFetch(`/api/orders/${id}`)
       if (!r.ok) throw new Error('Order not found')
       const data = await r.json()
       setOrder(data.data || data)
@@ -265,7 +297,7 @@ export default function OrderDetailPage() {
     if (!order) return
     setCancelling(true)
     try {
-      const res = await fetch(`/api/orders/${order.id}/cancel`, {
+      const res = await authFetch(`/api/orders/${order.id}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason: cancelReason }),
@@ -362,9 +394,22 @@ export default function OrderDetailPage() {
   const isCancelled = order.orderStatus === 'cancelled'
   const isDelivered = order.orderStatus === 'delivered'
   const canCancel = ['pending', 'confirmed'].includes(order.orderStatus)
-  const subtotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  // Guard against items being null/undefined (the API can return an empty or
+  // missing items array); without this, .reduce() would throw on null.
+  const orderItems = Array.isArray(order.items) ? order.items : []
+  const subtotal = orderItems.reduce(
+    (sum, item) => sum + safeNum(item.price) * safeNum(item.quantity),
+    0
+  )
   const estimatedDelivery = order.tracking?.estimatedDelivery
   const headerGradient = statusHeaderColors[order.orderStatus] || 'from-emerald-600 to-teal-600'
+  const safeOrderNumber = safeStr(order.orderNumber)
+  const safeOrderStatus = titleCase(order.orderStatus)
+  const safePaymentStatus = titleCase(order.paymentStatus)
+  const safePaymentMethod = formatPaymentMethod(order.paymentMethod)
+  const createdDateLabel = order.createdAt
+    ? new Date(order.createdAt).toLocaleDateString('en-BD', { year: 'numeric', month: 'long', day: 'numeric' })
+    : '—'
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
@@ -377,16 +422,16 @@ export default function OrderDetailPage() {
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <div>
-                <h1 className="text-lg font-bold text-gray-900">Order #{order.orderNumber}</h1>
+                <h1 className="text-lg font-bold text-gray-900">Order #{safeOrderNumber}</h1>
                 <p className="text-xs text-gray-500 flex items-center gap-1">
                   <Calendar className="h-3 w-3" />
-                  Placed on {new Date(order.createdAt).toLocaleDateString('en-BD', { year: 'numeric', month: 'long', day: 'numeric' })}
+                  Placed on {createdDateLabel}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <Badge className={`text-sm px-4 py-1.5 border-0 font-bold ${statusBadgeColors[order.orderStatus] || 'bg-gray-100 text-gray-800'}`}>
-                {order.orderStatus.charAt(0).toUpperCase() + order.orderStatus.slice(1)}
+                {safeOrderStatus}
               </Badge>
             </div>
           </div>
@@ -414,7 +459,7 @@ export default function OrderDetailPage() {
               <VerticalTimeline currentStatus={order.orderStatus} createdAt={order.createdAt} />
 
               {/* Estimated Delivery */}
-              {estimatedDelivery && !isCancelled && !isDelivered && (
+              {estimatedDelivery && estimatedDelivery.min && estimatedDelivery.max && !isCancelled && !isDelivered && (
                 <div className="mt-6 pt-5 border-t flex items-center gap-3 text-sm text-gray-600 bg-emerald-50/50 rounded-xl p-4">
                   <div className="h-10 w-10 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
                     <Calendar className="h-5 w-5 text-emerald-600" />
@@ -427,7 +472,7 @@ export default function OrderDetailPage() {
                   </div>
                 </div>
               )}
-              {!estimatedDelivery && !isCancelled && !isDelivered && (
+              {(!estimatedDelivery || !estimatedDelivery.min || !estimatedDelivery.max) && !isCancelled && !isDelivered && (
                 <div className="mt-6 pt-5 border-t flex items-center gap-3 text-sm text-gray-600 bg-emerald-50/50 rounded-xl p-4">
                   <div className="h-10 w-10 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
                     <Calendar className="h-5 w-5 text-emerald-600" />
@@ -454,37 +499,41 @@ export default function OrderDetailPage() {
                 <div className="h-8 w-8 rounded-lg bg-white/20 flex items-center justify-center">
                   <Package className="h-4 w-4 text-white" />
                 </div>
-                Order Items ({order.items.length})
+                Order Items ({orderItems.length})
               </h3>
             </div>
             <CardContent className="p-6">
               <div className="space-y-3">
-                {order.items.map((item, idx) => (
-                  <motion.div
-                    key={item.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.2 + idx * 0.05 }}
-                    className="flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="relative h-18 w-18 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0 border" style={{ height: '72px', width: '72px' }}>
-                      {item.image ? (
-                        <Image src={item.image} alt={item.productName} fill className="object-cover" sizes="72px" />
-                      ) : (
-                        <div className="flex items-center justify-center h-full bg-gradient-to-br from-gray-50 to-gray-100">
-                          <Package className="h-6 w-6 text-gray-300" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm text-gray-900 truncate">{item.productName}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{item.quantity} × ৳{item.price.toLocaleString()} per {item.unit}</p>
-                    </div>
-                    <span className="font-bold text-sm text-gray-900 whitespace-nowrap">
-                      ৳{(item.price * item.quantity).toLocaleString()}
-                    </span>
-                  </motion.div>
-                ))}
+                {orderItems.length === 0 ? (
+                  <p className="text-sm text-gray-400 italic text-center py-6">No items in this order.</p>
+                ) : (
+                  orderItems.map((item, idx) => (
+                    <motion.div
+                      key={item.id || idx}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.2 + idx * 0.05 }}
+                      className="flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="relative h-18 w-18 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0 border" style={{ height: '72px', width: '72px' }}>
+                        {item.image ? (
+                          <Image src={item.image} alt={safeStr(item.productName, 'Product')} fill className="object-cover" sizes="72px" />
+                        ) : (
+                          <div className="flex items-center justify-center h-full bg-gradient-to-br from-gray-50 to-gray-100">
+                            <Package className="h-6 w-6 text-gray-300" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm text-gray-900 truncate">{safeStr(item.productName, 'Product')}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{safeNum(item.quantity)} × ৳{safeNum(item.price).toLocaleString()} per {safeStr(item.unit, 'unit')}</p>
+                      </div>
+                      <span className="font-bold text-sm text-gray-900 whitespace-nowrap">
+                        ৳{(safeNum(item.price) * safeNum(item.quantity)).toLocaleString()}
+                      </span>
+                    </motion.div>
+                  ))
+                )}
               </div>
 
               <Separator className="my-5" />
@@ -494,22 +543,22 @@ export default function OrderDetailPage() {
                   <span className="text-gray-500">Subtotal</span>
                   <span className="font-medium text-gray-900">৳{subtotal.toLocaleString()}</span>
                 </div>
-                {order.discountAmount > 0 && (
+                {safeNum(order.discountAmount) > 0 && (
                   <div className="flex justify-between">
                     <span className="text-gray-500">Discount {order.couponCode ? `(${order.couponCode})` : ''}</span>
-                    <span className="text-emerald-600 font-bold">-৳{order.discountAmount.toLocaleString()}</span>
+                    <span className="text-emerald-600 font-bold">-{formatBDT(order.discountAmount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
                   <span className="text-gray-500">Delivery Charge</span>
-                  <span className={order.deliveryCharge === 0 ? 'text-emerald-600 font-bold' : 'text-gray-900 font-medium'}>
-                    {order.deliveryCharge === 0 ? 'FREE' : `৳${order.deliveryCharge.toLocaleString()}`}
+                  <span className={safeNum(order.deliveryCharge) === 0 ? 'text-emerald-600 font-bold' : 'text-gray-900 font-medium'}>
+                    {safeNum(order.deliveryCharge) === 0 ? 'FREE' : formatBDT(order.deliveryCharge)}
                   </span>
                 </div>
                 <Separator />
                 <div className="flex justify-between font-bold text-lg pt-1">
                   <span className="text-gray-900">Total</span>
-                  <span className="text-emerald-700">৳{order.totalAmount.toLocaleString()}</span>
+                  <span className="text-emerald-700">{formatBDT(order.totalAmount)}</span>
                 </div>
               </div>
             </CardContent>
@@ -535,7 +584,7 @@ export default function OrderDetailPage() {
                 {order.guestName && (
                   <div className="flex items-start gap-3">
                     <div className="h-7 w-7 rounded-md bg-blue-50 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-xs font-bold text-blue-600">{order.guestName.charAt(0)}</span>
+                      <span className="text-xs font-bold text-blue-600">{safeStr(order.guestName, 'U').charAt(0).toUpperCase()}</span>
                     </div>
                     <div>
                       <p className="font-semibold text-gray-900">{order.guestName}</p>
@@ -595,7 +644,7 @@ export default function OrderDetailPage() {
                     ) : (
                       <Wallet className="h-4 w-4 text-teal-500" />
                     )}
-                    <span className="font-semibold text-gray-900">{formatPaymentMethod(order.paymentMethod)}</span>
+                    <span className="font-semibold text-gray-900">{safePaymentMethod}</span>
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
@@ -609,7 +658,7 @@ export default function OrderDetailPage() {
                         : 'bg-gray-100 text-gray-600'
                     }`}
                   >
-                    {order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)}
+                    {safePaymentStatus}
                   </Badge>
                 </div>
                 {order.payment?.transactionId && (
@@ -666,7 +715,7 @@ export default function OrderDetailPage() {
                           <div className="h-8 w-8 rounded-lg bg-red-100 flex items-center justify-center">
                             <AlertCircle className="h-4 w-4 text-red-500" />
                           </div>
-                          Cancel Order #{order.orderNumber}?
+                          Cancel Order #{safeOrderNumber}?
                         </AlertDialogTitle>
                         <AlertDialogDescription className="text-gray-600 mt-2">
                           This action cannot be undone. Your order will be cancelled and any payment will be refunded according to our policy.

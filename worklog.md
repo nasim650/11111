@@ -796,3 +796,116 @@ File: `src/components/pages/admin/AdminOrdersPage.tsx`
 4. **Improve product detail page** — add "Frequently Bought Together" section with add-all-to-cart
 5. **Add a search results page** with filter UI (price slider, sort dropdown, category filter)
 6. **Add admin customer detail** view (view customer's orders, addresses)
+
+---
+Task ID: 11
+Agent: general-purpose
+Task: Add customer order history page + navbar link + null-safety fixes
+
+Work Log:
+- **OrdersPage (Task A)** in `src/components/pages/OrdersPage.tsx`:
+  - Switched from plain `fetch('/api/orders?userId=...')` to `authFetch('/api/orders')` (from `@/lib/api`). The backend `/api/orders` route already filters by the customer's userId from the JWT in the Authorization header (see `src/app/api/orders/route.ts` — `getUserIdFromRequest`), so the explicit `?userId=` query param is no longer needed and was actually bypassing nothing (it was being ignored by the API anyway). The refresh button was updated to use `authFetch` too.
+  - Added a `LoginPrompt` component (emerald/amber themed, mirrors the empty-state illustration style) shown when the user is not authenticated, with a "Login to View Orders" button that calls `navigate('login')`. Previously the page immediately auto-redirected to login on mount (`useEffect → navigate('login')`), which was jarring; now the user sees a friendly prompt and chooses to log in.
+  - Removed the `if (!isAuthenticated) return null` guard further down (no longer reachable since the login prompt returns early).
+  - Updated `statusConfig` colors to match the spec: `pending` = amber (unchanged), `confirmed`/`processing`/`packed` = blue (was teal/orange), `shipped` = teal (was purple), `delivered` = emerald (unchanged), `cancelled` = red (unchanged). Also added a new `packed` status entry that was missing entirely.
+  - Wrapped the order card list in a responsive grid: `grid grid-cols-1 md:grid-cols-2 gap-4` (1 column on mobile, 2 columns on tablet/desktop). Previously the list was a single-column `space-y-4`.
+  - Added a prominent, always-visible emerald "View Details" button (`Eye` icon, navigates to `order-detail` page with the order ID) to every order card. The conditional "Track" (shipped/processing) and "Reorder" (delivered) buttons remain as secondary outline buttons next to it. The whole card body uses `flex flex-col h-full` so cards in the same row have equal height with the action row pinned to the bottom (`mt-auto`).
+  - Made the order header more robust: `orderNumber` falls back to `—`, `createdAt` falls back to `—` (previously `new Date(null)` would render "Jan 1, 1970"), and the status label is now rendered as a proper shadcn `Badge` (was plain text).
+  - `paymentStatus` is now title-cased and falls back to `—` (previously rendered the raw string or "undefined").
+  - Increased `ordersPerPage` from 5 to 8 to better fill the 2-column grid (4 rows × 2 cols).
+  - Updated the empty-state CTA copy from "Browse Products" to "Start Shopping" per spec, and tightened the empty-state description.
+  - Removed the now-unused `user` destructure from `useAppStore()`.
+
+- **OrderDetailPage (Task B)** in `src/components/pages/OrderDetailPage.tsx`:
+  - Imported `authFetch` from `@/lib/api` and switched the `GET /api/orders/[id]` fetch (and the `POST /api/orders/[id]/cancel` fetch) to use it. The cancel business logic (reason select, toast, refetch) is unchanged — only the fetch wrapper was swapped to attach the JWT, since the cancel endpoint is an authenticated operation.
+  - Added 4 null-safety helper functions: `safeNum(value)` (coerces to finite number, else 0), `safeStr(value, fallback='—')` (returns fallback for null/undefined/empty), `titleCase(value, fallback='—')` (safe `charAt(0).toUpperCase() + slice(1)`), and `formatBDT(value)` (returns `৳<safeNum>.toLocaleString()`). These mirror the admin-orders null-safety fix referenced in the task.
+  - Hardened the `subtotal` calculation: was `order.items.reduce(...)` which would throw `Cannot read properties of null (reading 'reduce')` if `order.items` was null/undefined. Now uses `const orderItems = Array.isArray(order.items) ? order.items : []` and `safeNum(item.price) * safeNum(item.quantity)` inside the reduce.
+  - Replaced all raw `.toLocaleString()` calls on API-returned numbers with `safeNum(...)` / `formatBDT(...)`:
+    - `item.price.toLocaleString()` → `safeNum(item.price).toLocaleString()`
+    - `(item.price * item.quantity).toLocaleString()` → `(safeNum(item.price) * safeNum(item.quantity)).toLocaleString()`
+    - `order.discountAmount.toLocaleString()` → `formatBDT(order.discountAmount)`
+    - `order.deliveryCharge.toLocaleString()` → `formatBDT(order.deliveryCharge)`
+    - `order.totalAmount.toLocaleString()` → `formatBDT(order.totalAmount)`
+    - `subtotal.toLocaleString()` is now safe because `subtotal` is always a finite number (reduce starts at 0 and adds safeNum products).
+  - Hardened string fields: `order.orderStatus.charAt(0).toUpperCase() + order.orderStatus.slice(1)` (would throw if `orderStatus` was null/empty) → `safeOrderStatus = titleCase(order.orderStatus)`. Same fix applied to `order.paymentStatus` → `safePaymentStatus`. `order.orderNumber` → `safeOrderNumber` (fallback `—`), used in both the header `<h1>` and the cancel AlertDialog title. `formatPaymentMethod(order.paymentMethod)` now returns `—` for null/empty input (added early return). `item.productName` → `safeStr(item.productName, 'Product')`. `item.unit` → `safeStr(item.unit, 'unit')`. `order.guestName.charAt(0)` → `safeStr(order.guestName, 'U').charAt(0).toUpperCase()` (would throw on empty string).
+  - Hardened date rendering: `new Date(order.createdAt).toLocaleDateString(...)` in the header → `createdDateLabel` which falls back to `—`. Same pattern applied to the `VerticalTimeline` first-step timestamp. The `estimatedDelivery` block now also checks `estimatedDelivery.min && estimatedDelivery.max` before calling `new Date(...)` on them (previously `new Date(null)` would render "1/1/1970").
+  - Added an empty-items fallback: when `orderItems.length === 0`, the items card renders "No items in this order." instead of an empty list.
+  - Business logic (cancel flow, reorder, action buttons, timeline steps, status badges) is unchanged — only null/undefined crashes were fixed, per the task constraint.
+
+- **Navbar (Task C)** in `src/components/layout/Navbar.tsx`:
+  - Verified that the "My Orders" menu item ALREADY EXISTS in both the desktop user dropdown (lines ~1080-1086, between "My Profile" and "Wishlist"/"Logout") and the mobile slide-out menu (lines ~1364-1371, between "My Profile" and "Logout"). Both use the `Package` icon (lucide-react) with emerald color, both call `navigate('orders')`, and both are inside the `isAuthenticated` conditional block so they only render when the user is logged in. No changes were required — the requirement was already satisfied by a prior task. Left the code untouched to avoid breaking existing functionality.
+
+Stage Summary:
+- OrdersPage now: (1) uses `authFetch` with the JWT Authorization header, (2) shows a friendly "Login to View Orders" prompt for unauthenticated users instead of auto-redirecting, (3) renders order cards in a responsive 1-col-mobile / 2-col-tablet grid, (4) each card has a consistent emerald "View Details" button plus conditional Track/Reorder secondary actions, (5) status badges follow the spec color mapping (amber/blue/teal/emerald/red), (6) empty state shows "No Orders Yet" with a "Start Shopping" button.
+- OrderDetailPage now: uses `authFetch` for both the GET and the cancel POST, and is fully null-safe — `subtotal`, `totalAmount`, `discountAmount`, `deliveryCharge`, `item.price`, `item.quantity`, `orderNumber`, `orderStatus`, `paymentStatus`, `paymentMethod`, `guestName`, `createdAt`, and `estimatedDelivery.min/max` all have safe fallbacks (`—` for strings, 0 for numbers, "Invalid Date" avoided). No more `.toLocaleString()`-on-null crashes (the same class of bug that previously crashed the admin orders page).
+- Navbar already had the "My Orders" link in both desktop and mobile menus, positioned between Profile and Logout, gated on `isAuthenticated`, using the `Package` icon — no changes needed.
+- Verification: `bunx tsc --noEmit 2>&1 | grep -E "OrdersPage|OrderDetailPage|Navbar"` returns empty (no TypeScript errors in any of the three files). A full `bunx tsc --noEmit` also passes with zero errors project-wide.
+- Theme preserved throughout: emerald-600/700 primary, amber accents, teal secondary — all new buttons/badges match the existing design language. No new dependencies added. No existing functionality broken.
+
+---
+Task ID: CRON-R6
+Agent: main-orchestrator (webDevReview cycle 6)
+Task: QA checkout flow, add customer order history, fix lint errors
+
+## Current Project Status Assessment
+QA via agent-browser confirmed the project is stable:
+- ✅ Checkout page Step 1 (Review Cart) renders correctly: multi-step progress indicator, cart items with images/quantities/prices, order summary with coupon + FREE delivery, "Continue to Shipping" button
+- ✅ Checkout page Step 2 (Shipping) loads: delivery form with Full Name/Phone/Email/Address/City/District, delivery method selector (Regular FREE / Express Next day)
+- ✅ Customer login works (customer@test.com)
+- ✅ Wishlist flow works (add → badge updates → wishlist page shows product)
+- ✅ Product detail gallery shows multiple images with thumbnail navigation
+- ✅ Admin orders page works (fixed in previous cycle)
+- ✅ All APIs return 200, 0 HTTP errors
+
+## Completed Modifications
+
+### 1. Added customer order history page (Task 11 subagent + lint fixes)
+File: `src/components/pages/OrdersPage.tsx`
+- Switched to `authFetch('/api/orders')` for authenticated API calls (backend filters by JWT)
+- Added `LoginPrompt` component for unauthenticated users (emerald/amber themed, "Login to View Orders" button)
+- Updated status colors: pending=amber, confirmed/processing/packed=blue, shipped=teal, delivered=emerald, cancelled=red
+- Responsive grid: 1 column on mobile, 2 columns on tablet
+- "View Details" button on every order card
+- Empty state: "No Orders Yet" with "Start Shopping" button
+- Status filter tabs: All/Pending/Processing/Shipped/Delivered/Cancelled
+- Summary stats: Total Orders, Active, Delivered
+- Fixed React Rules of Hooks violations (moved hooks before early return, removed setState-in-effect)
+- Fixed lint errors: `react-hooks/rules-of-hooks`, `react-hooks/set-state-in-effect`, ref-during-render
+
+### 2. Fixed OrderDetailPage null-safety (Task 11 subagent)
+File: `src/components/pages/OrderDetailPage.tsx`
+- Added `safeNum`, `safeStr`, `titleCase`, `formatBDT` helpers
+- Hardened all `.toLocaleString()` calls on API numbers (totalAmount, discountAmount, deliveryCharge, item prices)
+- Hardened `.charAt(0)` calls on status/name strings
+- Added empty-items fallback ("No items in this order")
+- Switched to `authFetch` for authenticated calls
+- Business logic untouched — only null/undefined crashes fixed
+
+### 3. Verified navbar "My Orders" link
+File: `src/components/layout/Navbar.tsx`
+- The "My Orders" menu item already existed in both desktop dropdown (Package icon, between Profile and Logout) and mobile menu
+- Only shows when user is logged in
+- No changes needed — verified correct placement and gating
+
+## Verification Results
+- ✅ ESLint: 0 errors
+- ✅ TypeScript: 0 src errors
+- ✅ Customer orders page renders: "My Orders" heading, status filter tabs, summary stats, empty state with "Start Shopping" button
+- ✅ Checkout flow: Step 1 (cart review) and Step 2 (shipping form with delivery method) both render correctly
+- ✅ VLM confirms orders page: "No Orders Yet" empty state, filter tabs, summary stats all present
+- ✅ 0 HTTP 404/500 errors in dev.log
+- ✅ DB state: 8 products, 13 images, 8 reviews, 1 order (guest order)
+
+## Unresolved Issues / Risks
+1. **Customer has 0 orders**: The test order was placed as a guest (not tied to customer@test.com account). The orders page correctly shows the empty state. To see orders, a customer needs to place an order while logged in.
+2. **Checkout step navigation via browser automation**: The JS `element.click()` doesn't reliably trigger the checkout's `goToStep` handler. Native `agent-browser click @ref` works. Manual users click normally.
+3. **Dev server memory**: Can die under rapid edit cycles. Stable when left running.
+4. **Dormant Prisma models**: LoyaltyPoint, PrintQueue, etc. remain in schema (harmless).
+
+## Priority Recommendations for Next Phase
+1. **Place a test order as a logged-in customer** to verify the full order history flow
+2. **Test the order confirmation page** after placing an order
+3. **Add a "Frequently Bought Together" section** on product detail with add-all-to-cart
+4. **Add a search results page** with filter UI (price slider, sort dropdown)
+5. **Add admin customer detail view** (view customer's orders, addresses)
+6. **Improve the checkout Step 2→3→4 flow** (test payment selection and order placement in browser)
