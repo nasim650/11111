@@ -1,0 +1,1078 @@
+     1→import { create } from 'zustand'
+     2→import { persist, createJSONStorage } from 'zustand/middleware'
+     3→import { extractItems } from '@/lib/api'
+     4→
+     5→// ─── Types ────────────────────────────────────────────────────────────────────
+     6→
+     7→export type PageName =
+     8→  | 'home'
+     9→  | 'products'
+    10→  | 'product-detail'
+    11→  | 'cart'
+    12→  | 'checkout'
+    13→  | 'login'
+    14→  | 'register'
+    15→  | 'forgot-password'
+    16→  | 'profile'
+    17→  | 'orders'
+    18→  | 'order-detail'
+    19→  | 'order-confirmation'
+    20→  | 'order-tracking'
+    21→  | 'wishlist'
+    22→  | 'contact'
+    23→  | 'terms'
+    24→  | 'privacy'
+    25→  | 'return-policy'
+    26→  | 'delivery-policy'
+    27→  | 'policy'
+    28→  | 'admin-dashboard'
+    29→  | 'admin-products'
+    30→  | 'admin-categories'
+    31→  | 'admin-orders'
+    32→  | 'admin-customers'
+    33→  | 'admin-reviews'
+    34→  | 'admin-coupons'
+    35→  | 'admin-banners'
+    36→  | 'admin-policy-pages'
+    37→  | 'admin-settings'
+    38→  | 'admin-media'
+    39→  | 'admin-payments'
+    40→  | 'admin-contact-messages'
+    41→
+    42→export interface CartItem {
+    43→  id: string
+    44→  productId: string
+    45→  productName: string
+    46→  price: number
+    47→  discountPrice?: number | null
+    48→  quantity: number
+    49→  unit: string
+    50→  image: string
+    51→  stock: number
+    52→}
+    53→
+    54→export interface WishlistItem {
+    55→  productId: string
+    56→  productName: string
+    57→  price: number
+    58→  discountPrice?: number | null
+    59→  image: string
+    60→}
+    61→
+    62→export type NotificationType = 'order_update' | 'promo' | 'restock' | 'price_drop'
+    63→
+    64→export interface NotificationItem {
+    65→  id: string
+    66→  type: NotificationType
+    67→  title: string
+    68→  description: string
+    69→  timestamp: string
+    70→  isRead: boolean
+    71→  link?: string
+    72→  image?: string
+    73→}
+    74→
+    75→export interface User {
+    76→  id: string
+    77→  name?: string | null
+    78→  email?: string | null
+    79→  phone?: string | null
+    80→  role: string
+    81→  isVerified: boolean
+    82→  avatar?: string | null
+    83→  createdAt: string
+    84→}
+    85→
+    86→export interface SiteConfig {
+    87→  siteName: string
+    88→  tagline: string
+    89→  description: string
+    90→  logo: string
+    91→  favicon: string
+    92→  primaryColor: string
+    93→  secondaryColor: string
+    94→  accentColor: string
+    95→  currency: string
+    96→  currencySymbol: string
+    97→  phone: string
+    98→  email: string
+    99→  address: string
+   100→  socialLinks: {
+   101→    facebook?: string
+   102→    instagram?: string
+   103→    twitter?: string
+   104→    youtube?: string
+   105→  }
+   106→  freeShippingThreshold: number
+   107→  shippingCharge: number
+   108→  taxRate: number
+   109→  enableCod: boolean
+   110→  enableOnlinePayment: boolean
+   111→  minOrderAmount: number
+   112→  returnWindowDays: number
+   113→  deliveryZones: string[]
+   114→  maintenanceMode: boolean
+   115→  // ── Homepage business settings (Round 3E) ──
+   116→  announcementEnabled: boolean
+   117→  announcementText: string
+   118→  freeDeliveryEnabled: boolean
+   119→  freeDeliveryMinAmount: number
+   120→  freeDeliveryMessage: string
+   121→  flashSaleEnabled: boolean
+   122→  flashSaleTitle: string
+   123→  flashSaleSubtitle: string
+   124→  homepagePromoText: string
+   125→}
+   126→
+   127→// ─── Helper: Session ID ──────────────────────────────────────────────────────
+   128→
+   129→function getOrCreateSessionId(): string {
+   130→  if (typeof window === 'undefined') return ''
+   131→  const KEY = 'kk_session_id'
+   132→  let id = localStorage.getItem(KEY)
+   133→  if (!id) {
+   134→    id = `session_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+   135→    localStorage.setItem(KEY, id)
+   136→  }
+   137→  return id
+   138→}
+   139→
+   140→function getSessionId(): string | null {
+   141→  if (typeof window === 'undefined') return null
+   142→  return localStorage.getItem('kk_session_id')
+   143→}
+   144→
+   145→// ─── Store Interface ─────────────────────────────────────────────────────────
+   146→
+   147→export interface AppStore {
+   148→  // ── Navigation ──
+   149→  currentPage: PageName
+   150→  pageParams: Record<string, unknown>
+   151→  navigate: (page: PageName, params?: Record<string, unknown>) => void
+   152→
+   153→  // ── Auth ──
+   154→  user: User | null
+   155→  isAuthenticated: boolean
+   156→  accessToken: string | null
+   157→  login: (credentials: { email?: string; phone?: string; password: string }) => Promise<void>
+   158→  register: (data: { name: string; email?: string; phone?: string; password: string }) => Promise<void>
+   159→  logout: () => void
+   160→  setUser: (user: User | null) => void
+   161→  loadUser: () => void
+   162→
+   163→  // ── Cart ──
+   164→  cartItems: CartItem[]
+   165→  cartLoading: boolean
+   166→  totalItems: () => number
+   167→  subtotal: () => number
+   168→  addToCart: (item: Omit<CartItem, 'id'>) => Promise<void>
+   169→  removeFromCart: (cartItemId: string) => Promise<void>
+   170→  updateQuantity: (cartItemId: string, quantity: number) => Promise<void>
+   171→  clearCart: () => Promise<void>
+   172→  loadCart: () => Promise<void>
+   173→
+   174→  // ── Wishlist ──
+   175→  wishlistItems: WishlistItem[]
+   176→  wishlistLoading: boolean
+   177→  addToWishlist: (item: WishlistItem) => Promise<void>
+   178→  removeFromWishlist: (productId: string) => Promise<void>
+   179→  toggleWishlist: (item: WishlistItem) => Promise<void>
+   180→  loadWishlist: () => Promise<void>
+   181→  isInWishlist: (productId: string) => boolean
+   182→
+   183→  // ── UI ──
+   184→  language: 'en' | 'bn'
+   185→  searchQuery: string
+   186→  selectedCategory: string
+   187→  isMobileMenuOpen: boolean
+   188→  isCartOpen: boolean
+   189→  setLanguage: (language: 'en' | 'bn') => void
+   190→  setSearchQuery: (query: string) => void
+   191→  setSelectedCategory: (category: string) => void
+   192→  setMobileMenuOpen: (open: boolean) => void
+   193→  setCartOpen: (open: boolean) => void
+   194→  toggleMobileMenu: () => void
+   195→  toggleCart: () => void
+   196→
+   197→  // ── Quick View ──
+   198→  quickViewProductId: string | null
+   199→  isQuickViewOpen: boolean
+   200→  openQuickView: (productId: string) => void
+   201→  closeQuickView: () => void
+   202→
+   203→  // ── Product Comparison ──
+   204→  compareProducts: string[]
+   205→  isCompareDrawerOpen: boolean
+   206→  addToCompare: (productId: string) => void
+   207→  removeFromCompare: (productId: string) => void
+   208→  clearCompare: () => void
+   209→  isInCompare: (productId: string) => boolean
+   210→  openCompareDrawer: () => void
+   211→  closeCompareDrawer: () => void
+   212→  toggleCompareDrawer: () => void
+   213→
+   214→  // ── Notifications ──
+   215→  notifications: NotificationItem[]
+   216→  unreadCount: () => number
+   217→  addNotification: (notification: Omit<NotificationItem, 'id' | 'timestamp' | 'isRead'>) => void
+   218→  markAsRead: (notificationId: string) => void
+   219→  markAllAsRead: () => void
+   220→  clearNotifications: () => void
+   221→  initDemoNotifications: () => void
+   222→
+   223→  // ── Recently Viewed ──
+   224→  recentlyViewed: string[]
+   225→  addRecentlyViewed: (productId: string) => void
+   226→  clearRecentlyViewed: () => void
+   227→
+   228→  // ── Order Tracking Modal ──
+   229→  isOrderTrackingOpen: boolean
+   230→  orderTrackingId: string | null
+   231→  openOrderTracking: (orderId?: string) => void
+   232→  closeOrderTracking: () => void
+   233→
+   234→  // ── Wishlist Share ──
+   235→  isWishlistShareModalOpen: boolean
+   236→  wishlistShareData: {
+   237→    shareId: string
+   238→    items: WishlistItem[]
+   239→    message?: string
+   240→  } | null
+   241→  openWishlistShareModal: (shareId: string, items: WishlistItem[], message?: string) => void
+   242→  closeWishlistShareModal: () => void
+   243→
+   244→  // ── Site Config ──
+   245→  siteConfig: SiteConfig | null
+   246→  siteConfigLoading: boolean
+   247→  loadSiteConfig: () => Promise<void>
+   248→
+   249→  // ── Session ──
+   250→  getSessionId: () => string | null
+   251→  getOrCreateSessionId: () => string
+   252→}
+   253→
+   254→// ─── Default Site Config ──────────────────────────────────────────────────────
+   255→
+   256→const defaultSiteConfig: SiteConfig = {
+   257→  siteName: 'Khati Khadyo',
+   258→  tagline: 'Authentic Bangladeshi Food Products',
+   259→  description: 'Premium authentic Bangladeshi food products delivered fresh to your doorstep.',
+   260→  logo: '/all_logo.png',
+   261→  favicon: '/all_logo.png',
+   262→  primaryColor: '#2D6A4F',
+   263→  secondaryColor: '#B8860B',
+   264→  accentColor: '#D4A574',
+   265→  currency: 'BDT',
+   266→  currencySymbol: '৳',
+   267→  phone: '+880 1XXX-XXXXXX',
+   268→  email: 'info@khatikhadyo.com',
+   269→  address: 'Dhaka, Bangladesh',
+   270→  socialLinks: {
+   271→    facebook: 'https://facebook.com/khatikhadyo',
+   272→    instagram: 'https://instagram.com/khatikhadyo',
+   273→  },
+   274→  freeShippingThreshold: 1500,
+   275→  shippingCharge: 60,
+   276→  taxRate: 0,
+   277→  enableCod: true,
+   278→  enableOnlinePayment: false,
+   279→  minOrderAmount: 0,
+   280→  returnWindowDays: 7,
+   281→  deliveryZones: ['Dhaka', 'Chittagong', 'Sylhet', 'Rajshahi', 'Khulna'],
+   282→  maintenanceMode: false,
+   283→  // ── Homepage business settings (Round 3E) ──
+   284→  announcementEnabled: true,
+   285→  announcementText: 'Selected items at special prices',
+   286→  freeDeliveryEnabled: true,
+   287→  freeDeliveryMinAmount: 1500,
+   288→  freeDeliveryMessage: 'Free Delivery on Orders Above ৳1,500',
+   289→  flashSaleEnabled: true,
+   290→  flashSaleTitle: 'Flash Sale',
+   291→  flashSaleSubtitle: 'Today',
+   292→  homepagePromoText: '100% Authentic Bangladeshi Products',
+   293→}
+   294→
+   295→// ─── Store Implementation ─────────────────────────────────────────────────────
+   296→
+   297→// Module-level flag to prevent persist middleware from writing before rehydration
+   298→let _storeRehydrated = false
+   299→
+   300→export const useAppStore = create<AppStore>()(
+   301→  persist(
+   302→    (set, get) => ({
+   303→      // ── Navigation ────────────────────────────────────────────────────────
+   304→      currentPage: 'home' as PageName,
+   305→      pageParams: {},
+   306→
+   307→      navigate: (page, params = {}) => {
+   308→        set({ currentPage: page, pageParams: params })
+   309→        if (typeof window !== 'undefined') {
+   310→          window.scrollTo({ top: 0, behavior: 'smooth' })
+   311→        }
+   312→      },
+   313→
+   314→      // ── Auth ──────────────────────────────────────────────────────────────
+   315→      user: null,
+   316→      isAuthenticated: false,
+   317→      accessToken: null,
+   318→
+   319→      login: async (credentials) => {
+   320→        const res = await fetch('/api/auth/login', {
+   321→          method: 'POST',
+   322→          headers: { 'Content-Type': 'application/json' },
+   323→          body: JSON.stringify(credentials),
+   324→        })
+   325→
+   326→        if (!res.ok) {
+   327→          const data = await res.json()
+   328→          throw new Error(data.error || 'Login failed')
+   329→        }
+   330→
+   331→        const data = await res.json()
+   332→        const user = (data.data?.user || data.user) as User
+   333→        const token = data.data?.token || data.accessToken || null
+   334→        set({ user, accessToken: token, isAuthenticated: true })
+   335→
+   336→        // Persist user and token for loadUser
+   337→        // Removed manual localStorage set, Zustand persist handles this
+   338→
+   339→        // After login, merge guest cart into user cart and reload
+   340→        await get().loadCart()
+   341→        await get().loadWishlist()
+   342→      },
+   343→
+   344→      register: async (registerData) => {
+   345→        const res = await fetch('/api/auth/register', {
+   346→          method: 'POST',
+   347→          headers: { 'Content-Type': 'application/json' },
+   348→          body: JSON.stringify(registerData),
+   349→        })
+   350→
+   351→        if (!res.ok) {
+   352→          const data = await res.json()
+   353→          throw new Error(data.error || 'Registration failed')
+   354→        }
+   355→
+   356→        const data = await res.json()
+   357→        const user = (data.data?.user || data.user) as User
+   358→        const token = data.data?.token || data.accessToken || null
+   359→        set({ user, accessToken: token, isAuthenticated: true })
+   360→
+   361→        // Persist user and token for loadUser
+   362→        // Removed manual localStorage set, Zustand persist handles this
+   363→
+   364→        // After registration, reload cart and wishlist
+   365→        await get().loadCart()
+   366→        await get().loadWishlist()
+   367→      },
+   368→
+   369→      logout: () => {
+   370→        set({
+   371→          user: null,
+   372→          accessToken: null,
+   373→          isAuthenticated: false,
+   374→          cartItems: [],
+   375→          wishlistItems: [],
+   376→        })
+   377→        // Clear persisted user data but keep session id for guest cart
+   378→        if (typeof window !== 'undefined') {
+   379→          localStorage.removeItem('kk_user')
+   380→          localStorage.removeItem('kk_token')
+   381→        }
+   382→      },
+   383→
+   384→      setUser: (user) => {
+   385→        set({ user, isAuthenticated: !!user })
+   386→      },
+   387→
+   388→      loadUser: () => {
+   389→        // Zustand persist handles hydration automatically via useAppStore.persist.rehydrate()
+   390→      },
+   391→
+   392→      // ── Cart ──────────────────────────────────────────────────────────────
+   393→      cartItems: [],
+   394→      cartLoading: false,
+   395→
+   396→      totalItems: () => {
+   397→        return get().cartItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)
+   398→      },
+   399→
+   400→      subtotal: () => {
+   401→        return get().cartItems.reduce((sum, item) => {
+   402→          const price = item.discountPrice != null ? item.discountPrice : item.price
+   403→          return sum + (Number(price) || 0) * (Number(item.quantity) || 0)
+   404→        }, 0)
+   405→      },
+   406→
+   407→      addToCart: async (item) => {
+   408→        const state = get()
+   409→        const userId = state.user?.id
+   410→        const sessionId = userId ? undefined : getOrCreateSessionId()
+   411→
+   412→        try {
+   413→          const token = get().accessToken
+   414→          const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+   415→          if (token) headers['Authorization'] = `Bearer ${token}`
+   416→          const res = await fetch('/api/cart', {
+   417→            method: 'POST',
+   418→            headers,
+   419→            body: JSON.stringify({
+   420→              productId: item.productId,
+   421→              quantity: item.quantity,
+   422→              unit: item.unit,
+   423→              ...(userId ? { userId } : { sessionId }),
+   424→            }),
+   425→          })
+   426→
+   427→          if (!res.ok) {
+   428→            const data = await res.json()
+   429→            throw new Error(data.error || 'Failed to add to cart')
+   430→          }
+   431→
+   432→          const savedItem = await res.json()
+   433→
+   434→          // Update local state: if item already exists, update it; otherwise add
+   435→          set((s) => {
+   436→            const existingIndex = s.cartItems.findIndex(
+   437→              (ci) => ci.productId === item.productId
+   438→            )
+   439→            if (existingIndex >= 0) {
+   440→              const updated = [...s.cartItems]
+   441→              updated[existingIndex] = {
+   442→                ...updated[existingIndex],
+   443→                id: savedItem.id,
+   444→                quantity: savedItem.quantity,
+   445→              }
+   446→              return { cartItems: updated }
+   447→            }
+   448→            return {
+   449→              cartItems: [
+   450→                {
+   451→                  id: savedItem.id,
+   452→                  productId: item.productId,
+   453→                  productName: item.productName,
+   454→                  price: item.price,
+   455→                  discountPrice: item.discountPrice,
+   456→                  quantity: savedItem.quantity,
+   457→                  unit: item.unit,
+   458→                  image: item.image,
+   459→                  stock: item.stock,
+   460→                },
+   461→                ...s.cartItems,
+   462→              ],
+   463→            }
+   464→          })
+   465→
+   466→        } catch (error) {
+   467→          console.error('Failed to add to cart:', error)
+   468→          // Fallback: add locally without server sync
+   469→          set((s) => {
+   470→            const existingIndex = s.cartItems.findIndex(
+   471→              (ci) => ci.productId === item.productId
+   472→            )
+   473→            if (existingIndex >= 0) {
+   474→              const updated = [...s.cartItems]
+   475→              updated[existingIndex] = {
+   476→                ...updated[existingIndex],
+   477→                quantity: updated[existingIndex].quantity + item.quantity,
+   478→              }
+   479→              return { cartItems: updated }
+   480→            }
+   481→            return {
+   482→              cartItems: [
+   483→                {
+   484→                  ...item,
+   485→                  id: `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+   486→                  quantity: item.quantity || 1,
+   487→                },
+   488→                ...s.cartItems,
+   489→              ],
+   490→            }
+   491→          })
+   492→        }
+   493→      },
+   494→
+   495→      removeFromCart: async (cartItemId) => {
+   496→        // Optimistic update
+   497→        const previous = get().cartItems
+   498→        set((s) => ({
+   499→          cartItems: s.cartItems.filter((ci) => ci.id !== cartItemId),
+   500→        }))
+   501→
+   502→        try {
+   503→          const token = get().accessToken
+   504→          const delHeaders: Record<string, string> = {}
+   505→          if (token) delHeaders['Authorization'] = `Bearer ${token}`
+   506→          const res = await fetch(`/api/cart/${encodeURIComponent(cartItemId)}`, {
+   507→            method: 'DELETE',
+   508→            headers: delHeaders,
+   509→          })
+   510→          if (!res.ok) {
+   511→            // Revert on failure
+   512→            set({ cartItems: previous })
+   513→            const data = await res.json()
+   514→            throw new Error(data.error || 'Failed to remove item')
+   515→          }
+   516→        } catch (error) {
+   517→          console.error('Failed to remove from cart:', error)
+   518→          set({ cartItems: previous })
+   519→        }
+   520→      },
+   521→
+   522→      updateQuantity: async (cartItemId, quantity) => {
+   523→        if (quantity < 1) return
+   524→
+   525→        const previous = get().cartItems
+   526→        // Optimistic update
+   527→        set((s) => ({
+   528→          cartItems: s.cartItems.map((ci) =>
+   529→            ci.id === cartItemId ? { ...ci, quantity } : ci
+   530→          ),
+   531→        }))
+   532→
+   533→        try {
+   534→          const token = get().accessToken
+   535→          const updateHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+   536→          if (token) updateHeaders['Authorization'] = `Bearer ${token}`
+   537→          const res = await fetch(`/api/cart/${encodeURIComponent(cartItemId)}`, {
+   538→            method: 'PUT',
+   539→            headers: updateHeaders,
+   540→            body: JSON.stringify({ quantity }),
+   541→          })
+   542→          if (!res.ok) {
+   543→            set({ cartItems: previous })
+   544→            const data = await res.json()
+   545→            throw new Error(data.error || 'Failed to update quantity')
+   546→          }
+   547→        } catch (error) {
+   548→          console.error('Failed to update cart quantity:', error)
+   549→          set({ cartItems: previous })
+   550→        }
+   551→      },
+   552→
+   553→      clearCart: async () => {
+   554→        const previous = get().cartItems
+   555→        set({ cartItems: [] })
+   556→
+   557→        // Delete all items from server
+   558→        try {
+   559→          const token = get().accessToken
+   560→          const clearHeaders: Record<string, string> = {}
+   561→          if (token) clearHeaders['Authorization'] = `Bearer ${token}`
+   562→          await Promise.all(
+   563→            previous.map((item) =>
+   564→              fetch(`/api/cart/${encodeURIComponent(item.id)}`, {
+   565→                method: 'DELETE',
+   566→                headers: clearHeaders,
+   567→              })
+   568→            )
+   569→          )
+   570→        } catch (error) {
+   571→          console.error('Failed to clear cart on server:', error)
+   572→          // Don't revert - user explicitly cleared
+   573→        }
+   574→      },
+   575→
+   576→      loadCart: async () => {
+   577→        const state = get()
+   578→        const userId = state.user?.id
+   579→        const sessionId = userId ? undefined : getSessionId()
+   580→
+   581→        if (!userId && !sessionId) return
+   582→
+   583→        set({ cartLoading: true })
+   584→        try {
+   585→          const params = new URLSearchParams()
+   586→          if (userId) {
+   587→            params.set('userId', userId)
+   588→          } else if (sessionId) {
+   589→            params.set('sessionId', sessionId)
+   590→          }
+   591→
+   592→          const token = get().accessToken
+   593→          const headers: Record<string, string> = {}
+   594→          if (token) headers['Authorization'] = `Bearer ${token}`
+   595→          const res = await fetch(`/api/cart?${params.toString()}`, { headers })
+   596→          if (!res.ok) throw new Error('Failed to load cart')
+   597→
+   598→          const data = await res.json()
+   599→
+   600→          // Map API response to our CartItem shape
+   601→          const rawItems = extractItems<Record<string, unknown>>(data)
+   602→          const cartItems: CartItem[] = rawItems.map(
+   603→            (item: Record<string, unknown>) => {
+   604→              const product = item.product as Record<string, unknown>
+   605→              const images = product?.images as Array<Record<string, unknown>> | undefined
+   606→              return {
+   607→                id: item.id as string,
+   608→                productId: product?.id as string,
+   609→                productName: product?.name as string,
+   610→                price: Number(product?.price) || 0,
+   611→                discountPrice: product?.discountPrice != null ? Number(product.discountPrice) : null,
+   612→                quantity: item.quantity as number,
+   613→                unit: (item.unit as string) || (product?.unit as string) || 'kg',
+   614→                image: (images?.[0]?.url as string) || '/placeholder.png',
+   615→                stock: Number(product?.stock) || 0,
+   616→              }
+   617→            }
+   618→          )
+   619→
+   620→          set({ cartItems, cartLoading: false })
+   621→        } catch (error) {
+   622→          console.error('Failed to load cart:', error)
+   623→          set({ cartLoading: false })
+   624→        }
+   625→      },
+   626→
+   627→      // ── Wishlist ──────────────────────────────────────────────────────────
+   628→      wishlistItems: [],
+   629→      wishlistLoading: false,
+   630→
+   631→      addToWishlist: async (item) => {
+   632→        const state = get()
+   633→        if (!state.user?.id) {
+   634→          // For guests, just add locally
+   635→          set((s) => ({
+   636→            wishlistItems: [item, ...s.wishlistItems],
+   637→          }))
+   638→          return
+   639→        }
+   640→
+   641→        try {
+   642→          const res = await fetch('/api/wishlist', {
+   643→            method: 'POST',
+   644→            headers: { 'Content-Type': 'application/json' },
+   645→            body: JSON.stringify({
+   646→              userId: state.user.id,
+   647→              productId: item.productId,
+   648→            }),
+   649→          })
+   650→
+   651→          if (!res.ok) {
+   652→            const data = await res.json()
+   653→            if (res.status !== 409) {
+   654→              throw new Error(data.error || 'Failed to add to wishlist')
+   655→            }
+   656→            // 409 = already exists, that's fine
+   657→          }
+   658→
+   659→          // Add to local state if not already there
+   660→          set((s) => {
+   661→            if (s.wishlistItems.some((wi) => wi.productId === item.productId)) {
+   662→              return s
+   663→            }
+   664→            return { wishlistItems: [item, ...s.wishlistItems] }
+   665→          })
+   666→        } catch (error) {
+   667→          console.error('Failed to add to wishlist:', error)
+   668→          // Fallback: add locally
+   669→          set((s) => {
+   670→            if (s.wishlistItems.some((wi) => wi.productId === item.productId)) {
+   671→              return s
+   672→            }
+   673→            return { wishlistItems: [item, ...s.wishlistItems] }
+   674→          })
+   675→        }
+   676→      },
+   677→
+   678→      removeFromWishlist: async (productId) => {
+   679→        const state = get()
+   680→        const previous = state.wishlistItems
+   681→
+   682→        // Optimistic update
+   683→        set((s) => ({
+   684→          wishlistItems: s.wishlistItems.filter((wi) => wi.productId !== productId),
+   685→        }))
+   686→
+   687→        if (!state.user?.id) return // Guest: only local state
+   688→
+   689→        try {
+   690→          const params = new URLSearchParams({
+   691→            userId: state.user.id,
+   692→            productId,
+   693→          })
+   694→          const res = await fetch(`/api/wishlist?${params.toString()}`, {
+   695→            method: 'DELETE',
+   696→          })
+   697→          if (!res.ok) {
+   698→            set({ wishlistItems: previous })
+   699→            const data = await res.json()
+   700→            throw new Error(data.error || 'Failed to remove from wishlist')
+   701→          }
+   702→        } catch (error) {
+   703→          console.error('Failed to remove from wishlist:', error)
+   704→          set({ wishlistItems: previous })
+   705→        }
+   706→      },
+   707→
+   708→      toggleWishlist: async (item) => {
+   709→        const state = get()
+   710→        const exists = state.wishlistItems.some(
+   711→          (wi) => wi.productId === item.productId
+   712→        )
+   713→        if (exists) {
+   714→          await state.removeFromWishlist(item.productId)
+   715→        } else {
+   716→          await state.addToWishlist(item)
+   717→        }
+   718→      },
+   719→
+   720→      loadWishlist: async () => {
+   721→        const state = get()
+   722→        if (!state.user?.id) return
+   723→
+   724→        set({ wishlistLoading: true })
+   725→        try {
+   726→          const params = new URLSearchParams({ userId: state.user.id })
+   727→          const res = await fetch(`/api/wishlist?${params.toString()}`)
+   728→          if (!res.ok) throw new Error('Failed to load wishlist')
+   729→
+   730→          const data = await res.json()
+   731→
+   732→          // Map API response to WishlistItem shape
+   733→          const rawWishlist = extractItems<Record<string, unknown>>(data)
+   734→          const wishlistItems: WishlistItem[] = rawWishlist.map(
+   735→            (entry: Record<string, unknown>) => {
+   736→              const product = entry.product as Record<string, unknown>
+   737→              const images = product?.images as Array<Record<string, unknown>> | undefined
+   738→              return {
+   739→                productId: product?.id as string,
+   740→                productName: product?.name as string,
+   741→                price: Number(product?.price) || 0,
+   742→                discountPrice: product?.discountPrice != null ? Number(product.discountPrice) : null,
+   743→                image: (images?.[0]?.url as string) || '/placeholder.png',
+   744→              }
+   745→            }
+   746→          )
+   747→
+   748→          set({ wishlistItems, wishlistLoading: false })
+   749→        } catch (error) {
+   750→          console.error('Failed to load wishlist:', error)
+   751→          set({ wishlistLoading: false })
+   752→        }
+   753→      },
+   754→
+   755→      isInWishlist: (productId) => {
+   756→        return get().wishlistItems.some((wi) => wi.productId === productId)
+   757→      },
+   758→
+   759→      // ── UI ────────────────────────────────────────────────────────────────
+   760→      language: 'en' as const,
+   761→      searchQuery: '',
+   762→      selectedCategory: '',
+   763→      isMobileMenuOpen: false,
+   764→      isCartOpen: false,
+   765→
+   766→      setLanguage: (language) => set({ language }),
+   767→      setSearchQuery: (query) => set({ searchQuery: query }),
+   768→      setSelectedCategory: (category) => set({ selectedCategory: category }),
+   769→      setMobileMenuOpen: (open) => set({ isMobileMenuOpen: open }),
+   770→      setCartOpen: (open) => set({ isCartOpen: open }),
+   771→      toggleMobileMenu: () => set((s) => ({ isMobileMenuOpen: !s.isMobileMenuOpen })),
+   772→      toggleCart: () => set((s) => ({ isCartOpen: !s.isCartOpen })),
+   773→
+   774→      // ── Quick View ────────────────────────────────────────────────────────
+   775→      quickViewProductId: null,
+   776→      isQuickViewOpen: false,
+   777→
+   778→      openQuickView: (productId) => set({
+   779→        quickViewProductId: productId,
+   780→        isQuickViewOpen: true,
+   781→      }),
+   782→
+   783→      closeQuickView: () => set({
+   784→        isQuickViewOpen: false,
+   785→        quickViewProductId: null,
+   786→      }),
+   787→
+   788→      // ── Product Comparison ──────────────────────────────────────────────────
+   789→      compareProducts: [],
+   790→      isCompareDrawerOpen: false,
+   791→
+   792→      addToCompare: (productId) => set((s) => {
+   793→        if (s.compareProducts.length >= 4) return s
+   794→        if (s.compareProducts.includes(productId)) return s
+   795→        return { compareProducts: [...s.compareProducts, productId] }
+   796→      }),
+   797→
+   798→      removeFromCompare: (productId) => set((s) => ({
+   799→        compareProducts: s.compareProducts.filter((id) => id !== productId),
+   800→      })),
+   801→
+   802→      clearCompare: () => set({ compareProducts: [], isCompareDrawerOpen: false }),
+   803→
+   804→      isInCompare: (productId) => get().compareProducts.includes(productId),
+   805→
+   806→      openCompareDrawer: () => set({ isCompareDrawerOpen: true }),
+   807→
+   808→      closeCompareDrawer: () => set({ isCompareDrawerOpen: false }),
+   809→
+   810→      toggleCompareDrawer: () => set((s) => ({ isCompareDrawerOpen: !s.isCompareDrawerOpen })),
+   811→
+   812→      // ── Notifications ────────────────────────────────────────────────────
+   813→      notifications: [],
+   814→
+   815→      unreadCount: () => get().notifications.filter((n) => !n.isRead).length,
+   816→
+   817→      addNotification: (notification) => set((s) => ({
+   818→        notifications: [
+   819→          {
+   820→            ...notification,
+   821→            id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+   822→            timestamp: new Date().toISOString(),
+   823→            isRead: false,
+   824→          },
+   825→          ...s.notifications,
+   826→        ],
+   827→      })),
+   828→
+   829→      markAsRead: (notificationId) => set((s) => ({
+   830→        notifications: s.notifications.map((n) =>
+   831→          n.id === notificationId ? { ...n, isRead: true } : n
+   832→        ),
+   833→      })),
+   834→
+   835→      markAllAsRead: () => set((s) => ({
+   836→        notifications: s.notifications.map((n) => ({ ...n, isRead: true })),
+   837→      })),
+   838→
+   839→      clearNotifications: () => set({ notifications: [] }),
+   840→
+   841→      initDemoNotifications: () => {
+   842→        const existing = get().notifications
+   843→        if (existing.length > 0) return
+   844→        const now = Date.now()
+   845→        const demos: Omit<NotificationItem, 'id' | 'timestamp' | 'isRead'>[] = [
+   846→          {
+   847→            type: 'order_update',
+   848→            title: 'Order Shipped!',
+   849→            description: 'Your order #KK-2847 has been shipped and is on its way to Dhaka.',
+   850→            link: 'orders',
+   851→          },
+   852→          {
+   853→            type: 'promo',
+   854→            title: 'ঈদ স্পেশাল অফার! 🎉',
+   855→            description: 'Get 25% off on all premium spices. Use code: EID25',
+   856→            link: 'offers',
+   857→          },
+   858→          {
+   859→            type: 'restock',
+   860→            title: 'Back in Stock: Aromatic Basmati Rice',
+   861→            description: 'The premium Basmati rice you bookmarked is back in stock. Order now!',
+   862→            link: 'products',
+   863→          },
+   864→          {
+   865→            type: 'price_drop',
+   866→            title: 'Price Drop Alert! 📉',
+   867→            description: 'Sundarban Honey price dropped from ৳850 to ৳650. Grab it now!',
+   868→            link: 'products',
+   869→          },
+   870→          {
+   871→            type: 'order_update',
+   872→            title: 'Order Delivered',
+   873→            description: 'Your order #KK-2791 has been delivered successfully. Enjoy!',
+   874→            link: 'orders',
+   875→          },
+   876→          {
+   877→            type: 'promo',
+   878→            title: 'Free Delivery Weekend',
+   879→            description: 'Free delivery on orders above ৳500 this weekend. Don\'t miss out!',
+   880→            link: 'offers',
+   881→          },
+   882→        ]
+   883→        const notifications: NotificationItem[] = demos.map((d, i) => ({
+   884→          ...d,
+   885→          id: `demo_notif_${i}`,
+   886→          timestamp: new Date(now - i * 3600000 * (i + 1)).toISOString(),
+   887→          isRead: i >= 3,
+   888→        }))
+   889→        set({ notifications })
+   890→      },
+   891→
+   892→      // ── Recently Viewed ──────────────────────────────────────────────────────
+   893→      recentlyViewed: [],
+   894→
+   895→      addRecentlyViewed: (productId) => set((s) => {
+   896→        const filtered = s.recentlyViewed.filter((id) => id !== productId)
+   897→        return { recentlyViewed: [productId, ...filtered].slice(0, 10) }
+   898→      }),
+   899→
+   900→      clearRecentlyViewed: () => set({ recentlyViewed: [] }),
+   901→
+   902→      // ── Order Tracking Modal ──────────────────────────────────────────────────────
+   903→      isOrderTrackingOpen: false,
+   904→      orderTrackingId: null,
+   905→
+   906→      openOrderTracking: (orderId) => set({
+   907→        isOrderTrackingOpen: true,
+   908→        orderTrackingId: orderId || null,
+   909→      }),
+   910→
+   911→      closeOrderTracking: () => set({
+   912→        isOrderTrackingOpen: false,
+   913→        orderTrackingId: null,
+   914→      }),
+   915→
+   916→      // ── Wishlist Share ──────────────────────────────────────────────────────
+   917→      isWishlistShareModalOpen: false,
+   918→      wishlistShareData: null,
+   919→
+   920→      openWishlistShareModal: (shareId, items, message) => set({
+   921→        isWishlistShareModalOpen: true,
+   922→        wishlistShareData: { shareId, items, message },
+   923→      }),
+   924→
+   925→      closeWishlistShareModal: () => set({
+   926→        isWishlistShareModalOpen: false,
+   927→        wishlistShareData: null,
+   928→      }),
+   929→
+   930→      // ── Site Config ────────────────────────────────────────────────────────
+   931→      siteConfig: null,
+   932→      siteConfigLoading: false,
+   933→
+   934→      loadSiteConfig: async () => {
+   935→        set({ siteConfigLoading: true })
+   936→        try {
+   937→          const res = await fetch('/api/site-config')
+   938→          if (!res.ok) throw new Error('Failed to load site config')
+   939→
+   940→          const response = await res.json()
+   941→          // API returns { success: true, data: [{ key, value, type, group }, ...] }
+   942→          const configs: Array<{ key: string; value: string; type: string; group: string }> =
+   943→            Array.isArray(response) ? response :
+   944→            response.data && Array.isArray(response.data) ? response.data :
+   945→            Array.isArray((response as Record<string, unknown>).items) ? (response as Record<string, unknown>).items as Array<{ key: string; value: string; type: string; group: string }> :
+   946→            []
+   947→
+   948→          // Transform array of config items into a SiteConfig object
+   949→          const configMap: Record<string, string> = {}
+   950→          for (const item of configs) {
+   951→            configMap[item.key] = item.value
+   952→          }
+   953→
+   954→          const siteConfig: SiteConfig = {
+   955→            siteName: configMap.site_name || defaultSiteConfig.siteName,
+   956→            tagline: configMap.tagline || defaultSiteConfig.tagline,
+   957→            description: configMap.description || defaultSiteConfig.description,
+   958→            logo: configMap.logo || defaultSiteConfig.logo,
+   959→            favicon: configMap.favicon || defaultSiteConfig.favicon,
+   960→            primaryColor: configMap.primary_color || defaultSiteConfig.primaryColor,
+   961→            secondaryColor: configMap.secondary_color || defaultSiteConfig.secondaryColor,
+   962→            accentColor: configMap.accent_color || defaultSiteConfig.accentColor,
+   963→            currency: configMap.currency || defaultSiteConfig.currency,
+   964→            currencySymbol: configMap.currency_symbol || defaultSiteConfig.currencySymbol,
+   965→            phone: configMap.phone || defaultSiteConfig.phone,
+   966→            email: configMap.email || defaultSiteConfig.email,
+   967→            address: configMap.address || defaultSiteConfig.address,
+   968→            socialLinks: {
+   969→              facebook: configMap.facebook || defaultSiteConfig.socialLinks.facebook,
+   970→              instagram: configMap.instagram || defaultSiteConfig.socialLinks.instagram,
+   971→              twitter: configMap.twitter || defaultSiteConfig.socialLinks.twitter,
+   972→              youtube: configMap.youtube || defaultSiteConfig.socialLinks.youtube,
+   973→            },
+   974→            freeShippingThreshold: Number(configMap.free_delivery_min) || defaultSiteConfig.freeShippingThreshold,
+   975→            shippingCharge: Number(configMap.delivery_charge) || defaultSiteConfig.shippingCharge,
+   976→            taxRate: Number(configMap.taxRate) || defaultSiteConfig.taxRate,
+   977→            enableCod: configMap.cod_enabled === 'true' || defaultSiteConfig.enableCod,
+   978→            enableOnlinePayment: configMap.enableOnlinePayment === 'true' || defaultSiteConfig.enableOnlinePayment,
+   979→            minOrderAmount: Number(configMap.minOrderAmount) || defaultSiteConfig.minOrderAmount,
+   980→            returnWindowDays: Number(configMap.returnWindowDays) || defaultSiteConfig.returnWindowDays,
+   981→            deliveryZones: configMap.deliveryZones ? configMap.deliveryZones.split(',').map((z: string) => z.trim()) : defaultSiteConfig.deliveryZones,
+   982→            maintenanceMode: configMap.maintenance_mode === 'true' || defaultSiteConfig.maintenanceMode,
+   983→            // ── Homepage business settings (Round 3E) ──
+   984→            announcementEnabled: configMap.announcement_enabled === undefined ? defaultSiteConfig.announcementEnabled : configMap.announcement_enabled === 'true',
+   985→            announcementText: configMap.announcement_text || defaultSiteConfig.announcementText,
+   986→            freeDeliveryEnabled: configMap.free_delivery_enabled === undefined ? defaultSiteConfig.freeDeliveryEnabled : configMap.free_delivery_enabled === 'true',
+   987→            freeDeliveryMinAmount: Number(configMap.free_delivery_min_amount) || defaultSiteConfig.freeDeliveryMinAmount,
+   988→            freeDeliveryMessage: configMap.free_delivery_message || defaultSiteConfig.freeDeliveryMessage,
+   989→            flashSaleEnabled: configMap.flash_sale_enabled === undefined ? defaultSiteConfig.flashSaleEnabled : configMap.flash_sale_enabled === 'true',
+   990→            flashSaleTitle: configMap.flash_sale_title || defaultSiteConfig.flashSaleTitle,
+   991→            flashSaleSubtitle: configMap.flash_sale_subtitle || defaultSiteConfig.flashSaleSubtitle,
+   992→            homepagePromoText: configMap.homepage_promo_text || defaultSiteConfig.homepagePromoText,
+   993→          }
+   994→
+   995→          set({ siteConfig, siteConfigLoading: false })
+   996→        } catch (error) {
+   997→          // Silently fall back to defaults — this fires during dev hot-reloads
+   998→          // when the server is briefly unavailable. Logging it spams the console.
+   999→          if (process.env.NODE_ENV === 'production') {
+  1000→            console.error('Failed to load site config:', error)
+  1001→          }
+  1002→          set({ siteConfig: defaultSiteConfig, siteConfigLoading: false })
+  1003→        }
+  1004→      },
+  1005→
+  1006→      // ── Session ────────────────────────────────────────────────────────────
+  1007→      getSessionId: () => getSessionId(),
+  1008→
+  1009→      getOrCreateSessionId: () => getOrCreateSessionId(),
+  1010→    }),
+  1011→    {
+  1012→      name: 'kk-app-store',
+  1013→      skipHydration: true,
+  1014→      storage: createJSONStorage(() => {
+  1015→        // SSR-safe: return a mock on server side
+  1016→        if (typeof window === 'undefined') {
+  1017→          return {
+  1018→            getItem: () => null,
+  1019→            setItem: () => {},
+  1020→            removeItem: () => {},
+  1021→          }
+  1022→        }
+  1023→        
+  1024→        // Client-side: defer writes until after rehydration to prevent
+  1025→        // overwriting persisted auth data with default state
+  1026→        return {
+  1027→          getItem: (name: string) => localStorage.getItem(name),
+  1028→          setItem: (name: string, value: string) => {
+  1029→            if (!_storeRehydrated) {
+  1030→              // Skip writes before rehydration to prevent overwriting persisted data
+  1031→              return
+  1032→            }
+  1033→            localStorage.setItem(name, value)
+  1034→          },
+  1035→          removeItem: (name: string) => {
+  1036→            if (!_storeRehydrated) return
+  1037→            localStorage.removeItem(name)
+  1038→          },
+  1039→        }
+  1040→      }),
+  1041→      partialize: (state) => ({
+  1042→        // Only persist essential fields
+  1043→        user: state.user,
+  1044→        accessToken: state.accessToken,
+  1045→        isAuthenticated: state.isAuthenticated,
+  1046→        cartItems: state.cartItems,
+  1047→        wishlistItems: state.wishlistItems,
+  1048→        currentPage: state.currentPage,
+  1049→        pageParams: state.pageParams,
+  1050→        selectedCategory: state.selectedCategory,
+  1051→        language: state.language,
+  1052→        compareProducts: state.compareProducts,
+  1053→        recentlyViewed: state.recentlyViewed,
+  1054→        siteConfig: state.siteConfig,
+  1055→        notifications: state.notifications,
+  1056→      }),
+  1057→    }
+  1058→  )
+  1059→)
+  1060→
+  1061→// Rehydrate synchronously on client side BEFORE any React renders
+  1062→// This is critical for auth persistence - without this, the default state
+  1063→// gets written to localStorage before rehydrate() can read the persisted data
+  1064→if (typeof window !== 'undefined') {
+  1065→  useAppStore.persist.rehydrate()
+  1066→  
+  1067→  // Mark as rehydrated so future writes are allowed
+  1068→  _storeRehydrated = true
+  1069→  
+  1070→  // Write the rehydrated state to localStorage to ensure consistency
+  1071→  const state = useAppStore.getState()
+  1072→  const partialState = (useAppStore.persist.getOptions().partialize as any)(state)
+  1073→  localStorage.setItem('kk-app-store', JSON.stringify({ state: partialState, version: 0 }))
+  1074→  
+  1075→  // Expose store for debugging
+  1076→  ;(window as any).__APP_STORE__ = useAppStore
+  1077→}
+  1078→

@@ -912,6 +912,58 @@ function NewArrivalsSection({ products, navigate }: {
   )
 }
 
+// ── Recently Viewed Section ──
+// Uses a neutral slate accent (not emerald/amber) to distinguish from
+// Featured (emerald) and New Arrivals (amber). Powered by localStorage
+// via the Zustand persist store.
+function RecentlyViewedSection({ products, navigate }: {
+  products: Product[]
+  navigate: (page: PageName, params?: Record<string, unknown>) => void
+}) {
+  if (products.length === 0) return null
+
+  return (
+    <AnimatedSection className="py-10 md:py-14 bg-gradient-to-b from-slate-50/60 via-white to-white">
+      <div className="container mx-auto px-4">
+        <div className="flex items-end justify-between mb-6 md:mb-8">
+          <div>
+            <div className="inline-flex items-center gap-2 text-slate-500 mb-1.5">
+              <Clock className="h-4 w-4" />
+              <span className="text-xs font-semibold uppercase tracking-wider">Recently Viewed</span>
+            </div>
+            <h2 className="text-2xl md:text-3xl font-bold">Recently Viewed</h2>
+            <p className="text-sm text-muted-foreground mt-1">Pick up where you left off</p>
+            {/* Decorative slate underline */}
+            <div className="mt-2 h-1 w-16 rounded-full bg-gradient-to-r from-slate-400 to-slate-300" />
+          </div>
+          <Button
+            variant="ghost"
+            className="hidden sm:flex items-center gap-1 text-slate-600 hover:text-slate-700 hover:bg-slate-100 rounded-full"
+            onClick={() => navigate('products')}
+          >
+            View All <ArrowRight className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5">
+          {products.map((p) => (
+            <ProductCard key={p.id} product={p} />
+          ))}
+        </div>
+        {/* Mobile View All */}
+        <div className="mt-6 text-center sm:hidden">
+          <Button
+            variant="outline"
+            className="gap-2 border-slate-300 text-slate-600 hover:bg-slate-50 hover:text-slate-700 rounded-full px-6"
+            onClick={() => navigate('products')}
+          >
+            View All Recently Viewed <ArrowRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </AnimatedSection>
+  )
+}
+
 // ── Trust & Guarantees Section ──
 function TrustSection() {
   const guarantees = [
@@ -1135,12 +1187,15 @@ function HomeLoadingSkeleton() {
 // ── Main Component ──
 export default function HomePage() {
   const { navigate, setSearchQuery, loadSiteConfig, siteConfig } = useAppStore()
+  // Recently Viewed IDs are persisted in localStorage via the Zustand store
+  const recentlyViewed = useAppStore((s) => s.recentlyViewed || [])
   const [heroBanners, setHeroBanners] = useState<Banner[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [discountProducts, setDiscountProducts] = useState<Product[]>([])
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([])
   const [bestSellers, setBestSellers] = useState<Product[]>([])
   const [newArrivals, setNewArrivals] = useState<Product[]>([])
+  const [recentProducts, setRecentProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -1197,6 +1252,38 @@ export default function HomePage() {
     loadAll()
   }, [])
 
+  // ── Recently Viewed: fetch product details for persisted IDs ──
+  // Fires whenever the persisted recentlyViewed ID list changes (e.g. user
+  // returns from a product detail page). Fetches each product by ID in
+  // parallel, filters failures, and caps the display at 4 items so the
+  // section stays compact and prominent for returning users.
+  useEffect(() => {
+    if (!recentlyViewed || recentlyViewed.length === 0) {
+      setRecentProducts([])
+      return
+    }
+    let cancelled = false
+    const ids = recentlyViewed.slice(0, 4)
+    Promise.allSettled(
+      ids.map((id) =>
+        fetch(`/api/products/${id}`)
+          .then((r) => r.json())
+          .then((d) => (d?.data ?? d) as Product | null)
+      )
+    ).then((results) => {
+      if (cancelled) return
+      const valid = results
+        .filter((r): r is PromiseFulfilledResult<Product> =>
+          r.status === 'fulfilled' && Boolean(r.value)
+        )
+        .map((r) => r.value)
+      setRecentProducts(valid)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [recentlyViewed])
+
   const handleSearchSubmit = (query: string) => {
     setSearchQuery(query)
     navigate('products')
@@ -1246,6 +1333,9 @@ export default function HomePage() {
 
       {/* ── 4. Hero Banner Carousel (moved below Categories) ── */}
       <HeroBannerCarousel banners={heroBanners} navigate={navigate} />
+
+      {/* ── 4a. Recently Viewed (localStorage-backed; shown for returning users) ── */}
+      <RecentlyViewedSection products={recentProducts} navigate={navigate} />
 
       {/* ── 5. Flash Sale / Deal Timer Section (visual priority slightly reduced) ── */}
       <FlashSaleSection products={discountProducts} navigate={navigate} siteConfig={siteConfig} />

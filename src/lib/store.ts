@@ -893,8 +893,9 @@ export const useAppStore = create<AppStore>()(
       recentlyViewed: [],
 
       addRecentlyViewed: (productId) => set((s) => {
+        // Remove existing entry to avoid duplicates, prepend to front, cap at 8 items
         const filtered = s.recentlyViewed.filter((id) => id !== productId)
-        return { recentlyViewed: [productId, ...filtered].slice(0, 10) }
+        return { recentlyViewed: [productId, ...filtered].slice(0, 8) }
       }),
 
       clearRecentlyViewed: () => set({ recentlyViewed: [] }),
