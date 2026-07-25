@@ -56,6 +56,10 @@ interface Category {
   id: string
   name: string
   slug: string
+  description?: string | null
+  image?: string | null
+  bannerImage?: string | null
+  icon?: string | null
   subcategories?: Array<{ id: string; name: string; slug: string }>
   _count?: { products: number }
 }
@@ -253,6 +257,23 @@ export default function ProductsPage() {
     setSelectedSubcategories([]) // Clear subcategories when category changes
     setPage(1)
   }, [])
+
+  // ── Category chip navigation (quick switching) ──
+  const handleCategoryChipClick = useCallback((slug: string | null) => {
+    if (slug) {
+      // Navigate to products page with the selected category.
+      // The pageParams effect (below) will sync selectedCategories state.
+      navigate('products', { category: slug })
+      setPage(1)
+    } else {
+      // "All" chip — clear category filter and navigate without a category param.
+      setSelectedCategories([])
+      setSelectedSubcategories([])
+      setSelectedCategory('')
+      navigate('products', {})
+      setPage(1)
+    }
+  }, [navigate, setSelectedCategory])
 
   // ── Toggle subcategory ──
   const toggleSubcategory = useCallback((slug: string) => {
@@ -715,18 +736,29 @@ export default function ProductsPage() {
           <div className="absolute bottom-0 right-0 w-96 h-96 bg-white rounded-full translate-x-1/3 translate-y-1/3" />
           <div className="absolute top-1/2 left-1/3 w-32 h-32 bg-white rounded-full" />
         </div>
-        <div className="relative container mx-auto px-4 py-8 md:py-12 text-center">
+        <div className={`relative container mx-auto px-4 text-center ${activeCategory ? 'py-6 md:py-8' : 'py-8 md:py-12'}`}>
           <div className="flex items-center justify-center gap-2 mb-2">
             <Leaf className="h-5 w-5 text-emerald-300" />
             <span className="text-emerald-200 text-sm font-medium tracking-wider uppercase">সবচেয়ে ভালো দামে খাঁটি খাদ্য</span>
             <Leaf className="h-5 w-5 text-emerald-300" />
           </div>
-          <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-3">
-            Our Products
-          </h1>
-          <p className="text-emerald-100/80 text-base md:text-lg max-w-xl mx-auto mb-6">
-            Discover our curated collection of authentic Bangladeshi food products
-          </p>
+          {!activeCategory && (
+            <>
+              <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-3">
+                Our Products
+              </h1>
+              <p className="text-emerald-100/80 text-base md:text-lg max-w-xl mx-auto mb-2">
+                Discover authentic Bangladeshi food products
+              </p>
+              {totalProducts > 0 && (
+                <p className="text-emerald-200/80 text-sm mb-6">
+                  <span className="font-semibold text-white">{totalProducts}</span> product{totalProducts !== 1 ? 's' : ''} available
+                </p>
+              )}
+              {totalProducts === 0 && <div className="mb-6" />}
+            </>
+          )}
+          {activeCategory && <div className="mb-4" />}
 
           {/* ── Advanced Search Bar ── */}
           <div className="max-w-2xl mx-auto relative" ref={suggestionsRef}>
@@ -832,10 +864,11 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {/* Breadcrumb */}
-      <div className="bg-white dark:bg-card py-3 border-b">
-        <div className="container mx-auto px-4">
-          <Breadcrumb>
+      {/* ── Category Banner / All Products Header ── */}
+      <div className="bg-white dark:bg-card border-b">
+        <div className="container mx-auto px-4 py-4 md:py-6">
+          {/* Breadcrumb (always visible, contextual) */}
+          <Breadcrumb className="mb-3">
             <BreadcrumbList>
               <BreadcrumbItem>
                 <BreadcrumbLink onClick={() => navigate('home')} className="cursor-pointer flex items-center gap-1">
@@ -845,18 +878,124 @@ export default function ProductsPage() {
               </BreadcrumbItem>
               <BreadcrumbSeparator />
               <BreadcrumbItem>
-                <BreadcrumbLink>Products</BreadcrumbLink>
+                {activeCategory ? (
+                  <BreadcrumbLink
+                    onClick={() => handleCategoryChipClick(null)}
+                    className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Categories
+                  </BreadcrumbLink>
+                ) : (
+                  <BreadcrumbLink className="text-foreground font-medium">Products</BreadcrumbLink>
+                )}
               </BreadcrumbItem>
               {activeCategory && (
                 <>
                   <BreadcrumbSeparator />
                   <BreadcrumbItem>
-                    <BreadcrumbLink>{activeCategory.name}</BreadcrumbLink>
+                    <BreadcrumbLink className="text-foreground font-medium">{activeCategory.name}</BreadcrumbLink>
                   </BreadcrumbItem>
                 </>
               )}
             </BreadcrumbList>
           </Breadcrumb>
+
+          {activeCategory ? (
+            /* Rich category banner with image background */
+            <div className="relative h-48 md:h-64 rounded-2xl overflow-hidden">
+              {(() => {
+                const bannerSrc = activeCategory.bannerImage || activeCategory.image
+                return bannerSrc ? (
+                  <Image
+                    src={bannerSrc}
+                    alt={activeCategory.name}
+                    fill
+                    priority
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, 1200px"
+                  />
+                ) : (
+                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-600 via-emerald-800 to-emerald-900" />
+                )
+              })()}
+              {/* Dark overlay for readability */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/10" />
+
+              {/* Content positioned at bottom-left */}
+              <div className="absolute inset-x-0 bottom-0 p-5 md:p-7">
+                <div className="flex items-end justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="text-2xl md:text-3xl font-bold text-white mb-1.5 drop-shadow-md">
+                      {activeCategory.name}
+                    </h2>
+                    {activeCategory.description && (
+                      <p className="text-sm md:text-base text-white/80 line-clamp-2 max-w-2xl drop-shadow">
+                        {activeCategory.description}
+                      </p>
+                    )}
+                  </div>
+                  {totalProducts > 0 && (
+                    <Badge className="bg-white/20 backdrop-blur-sm text-white border border-white/30 shrink-0">
+                      <Package className="h-3 w-3 mr-1" />
+                      {totalProducts} product{totalProducts !== 1 ? 's' : ''}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Simpler "All Products" header when no category selected */
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="text-xl md:text-2xl font-bold text-foreground">All Products</h2>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Browse our complete collection of authentic Bangladeshi food products
+                </p>
+              </div>
+              {totalProducts > 0 && (
+                <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 shrink-0">
+                  <Package className="h-3 w-3 mr-1" />
+                  {totalProducts} product{totalProducts !== 1 ? 's' : ''}
+                </Badge>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Category Chips (quick switching) ── */}
+      <div className="bg-white dark:bg-card border-b">
+        <div className="container mx-auto px-4 py-3">
+          <div className="flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none] -mx-1 px-1">
+            <button
+              onClick={() => handleCategoryChipClick(null)}
+              aria-pressed={selectedCategories.length === 0}
+              className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                selectedCategories.length === 0
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-muted text-muted-foreground hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/30 dark:hover:text-emerald-300'
+              }`}
+            >
+              All
+            </button>
+            {categories.map((cat) => {
+              const isActive = selectedCategories.includes(cat.slug)
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => handleCategoryChipClick(cat.slug)}
+                  aria-pressed={isActive}
+                  className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'bg-muted text-muted-foreground hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/30 dark:hover:text-emerald-300'
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              )
+            })}
+          </div>
         </div>
       </div>
 
@@ -936,19 +1075,30 @@ export default function ProductsPage() {
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
-                {/* View Toggle */}
-                <div className="flex items-center border rounded-lg overflow-hidden">
+                {/* View Toggle (grid / list) */}
+                <div className="flex items-center border rounded-lg overflow-hidden bg-muted/30">
                   <button
-                    className={`h-9 w-9 flex items-center justify-center transition-colors ${viewMode === 'grid' ? 'bg-emerald-600 text-white' : 'hover:bg-muted'}`}
+                    className={`h-9 w-9 flex items-center justify-center transition-all ${
+                      viewMode === 'grid'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'text-muted-foreground hover:bg-background hover:text-emerald-700 dark:hover:text-emerald-300'
+                    }`}
                     onClick={() => setViewMode('grid')}
                     aria-label="Grid view"
+                    aria-pressed={viewMode === 'grid'}
                   >
                     <Grid3X3 className="h-4 w-4" />
                   </button>
+                  <Separator orientation="vertical" className="h-6 bg-border/60" />
                   <button
-                    className={`h-9 w-9 flex items-center justify-center transition-colors ${viewMode === 'list' ? 'bg-emerald-600 text-white' : 'hover:bg-muted'}`}
+                    className={`h-9 w-9 flex items-center justify-center transition-all ${
+                      viewMode === 'list'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'text-muted-foreground hover:bg-background hover:text-emerald-700 dark:hover:text-emerald-300'
+                    }`}
                     onClick={() => setViewMode('list')}
                     aria-label="List view"
+                    aria-pressed={viewMode === 'list'}
                   >
                     <List className="h-4 w-4" />
                   </button>
@@ -956,24 +1106,31 @@ export default function ProductsPage() {
 
                 {/* Grid columns toggle (desktop) */}
                 {viewMode === 'grid' && (
-                  <div className="hidden md:flex items-center border rounded-lg overflow-hidden">
-                    {[2, 3, 4].map((cols) => (
-                      <button
-                        key={cols}
-                        className={`h-9 w-9 flex items-center justify-center transition-colors ${gridCols === cols ? 'bg-emerald-600 text-white' : 'hover:bg-muted'}`}
-                        onClick={() => setGridCols(cols as 2 | 3 | 4)}
-                        aria-label={`${cols} columns`}
-                      >
-                        {cols === 2 ? <LayoutGrid className="h-4 w-4" /> : <Columns3 className="h-4 w-4" />}
-                      </button>
+                  <div className="hidden md:flex items-center border rounded-lg overflow-hidden bg-muted/30">
+                    {[2, 3, 4].map((cols, idx) => (
+                      <div key={cols} className="flex items-center">
+                        {idx > 0 && <Separator orientation="vertical" className="h-6 bg-border/60" />}
+                        <button
+                          className={`h-9 w-9 flex items-center justify-center transition-all ${
+                            gridCols === cols
+                              ? 'bg-emerald-600 text-white shadow-sm'
+                              : 'text-muted-foreground hover:bg-background hover:text-emerald-700 dark:hover:text-emerald-300'
+                          }`}
+                          onClick={() => setGridCols(cols as 2 | 3 | 4)}
+                          aria-label={`${cols} columns`}
+                          aria-pressed={gridCols === cols}
+                        >
+                          {cols === 2 ? <LayoutGrid className="h-4 w-4" /> : <Columns3 className="h-4 w-4" />}
+                        </button>
+                      </div>
                     ))}
                   </div>
                 )}
 
-                {/* Sort dropdown */}
+                {/* Sort dropdown — emerald accent on focus / open */}
                 <Select value={sort} onValueChange={(val) => { setSort(val); setPage(1) }}>
-                  <SelectTrigger className="w-[180px] rounded-lg">
-                    <ArrowUpDown className="h-4 w-4 mr-2 text-muted-foreground" />
+                  <SelectTrigger className="w-[180px] rounded-lg border-emerald-200 dark:border-emerald-800/60 data-[state=open]:border-emerald-500 data-[state=open]:ring-2 data-[state=open]:ring-emerald-500/20 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20">
+                    <ArrowUpDown className="h-4 w-4 mr-2 text-emerald-600" />
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

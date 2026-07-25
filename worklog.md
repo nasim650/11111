@@ -1006,3 +1006,92 @@ File: `src/components/pages/ProductDetailPage.tsx`
 4. **Improve the products page mobile layout** (test on mobile viewport, collapsible filters)
 5. **Add a "You May Also Like" section** improvement on product detail (cross-category recommendations)
 6. **Add a category landing page** with category banner, description, subcategory navigation
+
+---
+Task ID: 13
+Agent: general-purpose
+Task: Add category banner + chips + heading improvements to ProductsPage
+
+Work Log:
+- Category banner: Added a rich banner section that replaces the old plain breadcrumb bar. When `pageParams.category` is set, the banner renders as `h-48 md:h-64 rounded-2xl overflow-hidden relative` with the category's `bannerImage` (falling back to `image`) as a `next/image` `fill` `object-cover` background, plus a layered dark overlay (`bg-gradient-to-t from-black/80 via-black/40 to-black/10`) for readability. Text is anchored bottom-left and includes the category name (2xl/3xl bold white), description (white/80, line-clamped), and a product-count badge (`bg-white/20 backdrop-blur`). When no category is selected, a simpler "All Products" header (title + subtitle + emerald count badge) replaces the banner. The breadcrumb now reads "Home > Categories > {Category Name}" when a category is active, or "Home > Products" otherwise.
+- Category chips: Added a horizontally scrollable chip row directly below the banner (`overflow-x-auto flex gap-2` with hidden scrollbar via `[&::-webkit-scrollbar]:hidden [scrollbar-width:none]`). An "All" chip sits first; each chip is `rounded-full px-4 py-2 text-sm font-medium`. Active chip uses `bg-emerald-600 text-white shadow-sm`; inactive uses `bg-muted text-muted-foreground` with emerald hover (`hover:bg-emerald-50 hover:text-emerald-700`, plus dark-mode variants). Clicking a category chip calls `navigate('products', { category: slug })` so the existing `pageParams` effect syncs `selectedCategories`; clicking "All" both clears the filter state (`setSelectedCategories([])`, `setSelectedCategory('')`, etc.) and calls `navigate('products', {})`. A new `handleCategoryChipClick` handler (added near `toggleCategory`) encapsulates this logic without touching any existing business logic. Each chip has `aria-pressed` for accessibility.
+- Heading area improvements: (1) When a category is selected, the generic "Our Products" H1 and subtitle are hidden inside the green hero (the category banner now serves as the page's visual heading); vertical padding is reduced (`py-6 md:py-8`) so the hero doesn't look empty. (2) When no category is selected, the hero shows "Our Products" with the new subtitle "Discover authentic Bangladeshi food products" plus a live product-count line. (3) The sort `SelectTrigger` now has an emerald border (`border-emerald-200`) that intensifies on focus/open (`data-[state=open]:border-emerald-500 focus:border-emerald-500`) with an emerald focus ring (`focus:ring-2 focus:ring-emerald-500/20`); the sort icon is now emerald. (4) The grid/list view toggle and grid-columns toggle were rebuilt with clearer active state: active button is `bg-emerald-600 text-white shadow-sm`, inactive is `text-muted-foreground hover:bg-background hover:text-emerald-700`, with subtle `Separator` dividers between buttons and `aria-pressed` flags.
+
+Stage Summary:
+- Verified: `bunx tsc --noEmit` exits with code 0 (zero TypeScript errors project-wide). The verification command `bunx tsc --noEmit 2>&1 | grep "ProductsPage"` returns empty output (grep exit 1 = no matches), satisfying the task's acceptance criterion.
+- No business logic was touched: filtering, search debounce, pagination, API calls, sidebar filters, and the `pageParams` → `selectedCategories` sync effect are all unchanged. Only the `Category` interface was extended (added `description`, `image`, `bannerImage`, `icon` as optional fields, all of which the existing `/api/categories` route already returns from the Prisma model).
+- Theme preserved: all new UI uses emerald/amber accents — no indigo/blue introduced. `next/image` with `fill` + `object-cover` is used for the category banner image, with a graceful emerald gradient fallback when no image is set. Mobile-first responsiveness is maintained (banner is `h-48` on mobile, `h-64` on desktop; chips scroll horizontally; hero padding adapts to category state).
+- Net additions: ~140 lines in `ProductsPage.tsx` (1 new handler, 1 extended interface, hero conditional, banner section, chips section, restyled sort/view toggles). File now ~1443 lines, compiles cleanly.
+
+---
+Task ID: CRON-R8
+Agent: main-orchestrator (webDevReview cycle 8)
+Task: QA order history, test mobile, add category banner + chips
+
+## Current Project Status Assessment
+QA via agent-browser confirmed the project is stable and all customer flows work:
+- ✅ Customer order history works: placed order as logged-in customer (KK-20260725-08190), orders page shows it with order number, date, status (Pending), items (2), total (৳950), "View Details" button, status filter tabs, summary stats (1 Total, 1 Active, 0 Delivered)
+- ✅ Mobile layout tested (375px): products page is mobile-friendly with 2-column grid, "Filters" button, search bar
+- ✅ Products page with category filter works (shows "Rice & Grains" products)
+- ✅ Product detail page has Frequently Bought Together section
+- ✅ All APIs return 200, 0 HTTP errors
+- ✅ TypeScript: 0 errors, ESLint: 0 errors
+
+## Completed Modifications
+
+### 1. Verified customer order history flow
+- Placed order as logged-in customer (customer@test.com) via API with JWT auth
+- Order KK-20260725-08190 created successfully (2 items, ৳950 total, COD, pending status)
+- Orders page shows the order with: order number, date, status badge, items, total, View Details button
+- Status filter tabs work (All/Pending/Processing/Shipped/Delivered/Cancelled)
+- Summary stats correct (1 Total, 1 Active, 0 Delivered)
+- VLM confirms: "order card visible with all details", "filter tabs", "summary cards"
+
+### 2. Added category banner + chips to products page (Task 13 subagent)
+File: `src/components/pages/ProductsPage.tsx`
+
+**Category banner:**
+- When a category is selected: shows `h-48 md:h-64 rounded-2xl` banner with category image (bannerImage or image) as background, dark overlay, category name (large bold white), description (white/80%), product count badge
+- When no category: simpler "All Products" header with subtitle "Discover authentic Bangladeshi food products" and count badge
+- Breadcrumb: "Home > Categories > {Name}" (clickable) or "Home > Products"
+
+**Category chips:**
+- Horizontal scrollable row below the banner: `overflow-x-auto flex gap-2`
+- "All" chip first, then each category as a pill (`rounded-full px-4 py-2 text-sm font-medium`)
+- Active: `bg-emerald-600 text-white`; Inactive: `bg-muted` with emerald hover
+- Clicking navigates to products with that category (or clears for "All")
+
+**Heading improvements:**
+- "Our Products" heading hidden when category selected (banner replaces it)
+- Sort dropdown: emerald border on focus/open, emerald sort icon
+- View toggle (grid/list): clearer active state (`bg-emerald-600 text-white`)
+
+**Verified by VLM:** "category banner with background image (rice in wooden bowls)", "category name in bold white", "4 products badge", "breadcrumb Home > Categories > Rice & Grains", "category chips (All, Rice & Grains [active], Spices, Lentils & Pulses)", "high and professional quality"
+
+### 3. QA: Mobile layout verified
+- Products page mobile (375px): 2-column grid, "Filters" button, search bar, mobile-friendly
+- VLM confirms: "mobile-friendly layout", "2-column grid", "Filters button present"
+
+## Verification Results
+- ✅ ESLint: 0 errors
+- ✅ TypeScript: 0 src errors
+- ✅ Customer order history: order KK-20260725-08190 visible with all details
+- ✅ Category banner: background image, name, description, product count, breadcrumb
+- ✅ Category chips: All/Rice & Grains/Spices/Lentils & Pulses with active state
+- ✅ Mobile layout: 2-column grid, filters button, responsive
+- ✅ VLM confirms: "high and professional quality" for category banner
+- ✅ 0 HTTP 404/500 errors in dev.log
+- ✅ DB state: 8 products, 13 images, 8 reviews, 2 orders
+
+## Unresolved Issues / Risks
+1. **Dev server memory**: Can die under rapid edit cycles. Stable when left running.
+2. **Dormant Prisma models**: LoyaltyPoint, PrintQueue, etc. remain in schema (harmless).
+3. **Mobile search placeholder truncation**: Minor — the search placeholder text is slightly truncated on 375px screens. Low priority.
+
+## Priority Recommendations for Next Phase
+1. **Add admin customer detail view** (view customer's orders, addresses, profile)
+2. **Add a "You May Also Like" cross-category recommendations** on product detail
+3. **Improve checkout Step 2→3→4 flow** (test payment selection and order placement in browser)
+4. **Add a search results page** with enhanced filter UI
+5. **Add product comparison** (compare 2-3 products side by side)
+6. **Add a "Deal of the Day" section** with countdown timer on homepage
