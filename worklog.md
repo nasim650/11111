@@ -1202,3 +1202,137 @@ File: `src/components/pages/admin/DashboardHome.tsx` (672 → 564 lines)
 4. **Improve checkout Step 2→3→4 flow** (test payment selection and order placement in browser)
 5. **Add product comparison** (compare 2-3 products side by side)
 6. **Add a search results page** with enhanced filter UI
+
+---
+
+Task ID: 15-b
+Agent: general-purpose
+Task: Improve You May Also Like with cross-category recommendations
+
+Work Log:
+- Located the existing "You May Also Like" section in `src/components/pages/ProductDetailPage.tsx`. It previously pulled products from the SAME category as the current product (the `/api/products?category=<slug>` fetch on line ~360) and shared its data with the "Customers Also Viewed" section.
+- Rewrote the recommendation fetch in the main `useEffect` (around the product-load handler):
+  - Now runs two parallel fetches via `Promise.all`:
+    1. `/api/products?category=<slug>&limit=8&status=active` (same-category — feeds "Customers Also Viewed")
+    2. `/api/products?status=active&limit=8` (broad active-product sample)
+  - "Customers Also Viewed" still uses the same-category slice (existing behavior preserved).
+  - "You May Also Like" now filters OUT products whose `category.slug` matches the current product's category slug, then takes up to 8 cross-category items. When there aren't enough cross-category products, it falls back to filling the remaining slots with same-category products (deduped against already-selected cross-category items). This satisfies the "Rice & Grains → Spices / Lentils" discovery intent generically.
+  - Added a no-category fallback path so a product without a category still surfaces a generic mix of active products.
+- Redesigned the "You May Also Like" section JSX:
+  - Wrapped in `AnimatedSection` with `className="py-10 md:py-14 bg-muted/20 -mx-4 px-4 sm:rounded-2xl"` (extends the muted band to the container's px-4 edge on mobile, rounded card on larger screens).
+  - Heading uses a `Compass` lucide icon inside an indigo icon chip (bg-indigo-100 / dark:bg-indigo-900/30, text-indigo-600) to visually distinguish it from the emerald Frequently Bought Together section. Added `Compass` to the lucide-react import block.
+  - Added subtitle "Discover products from other categories" and a decorative `h-1 w-16 rounded-full bg-indigo-500/60` underline beneath the heading.
+  - Replaced the previous horizontal-scroll layout (and its left/right nav buttons) with a responsive grid: `grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5`.
+  - Kept the existing `ProductCard` component for each product (no new card created) and the staggered `motion.div` entrance animation (delay = idx * 0.06).
+  - "View All Products" ghost button now uses indigo accents and links to the products page (`navigate('products')`) instead of the same-category filter.
+- Removed now-unused code that was only referenced by the old scroll UI: the `relatedScrollRef` useState and the `scrollRelated` helper function. No other code referenced these.
+- Did NOT touch FBT, reviews, Add to Cart, sticky bar, breadcrumbs, image gallery, or any other existing functionality — only the "You May Also Like" section and its supporting fetch were modified.
+
+Stage Summary:
+- "You May Also Like" is now a true cross-category discovery section (4-8 products from OTHER categories, with same-category fallback when sparse), distinct from "Customers Also Viewed" (same-category).
+- New indigo accent palette for this section's decorative elements (icon chip, underline, "View All Products" button) — keeps the emerald/amber primary theme intact while differentiating the section from FBT.
+- Grid layout `grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5` replaces the old horizontal-scroll + nav-arrows pattern, giving users a denser at-a-glance view.
+- Verification: `bunx tsc --noEmit` exits 0 with zero output; `bunx tsc --noEmit 2>&1 | grep "ProductDetailPage"` returns empty (no TS errors in the file).
+- Preserved all existing functionality: FBT, reviews, Add to Cart, sticky bar, breadcrumbs, gallery, Customers Also Viewed.
+
+---
+Task ID: 15-a
+Agent: general-purpose
+Task: Add Deal of the Day section with countdown timer to homepage
+
+Work Log:
+- Added a new `DealOfTheDaySection` component to `src/components/pages/HomePage.tsx` (placed between `HeroBannerCarousel` and `FlashSaleSection` in the component definition order). The component renders a single featured product with a live HH:MM:SS countdown that ticks every second until 23:59:59.999.
+- Added 3 new lucide-react imports: `ShoppingCart`, `Loader2`, `Check` (used in the Add-to-Cart button state machine). Added `useMemo` to the React import.
+- Component layout (mobile-stacked, desktop 2-col):
+  * Left: product image in an `aspect-square` `rounded-2xl` card with `object-cover` `next/image`, an amber Flame + "X% OFF" discount badge overlay (top-left), and a small emerald "Featured" ribbon (top-right).
+  * Right: amber "DEAL OF THE DAY" pill label with filled `Zap` icon → large bold product name → 1-line muted short description (falls back to a generic "Limited-time offer..." string when `shortDescription` is missing) → price block (emerald bold current ৳ price + line-through original + emerald "Save ৳X" Badge) → 3 dark-bg countdown boxes (HH:MM:SS, `bg-slate-900 text-white rounded-lg text-2xl font-bold tabular-nums`) → "X% claimed" stock progress bar (random 60–90% picked once via `useRef`) → CTA row: emerald `Add to Cart` (h-12, rounded-xl, full-width on mobile, with Loading/Added/Idle states) + ghost `View Details` button (amber border, navigates to `product-detail`).
+- Styling: full-width `rounded-3xl overflow-hidden` banner card, `border-2 border-amber-200`, `bg-gradient-to-br from-amber-50 via-orange-50 to-amber-50`. Decorative background = dotted radial-gradient pattern (24px grid) at 30% opacity + two blurred amber/orange blob shapes (top-right, bottom-left). Wrapped in existing `AnimatedSection` so framer-motion fade-in + slide-up triggers on scroll-into-view.
+- State management:
+  * `timeLeft` state `{ hours, minutes, seconds }` updated every second via `setInterval` inside `useEffect` (cleared on unmount). Time-to-midnight computed as `end.setHours(23,59,59,999) - Date.now()` clamped at 0.
+  * `adding` / `added` button states (1.5s "Added!" confirmation, then reverts).
+  * `claimedPct` stable demo value via `useRef(Math.floor(Math.random()*31) + 60)`.
+- `addToCart` is pulled from the Zustand store via `useAppStore((s) => s.addToCart)` directly inside the section (matches the ProductCard pattern). The button builds the standard `Omit<CartItem, 'id'>` payload (productId, productName, price, discountPrice, quantity: 1, unit, image, stock) — same shape ProductCard uses.
+- In the main `HomePage` component, added a `dealProduct` derived value via `useMemo` that picks the highest-discount-% product from `discountProducts` (sorted descending), falling back to `featuredProducts[0]` when no discounted products exist, or `null` when both lists are empty. Section is conditionally rendered (`{dealProduct && <DealOfTheDaySection .../>}`) so it auto-hides when there's nothing to feature.
+- Placement in render order: AnnouncementBar → Search → Categories → Hero Banner → **Deal of the Day** → Recently Viewed → Flash Sale → Best Sellers → Featured Products → New Arrivals → Trust → Mobile App CTA. (Deal of the Day sits between `HeroBannerCarousel` and `FlashSaleSection` as required.)
+- No existing sections or logic changed; only additive edits (3 new imports, 1 new component ~250 lines, 1 new `useMemo`, 1 conditional render block).
+
+Stage Summary:
+- Single file changed: `src/components/pages/HomePage.tsx` (1398 → 1673 lines, +275 lines).
+- Verification: `bunx tsc --noEmit 2>&1 | grep "HomePage"` → empty (no TS errors). Full `bunx tsc --noEmit` → exit code 0 (zero project-wide TS errors).
+- Theme preserved: emerald accent on price + Add-to-Cart button (matches primary brand), amber/orange accent for the Deal of the Day label, countdown background, and progress bar (matches the requested amber accent + existing Flash Sale amber styling). Bengali ৳ symbol used throughout.
+- Countdown actually ticks: `setInterval(updateCountdown, 1000)` with proper cleanup; initial value computed synchronously on mount so the UI never flashes 00:00:00.
+- All section props typed (`product: Product`, `navigate: (page: PageName, params?) => void`), no `any` types introduced.
+- Dev server NOT started per instructions.
+
+---
+Task ID: CRON-R10
+Agent: main-orchestrator (webDevReview cycle 10)
+Task: QA profile/contact pages, add Deal of the Day + You May Also Like
+
+## Current Project Status Assessment
+QA via agent-browser confirmed the project is stable:
+- ✅ Customer profile page works: shows user info (name, email, phone, member since), stats (Orders, Wishlist, Addresses), tabs (Profile, Orders, Addresses, Settings), personal information form
+- ✅ Contact page works: contact method cards (Call, Email, Visit, Business Hours), "Send a Message" form, FAQ section
+- ✅ Admin dashboard clean (dead print queue/loyalty sections removed in previous cycle)
+- ✅ All customer flows work (login, cart, checkout, orders, wishlist, reviews, category banner)
+- ✅ All APIs return 200, 0 HTTP errors
+- ✅ TypeScript: 0 errors, ESLint: 0 errors
+
+## Completed Modifications
+
+### 1. Added Deal of the Day section (Task 15-a subagent)
+File: `src/components/pages/HomePage.tsx` (+275 lines)
+
+**New `DealOfTheDaySection` component:**
+- Full-width `rounded-3xl` card with amber/orange gradient background and border
+- 2-column layout (desktop) / stacked (mobile)
+- Left: product image (aspect-square) with "25% OFF" badge + "FEATURED" ribbon
+- Right: "DEAL OF THE DAY" label (Zap icon, amber), product name, description, price block (৳45 current, ৳60 original, Save ৳15 badge)
+- **Live countdown timer**: 3 dark boxes (HH:MM:SS) counting down to midnight, updates every second via setInterval
+- "68% claimed" progress bar
+- "Add to Cart" button (emerald, h-12) + "View Details" ghost button
+- Framer-motion entrance animation
+- `dealProduct` derived via useMemo: picks highest-discount-% product from discountProducts, falls back to featuredProducts[0]
+- Placed between HeroBannerCarousel and RecentlyViewedSection
+
+**Verified by VLM:** "Puffed Rice in burlap sack, 25% OFF + FEATURED badges, ৳45 price, countdown timer 01:30:37 in dark boxes, all elements present"
+
+### 2. Improved You May Also Like with cross-category recommendations (Task 15-b subagent)
+File: `src/components/pages/ProductDetailPage.tsx`
+
+**Cross-category fetch logic:**
+- Now fetches `/api/products?status=active&limit=8` and filters OUT products in the same category as the current product
+- Takes up to 8 cross-category items; falls back to same-category if sparse
+- "Customers Also Viewed" still uses same-category fetch (unchanged)
+
+**Redesigned section:**
+- Indigo accent (Compass icon, decorative underline, "View All Products" button) — distinct from FBT's emerald
+- Subtitle: "Discover products from other categories"
+- Grid: `grid-cols-2 sm:3 lg:4` using existing ProductCard
+- Wrapped in AnimatedSection with `bg-muted/20`
+
+**Verified:** Current product is Honey (Lentils & Pulses) → recommendations show Puffed Rice (Rice & Grains) + Biryani Masala (Spices) — correctly cross-category
+
+## Verification Results
+- ✅ ESLint: 0 errors
+- ✅ TypeScript: 0 src errors
+- ✅ Deal of the Day: product image, countdown timer, price, Add to Cart — all present
+- ✅ You May Also Like: cross-category products from different categories
+- ✅ VLM confirms Deal of the Day: "all elements present"
+- ✅ Profile page: user info, stats, tabs, form
+- ✅ Contact page: contact cards, form, FAQ
+- ✅ 0 HTTP 404/500 errors in dev.log
+- ✅ DB state: 8 products, 13 images, 8 reviews, 2 orders
+
+## Unresolved Issues / Risks
+1. **Dev server memory**: Can die under rapid edit cycles. Stable when left running.
+2. **Dormant Prisma models**: LoyaltyPoint, PrintQueue, etc. remain in schema (harmless).
+3. **VLM scroll issues**: Full-page VLM screenshots sometimes show the wrong section due to scroll position. Section-by-section text checks are more reliable.
+
+## Priority Recommendations for Next Phase
+1. **Add admin customer detail view** (view customer's orders, addresses, profile)
+2. **Add product comparison** (compare 2-3 products side by side)
+3. **Improve checkout Step 2→3→4 flow** (test payment selection and order placement in browser)
+4. **Add a search results page** with enhanced filter UI
+5. **Add a "Top Rated" section** on homepage (products with highest reviews)
+6. **Add a newsletter signup** in the footer (with a working API endpoint)

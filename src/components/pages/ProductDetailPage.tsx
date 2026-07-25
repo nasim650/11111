@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   RefreshCw,
   ChevronRight,
+  Compass,
   Copy,
   Check,
   GitCompareArrows,
@@ -308,7 +309,6 @@ export default function ProductDetailPage() {
   const [fullscreenOpen, setFullscreenOpen] = useState(false)
   const [wishlistAnimating, setWishlistAnimating] = useState(false)
   const [showVideo, setShowVideo] = useState(false)
-  const [relatedScrollRef, setRelatedScrollRef] = useState<HTMLDivElement | null>(null)
 
   // Zoom state
   const [zoomPosition, setZoomPosition] = useState({ x: 50, y: 50 })
@@ -357,18 +357,54 @@ export default function ProductDetailPage() {
         setReviews(extractItems<Review>(reviewsData))
         addRecentlyViewed(productData.id)
 
-        if (productData.category?.id) {
-          fetch(`/api/products?category=${productData.category.slug}&limit=8&status=active`)
+        // ── Cross-category recommendations ──
+        // "Customers Also Viewed" uses same-category products.
+        // "You May Also Like" surfaces products from OTHER categories so
+        // users can discover more (e.g. Rice & Grains → Spices / Lentils).
+        // When there aren't enough cross-category products, we fall back
+        // to filling the grid with same-category products.
+        const currentCatSlug = productData.category?.slug
+        Promise.all([
+          currentCatSlug
+            ? fetch(`/api/products?category=${currentCatSlug}&limit=8&status=active`)
+                .then((r) => r.json())
+                .then((d) =>
+                  extractItems<RelatedProduct>(d).filter(
+                    (p) => p.id !== productData.id
+                  )
+                )
+                .catch(() => [] as RelatedProduct[])
+            : Promise.resolve([] as RelatedProduct[]),
+          fetch(`/api/products?status=active&limit=8`)
             .then((r) => r.json())
-            .then((d) => {
-              const prods = extractItems<RelatedProduct>(d).filter(
+            .then((d) =>
+              extractItems<RelatedProduct>(d).filter(
                 (p) => p.id !== productData.id
               )
-              setRelatedProducts(prods.slice(0, 6))
-              setAlsoViewedProducts(prods.slice(0, 6))
-            })
-            .catch(() => {})
-        }
+            )
+            .catch(() => [] as RelatedProduct[]),
+        ]).then(([sameCat, allActive]) => {
+          // "Customers Also Viewed" — same-category products.
+          if (sameCat.length > 0) {
+            setAlsoViewedProducts(sameCat.slice(0, 6))
+          }
+
+          // "You May Also Like" — cross-category recommendations.
+          // Filter OUT products in the same category as the current product.
+          const crossCat = currentCatSlug
+            ? allActive.filter((p) => p.category?.slug !== currentCatSlug)
+            : allActive
+          const desired = 8
+          const result = [...crossCat.slice(0, desired)]
+          // Fall back to same-category products if cross-category is sparse.
+          if (result.length < desired) {
+            const filler = sameCat
+              .filter((p) => !result.some((r) => r.id === p.id))
+              .slice(0, desired - result.length)
+            result.push(...filler)
+          }
+          setRelatedProducts(result.slice(0, desired))
+        })
 
         fetch(`/api/products?status=active&limit=4`)
           .then((r) => r.json())
@@ -763,16 +799,6 @@ export default function ProductDetailPage() {
 
   const scrollToReviews = () => {
     reviewsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
-
-  // Related products scroll navigation
-  const scrollRelated = (direction: 'left' | 'right') => {
-    if (!relatedScrollRef) return
-    const scrollAmount = 280
-    relatedScrollRef.scrollBy({
-      left: direction === 'left' ? -scrollAmount : scrollAmount,
-      behavior: 'smooth',
-    })
   }
 
   return (
@@ -2024,53 +2050,43 @@ export default function ProductDetailPage() {
         )}
 
         {/* ══════════════════════════════════════════════════════════════════════
-            YOU MAY ALSO LIKE (Related Products) - with navigation arrows
+            YOU MAY ALSO LIKE (Cross-Category Recommendations)
+            Surfaces products from OTHER categories than the current product
+            so users can discover more of the catalog. Falls back to
+            same-category products when cross-category stock is sparse.
         ══════════════════════════════════════════════════════════════════════ */}
         {relatedProducts.length > 0 && (
-          <AnimatedSection className="mt-12">
+          <AnimatedSection className="py-10 md:py-14 bg-muted/20 -mx-4 px-4 sm:rounded-2xl">
             <section>
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                    <Sparkles className="h-4 w-4 text-amber-600" />
+              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-6">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                      <Compass className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                    </div>
+                    <h2 className="text-xl md:text-2xl font-bold">You May Also Like</h2>
                   </div>
-                  <h2 className="text-xl md:text-2xl font-bold">You May Also Like</h2>
+                  <p className="text-sm text-muted-foreground mt-1.5 ml-10">
+                    Discover products from other categories
+                  </p>
+                  <div className="ml-10 mt-2 h-1 w-16 rounded-full bg-indigo-500/60" />
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8 rounded-full hidden md:flex"
-                    onClick={() => scrollRelated('left')}
-                    aria-label="Scroll left"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8 rounded-full hidden md:flex"
-                    onClick={() => scrollRelated('right')}
-                    aria-label="Scroll right"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" className="text-emerald-600 hover:text-emerald-700 rounded-full" onClick={() => navigate('products', { category: product.category?.slug })}>
-                    View All <ArrowRight className="h-4 w-4 ml-1" />
-                  </Button>
-                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/30 rounded-full self-start sm:self-auto"
+                  onClick={() => navigate('products')}
+                >
+                  View All Products <ArrowRight className="h-4 w-4 ml-1" />
+                </Button>
               </div>
-              <div
-                ref={setRelatedScrollRef}
-                className="flex gap-4 overflow-x-auto pb-4 md:grid md:grid-cols-2 lg:grid-cols-3 md:overflow-x-visible md:pb-0 scrollbar-hide scroll-smooth"
-              >
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5">
                 {relatedProducts.map((p, idx) => (
                   <motion.div
                     key={p.id}
-                    className="min-w-[200px] md:min-w-0"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: idx * 0.08 }}
+                    transition={{ delay: idx * 0.06 }}
                   >
                     <ProductCard product={p} />
                   </motion.div>

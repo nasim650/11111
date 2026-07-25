@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import Image from 'next/image'
 import {
   ChevronLeft,
@@ -21,6 +21,9 @@ import {
   Gift,
   GripHorizontal,
   TrendingUp,
+  ShoppingCart,
+  Loader2,
+  Check,
 } from 'lucide-react'
 import { motion, AnimatePresence, useInView } from 'framer-motion'
 import { Button } from '@/components/ui/button'
@@ -701,6 +704,257 @@ function CategorySection({ categories, navigate }: {
   )
 }
 
+// ── Deal of the Day Section ──
+// Single featured product with a live HH:MM:SS countdown until midnight.
+// Highlights the highest-discount product from `discountProducts`, falling back
+// to the first featured product when no discounted products are available.
+function DealOfTheDaySection({ product, navigate }: {
+  product: Product
+  navigate: (page: PageName, params?: Record<string, unknown>) => void
+}) {
+  const addToCart = useAppStore((s) => s.addToCart)
+  const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 })
+  const [adding, setAdding] = useState(false)
+  const [added, setAdded] = useState(false)
+
+  // Stable "X% claimed" demo value (60–90%) picked once per mount
+  const claimedPct = useRef<number>(Math.floor(Math.random() * 31) + 60)
+
+  // Live countdown — tick every second until 23:59:59.999 today
+  useEffect(() => {
+    const updateCountdown = () => {
+      const now = new Date()
+      const end = new Date()
+      end.setHours(23, 59, 59, 999)
+      const diff = Math.max(end.getTime() - now.getTime(), 0)
+      setTimeLeft({
+        hours: Math.floor(diff / (1000 * 60 * 60)),
+        minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
+        seconds: Math.floor((diff % (1000 * 60)) / 1000),
+      })
+    }
+    updateCountdown()
+    const timer = setInterval(updateCountdown, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const hasDiscount =
+    product.discountPrice != null && product.discountPrice < product.price
+  const discountPercent = hasDiscount
+    ? Math.round(((product.price - product.discountPrice!) / product.price) * 100)
+    : 0
+  const effectivePrice = hasDiscount ? product.discountPrice! : product.price
+  const savingsAmount = hasDiscount ? product.price - product.discountPrice! : 0
+  const imageUrl = product.images?.[0]?.url || '/placeholder.png'
+  const outOfStock = product.stock <= 0
+  const pad = (n: number) => n.toString().padStart(2, '0')
+
+  const handleAddToCart = async () => {
+    if (adding || outOfStock) return
+    setAdding(true)
+    try {
+      await addToCart({
+        productId: product.id,
+        productName: product.name,
+        price: product.price,
+        discountPrice: product.discountPrice,
+        quantity: 1,
+        unit: product.unit,
+        image: imageUrl,
+        stock: product.stock,
+      })
+      setAdded(true)
+      setTimeout(() => setAdded(false), 1500)
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  const countdownUnits = [
+    { label: 'Hours', value: pad(timeLeft.hours) },
+    { label: 'Min', value: pad(timeLeft.minutes) },
+    { label: 'Sec', value: pad(timeLeft.seconds) },
+  ]
+
+  return (
+    <section className="py-8 md:py-10 bg-white">
+      <div className="container mx-auto px-4">
+        <AnimatedSection>
+          <div className="relative rounded-3xl overflow-hidden border-2 border-amber-200 bg-gradient-to-br from-amber-50 via-orange-50 to-amber-50 shadow-sm">
+            {/* Decorative dotted pattern background */}
+            <div
+              className="absolute inset-0 opacity-30 pointer-events-none"
+              style={{
+                backgroundImage: `radial-gradient(circle at 2px 2px, rgba(245,158,11,0.18) 1px, transparent 0)`,
+                backgroundSize: '24px 24px',
+              }}
+            />
+            {/* Floating decorative blobs */}
+            <div className="absolute top-0 right-0 w-48 h-48 bg-amber-200/40 rounded-full -translate-y-1/3 translate-x-1/3 blur-2xl pointer-events-none" />
+            <div className="absolute bottom-0 left-1/4 w-32 h-32 bg-orange-200/40 rounded-full translate-y-1/2 blur-2xl pointer-events-none" />
+
+            <div className="relative grid md:grid-cols-2 gap-6 md:gap-10 p-5 md:p-10 items-center">
+              {/* ── Left column: Product image with discount badge ── */}
+              <div className="relative">
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ duration: 0.5, ease: 'easeOut' }}
+                  className="relative aspect-square w-full max-w-sm mx-auto rounded-2xl overflow-hidden bg-white shadow-xl ring-1 ring-amber-100"
+                >
+                  <Image
+                    src={imageUrl}
+                    alt={product.name}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, 50vw"
+                  />
+                  {/* Discount badge overlay */}
+                  {hasDiscount && (
+                    <div className="absolute top-3 left-3 bg-gradient-to-br from-amber-500 to-orange-600 text-white font-bold text-sm px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1">
+                      <Flame className="h-3.5 w-3.5" />
+                      {discountPercent}% OFF
+                    </div>
+                  )}
+                  {/* Featured ribbon */}
+                  <div className="absolute top-3 right-3 bg-emerald-700 text-white text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full shadow-md">
+                    Featured
+                  </div>
+                </motion.div>
+              </div>
+
+              {/* ── Right column: Details + countdown + CTAs ── */}
+              <div className="flex flex-col gap-4">
+                {/* "DEAL OF THE DAY" label */}
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1, duration: 0.5 }}
+                  className="inline-flex items-center gap-1.5 self-start bg-amber-100 px-3 py-1 rounded-full"
+                >
+                  <Zap className="h-4 w-4 fill-amber-500 text-amber-500" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-amber-700">
+                    Deal of the Day
+                  </span>
+                </motion.div>
+
+                {/* Product name + short description */}
+                <div>
+                  <h2 className="text-2xl md:text-3xl font-extrabold text-foreground leading-tight">
+                    {product.name}
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1 line-clamp-1">
+                    {product.shortDescription ||
+                      'Limited-time offer on this authentic Bangladeshi favorite.'}
+                  </p>
+                </div>
+
+                {/* Price block */}
+                <div className="flex flex-wrap items-end gap-3">
+                  <span className="text-3xl md:text-4xl font-extrabold text-emerald-700">
+                    ৳{effectivePrice.toLocaleString()}
+                  </span>
+                  {hasDiscount && (
+                    <>
+                      <span className="text-lg text-muted-foreground line-through">
+                        ৳{product.price.toLocaleString()}
+                      </span>
+                      <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 font-semibold text-xs">
+                        Save ৳{savingsAmount.toLocaleString()}
+                      </Badge>
+                    </>
+                  )}
+                </div>
+
+                {/* Countdown timer (HH:MM:SS) */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-1.5 text-amber-700">
+                    <Clock className="h-4 w-4" />
+                    <span className="text-xs font-semibold uppercase tracking-wider">
+                      Ends in
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {countdownUnits.map((unit, idx) => (
+                      <div key={unit.label} className="flex items-center gap-2">
+                        <div className="flex flex-col items-center">
+                          <div className="bg-slate-900 text-white rounded-lg px-3 py-2 min-w-[56px] text-center text-2xl font-bold tabular-nums shadow-md">
+                            {unit.value}
+                          </div>
+                          <span className="text-[10px] text-muted-foreground mt-1 font-medium uppercase tracking-wide">
+                            {unit.label}
+                          </span>
+                        </div>
+                        {idx < countdownUnits.length - 1 && (
+                          <span className="text-2xl font-bold text-slate-900 -mt-4">:</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Stock progress bar */}
+                <div>
+                  <div className="flex items-center justify-between text-xs mb-1.5">
+                    <span className="text-muted-foreground font-medium">Stock status</span>
+                    <span className="font-semibold text-amber-700">
+                      {claimedPct.current}% claimed
+                    </span>
+                  </div>
+                  <div className="h-2.5 w-full rounded-full bg-amber-100 overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${claimedPct.current}%` }}
+                      transition={{ duration: 1, ease: 'easeOut' }}
+                      className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
+                    />
+                  </div>
+                </div>
+
+                {/* CTA buttons */}
+                <div className="flex flex-col sm:flex-row gap-3 mt-2">
+                  <Button
+                    size="lg"
+                    onClick={handleAddToCart}
+                    disabled={adding || outOfStock}
+                    className="h-12 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-semibold gap-2 sm:flex-1 shadow-md disabled:opacity-60"
+                  >
+                    {adding ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Adding...
+                      </>
+                    ) : added ? (
+                      <>
+                        <Check className="h-4 w-4" />
+                        Added to Cart
+                      </>
+                    ) : (
+                      <>
+                        <ShoppingCart className="h-4 w-4" />
+                        {outOfStock ? 'Out of Stock' : 'Add to Cart'}
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="lg"
+                    onClick={() => navigate('product-detail', { id: product.id })}
+                    className="h-12 rounded-xl border border-amber-200 text-amber-800 hover:bg-amber-50 hover:text-amber-900 font-semibold gap-2"
+                  >
+                    View Details
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </AnimatedSection>
+      </div>
+    </section>
+  )
+}
+
 // ── Flash Sale Section ──
 function FlashSaleSection({ products, navigate, siteConfig }: {
   products: Product[]
@@ -1289,6 +1543,22 @@ export default function HomePage() {
     navigate('products')
   }
 
+  // ── Deal of the Day product: highest discount % from discountProducts,
+  // falling back to the first featured product when no discounts exist.
+  const dealProduct = useMemo<Product | null>(() => {
+    if (discountProducts.length > 0) {
+      const discountPct = (p: Product) =>
+        p.discountPrice != null && p.discountPrice < p.price
+          ? (p.price - p.discountPrice) / p.price
+          : 0
+      return [...discountProducts].sort(
+        (a, b) => discountPct(b) - discountPct(a)
+      )[0]
+    }
+    if (featuredProducts.length > 0) return featuredProducts[0]
+    return null
+  }, [discountProducts, featuredProducts])
+
   if (loading) {
     return <HomeLoadingSkeleton />
   }
@@ -1333,6 +1603,11 @@ export default function HomePage() {
 
       {/* ── 4. Hero Banner Carousel (moved below Categories) ── */}
       <HeroBannerCarousel banners={heroBanners} navigate={navigate} />
+
+      {/* ── 4b. Deal of the Day (single featured product + midnight countdown) ── */}
+      {dealProduct && (
+        <DealOfTheDaySection product={dealProduct} navigate={navigate} />
+      )}
 
       {/* ── 4a. Recently Viewed (localStorage-backed; shown for returning users) ── */}
       <RecentlyViewedSection products={recentProducts} navigate={navigate} />
