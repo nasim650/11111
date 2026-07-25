@@ -1,0 +1,1668 @@
+     1→'use client'
+     2→
+     3→import { useEffect, useState } from 'react'
+     4→import Image from 'next/image'
+     5→import { motion, AnimatePresence } from 'framer-motion'
+     6→import {
+     7→  CreditCard, Truck, MapPin, ChevronRight, Loader2, ShieldCheck,
+     8→  Gift, Clock, CheckCircle2, Wallet, Banknote, Lock,
+     9→  ArrowLeft, RefreshCw, Zap, Tag, ShoppingBag, ChevronDown,
+    10→  Phone, User, Mail, Home as HomeIcon, AlertCircle, Minus, Plus,
+    11→  X, Info, Star, Sparkles, Package,
+    12→} from 'lucide-react'
+    13→import { Button } from '@/components/ui/button'
+    14→import { Input } from '@/components/ui/input'
+    15→import { Label } from '@/components/ui/label'
+    16→import { Textarea } from '@/components/ui/textarea'
+    17→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    18→import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+    19→import { Separator } from '@/components/ui/separator'
+    20→import { Badge } from '@/components/ui/badge'
+    21→import { Checkbox } from '@/components/ui/checkbox'
+    22→import { Progress } from '@/components/ui/progress'
+    23→import {
+    24→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    25→} from '@/components/ui/select'
+    26→import {
+    27→  Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
+    28→} from '@/components/ui/sheet'
+    29→import { useAppStore } from '@/lib/store'
+    30→import { extractItems } from '@/lib/api'
+    31→import CheckoutStepIndicator from '@/components/shared/CheckoutStepIndicator'
+    32→import { toast } from 'sonner'
+    33→
+    34→// ─── Types ────────────────────────────────────────────────────────────────────
+    35→
+    36→interface Address {
+    37→  id: string
+    38→  name: string
+    39→  phone: string
+    40→  address: string
+    41→  city: string
+    42→  district?: string
+    43→  postalCode?: string
+    44→  isDefault: boolean
+    45→}
+    46→
+    47→// ─── Bangladesh Districts (grouped by division) ─────────────────────────────
+    48→
+    49→const divisionDistricts: Record<string, string[]> = {
+    50→  'Dhaka Division': ['Dhaka', 'Faridpur', 'Gazipur', 'Gopalganj', 'Kishoreganj', 'Madaripur', 'Manikganj', 'Munshiganj', 'Narayanganj', 'Narsingdi', 'Rajbari', 'Shariatpur', 'Tangail'],
+    51→  'Rajshahi Division': ['Bogra', 'Joypurhat', 'Naogaon', 'Natore', 'Nawabganj', 'Pabna', 'Rajshahi', 'Sirajganj'],
+    52→  'Chittagong Division': ['Chittagong', 'Comilla', "Cox's Bazar", 'Feni', 'Khagrachhari', 'Lakshmipur', 'Noakhali', 'Rangamati', 'Brahmanbaria', 'Chandpur'],
+    53→  'Khulna Division': ['Khulna', 'Bagerhat', 'Chuadanga', 'Jessore', 'Jhenaidah', 'Kushtia', 'Magura', 'Meherpur', 'Narail', 'Satkhira'],
+    54→  'Barisal Division': ['Barisal', 'Barguna', 'Bhola', 'Jhalokati', 'Patuakhali', 'Pirojpur'],
+    55→  'Sylhet Division': ['Sylhet', 'Habiganj', 'Moulvibazar', 'Sunamganj'],
+    56→  'Rangpur Division': ['Rangpur', 'Dinajpur', 'Gaibandha', 'Kurigram', 'Lalmonirhat', 'Nilphamari', 'Panchagarh', 'Thakurgaon'],
+    57→  'Mymensingh Division': ['Mymensingh', 'Jamalpur', 'Netrokona', 'Sherpur'],
+    58→}
+    59→
+    60→const bangladeshDistricts = Object.values(divisionDistricts).flat()
+    61→
+    62→// ─── Component ────────────────────────────────────────────────────────────────
+    63→
+    64→export default function CheckoutPage() {
+    65→  const { cartItems, subtotal, totalItems, navigate, isAuthenticated, user, siteConfig, clearCart, updateQuantity, removeFromCart } = useAppStore()
+    66→  const [addresses, setAddresses] = useState<Address[]>([])
+    67→  const [selectedAddressId, setSelectedAddressId] = useState('')
+    68→  const [shippingMethod, setShippingMethod] = useState('standard')
+    69→  const [paymentMethod, setPaymentMethod] = useState('cod')
+    70→  const [note, setNote] = useState('')
+    71→  const [couponCode, setCouponCode] = useState('')
+    72→  const [discount, setDiscount] = useState(0)
+    73→  const [placing, setPlacing] = useState(false)
+    74→  const [currentStep, setCurrentStep] = useState(1)
+    75→  const [maxReachedStep, setMaxReachedStep] = useState(1)
+    76→  const [couponApplied, setCouponApplied] = useState(false)
+    77→  const [termsAccepted, setTermsAccepted] = useState(false)
+    78→  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
+    79→  const [showCouponInput, setShowCouponInput] = useState(true)
+    80→
+    81→  // Loyalty points state
+    82→  const [loyaltyBalance, setLoyaltyBalance] = useState(0)
+    83→  const [loyaltyPointsToUse, setLoyaltyPointsToUse] = useState(0)
+    84→  const [loyaltyApplied, setLoyaltyApplied] = useState(false)
+    85→  const [showLoyaltyInput, setShowLoyaltyInput] = useState(false)
+    86→
+    87→  // Guest form
+    88→  const [guestName, setGuestName] = useState('')
+    89→  const [guestPhone, setGuestPhone] = useState('')
+    90→  const [guestEmail, setGuestEmail] = useState('')
+    91→  const [guestAddress, setGuestAddress] = useState('')
+    92→  const [guestCity, setGuestCity] = useState('')
+    93→  const [guestDistrict, setGuestDistrict] = useState('')
+    94→
+    95→  // Add address form
+    96→  const [showAddAddress, setShowAddAddress] = useState(false)
+    97→  const [newAddr, setNewAddr] = useState({ name: '', phone: '', address: '', city: '', district: '', postalCode: '' })
+    98→
+    99→  // Mobile summary sheet
+   100→  const [mobileSummaryOpen, setMobileSummaryOpen] = useState(false)
+   101→
+   102→  useEffect(() => {
+   103→    if (isAuthenticated && user?.id) {
+   104→      fetch(`/api/addresses?userId=${user.id}`)
+   105→        .then((r) => r.json())
+   106→        .then((data) => {
+   107→          const addrs = extractItems<Address>(data)
+   108→          setAddresses(addrs)
+   109→          const defaultAddr = addrs.find((a: Address) => a.isDefault)
+   110→          if (defaultAddr) setSelectedAddressId(defaultAddr.id)
+   111→          else if (addrs.length > 0) setSelectedAddressId(addrs[0].id)
+   112→        })
+   113→        .catch(() => {})
+   114→    }
+   115→  }, [isAuthenticated, user?.id])
+   116→
+   117→  // Fetch loyalty balance for logged-in users
+   118→  useEffect(() => {
+   119→    if (isAuthenticated && user?.id) {
+   120→      fetch('/api/loyalty')
+   121→        .then((r) => r.json())
+   122→        .then((data) => {
+   123→          if (data.success) {
+   124→            setLoyaltyBalance(data.data.balance || 0)
+   125→          }
+   126→        })
+   127→        .catch(() => {})
+   128→    }
+   129→  }, [isAuthenticated, user?.id])
+   130→
+   131→  const sub = subtotal()
+   132→  const standardShipping = siteConfig?.shippingCharge || 60
+   133→  const expressShipping = 120
+   134→  const freeThreshold = siteConfig?.freeShippingThreshold || 1500
+   135→
+   136→  let shipping = standardShipping
+   137→  if (sub >= freeThreshold) {
+   138→    shipping = 0
+   139→  }
+   140→  if (shippingMethod === 'express') {
+   141→    shipping = expressShipping
+   142→    if (sub >= freeThreshold) {
+   143→      shipping = expressShipping - standardShipping
+   144→    }
+   145→  }
+   146→
+   147→  const loyaltyDiscount = loyaltyApplied ? Math.min(loyaltyPointsToUse, Math.floor(sub * 0.2), loyaltyBalance) : 0
+   148→  const maxLoyaltyDiscount = Math.floor(sub * 0.2)
+   149→  const effectiveLoyaltyPoints = Math.min(loyaltyPointsToUse, maxLoyaltyDiscount, loyaltyBalance)
+   150→
+   151→  const total = sub + shipping - discount - loyaltyDiscount
+   152→  const freeShippingProgress = Math.min((sub / freeThreshold) * 100, 100)
+   153→  const freeShippingRemaining = Math.max(freeThreshold - sub, 0)
+   154→
+   155→  // ─── Validation ───────────────────────────────────────────────────────────
+   156→
+   157→  const validatePhone = (p: string) => /^(?:01\d{9}|\+8801\d{9})$/.test(p)
+   158→
+   159→  const validateShippingStep = (): boolean => {
+   160→    const errors: Record<string, string> = {}
+   161→    if (isAuthenticated) {
+   162→      if (!selectedAddressId) errors.address = 'Please select a delivery address'
+   163→    } else {
+   164→      if (!guestName.trim()) errors.guestName = 'Full name is required'
+   165→      if (!guestPhone.trim()) {
+   166→        errors.guestPhone = 'Phone number is required'
+   167→      } else if (!validatePhone(guestPhone)) {
+   168→        errors.guestPhone = 'Enter a valid BD number (01XXXXXXXXX)'
+   169→      }
+   170→      if (!guestAddress.trim()) errors.guestAddress = 'Address is required'
+   171→      if (!guestCity.trim()) errors.guestCity = 'City is required'
+   172→    }
+   173→    setFormErrors(errors)
+   174→    return Object.keys(errors).length === 0
+   175→  }
+   176→
+   177→  // ─── Step Navigation ─────────────────────────────────────────────────────
+   178→
+   179→  const goToStep = (step: number) => {
+   180→    if (step <= currentStep) {
+   181→      setCurrentStep(step)
+   182→      return
+   183→    }
+   184→    if (step === 3 && currentStep === 2) {
+   185→      if (!validateShippingStep()) {
+   186→        toast.error('Please fill in all required fields')
+   187→        return
+   188→      }
+   189→    }
+   190→    if (step === 2 && currentStep === 1) {
+   191→      // Moving from cart review to shipping — no validation needed
+   192→    }
+   193→    if (step > currentStep + 1) return
+   194→    setCurrentStep(step)
+   195→    setMaxReachedStep((prev) => Math.max(prev, step))
+   196→  }
+   197→
+   198→  // ─── Coupon ───────────────────────────────────────────────────────────────
+   199→
+   200→  const handleApplyCoupon = async () => {
+   201→    if (!couponCode.trim()) return
+   202→    try {
+   203→      const res = await fetch('/api/coupons/validate', {
+   204→        method: 'POST',
+   205→        headers: { 'Content-Type': 'application/json' },
+   206→        body: JSON.stringify({ code: couponCode, totalAmount: sub }),
+   207→      })
+   208→      const data = await res.json()
+   209→      if (!res.ok) {
+   210→        toast.error(data.error || 'Invalid coupon')
+   211→        return
+   212→      }
+   213→      const discountAmount = data.type === 'percentage'
+   214→        ? Math.min(sub * (data.value / 100), data.maxDiscount || Infinity)
+   215→        : data.value
+   216→      setDiscount(discountAmount)
+   217→      setCouponApplied(true)
+   218→      toast.success('Coupon applied!')
+   219→    } catch {
+   220→      toast.error('Failed to validate coupon')
+   221→    }
+   222→  }
+   223→
+   224→  // ─── Add Address ──────────────────────────────────────────────────────────
+   225→
+   226→  const handleAddAddress = async () => {
+   227→    if (!user?.id) return
+   228→    try {
+   229→      const res = await fetch('/api/addresses', {
+   230→        method: 'POST',
+   231→        headers: { 'Content-Type': 'application/json' },
+   232→        body: JSON.stringify({ userId: user.id, ...newAddr, isDefault: addresses.length === 0 }),
+   233→      })
+   234→      if (!res.ok) throw new Error('Failed to add address')
+   235→      const saved = await res.json()
+   236→      setAddresses((prev) => [...prev, saved])
+   237→      setSelectedAddressId(saved.id)
+   238→      setShowAddAddress(false)
+   239→      setNewAddr({ name: '', phone: '', address: '', city: '', district: '', postalCode: '' })
+   240→      toast.success('Address added')
+   241→    } catch {
+   242→      toast.error('Failed to add address')
+   243→    }
+   244→  }
+   245→
+   246→  // ─── Place Order ──────────────────────────────────────────────────────────
+   247→
+   248→  const handlePlaceOrder = async () => {
+   249→    if (cartItems.length === 0) {
+   250→      toast.error('Your cart is empty')
+   251→      return
+   252→    }
+   253→
+   254→    if (!validateShippingStep()) {
+   255→      toast.error('Please fill in all required fields')
+   256→      setCurrentStep(2)
+   257→      return
+   258→    }
+   259→
+   260→    if (!termsAccepted) {
+   261→      toast.error('Please accept the terms & conditions')
+   262→      return
+   263→    }
+   264→
+   265→    setPlacing(true)
+   266→    try {
+   267→      const orderData: Record<string, unknown> = {
+   268→        paymentMethod,
+   269→        shippingMethod,
+   270→        orderNote: note,
+   271→        couponCode: couponCode || undefined,
+   272→        discountAmount: discount,
+   273→        deliveryCharge: shipping,
+   274→        totalAmount: total,
+   275→        loyaltyPoints: loyaltyApplied ? effectiveLoyaltyPoints : undefined,
+   276→        items: cartItems.map((item) => ({
+   277→          productId: item.productId,
+   278→          productName: item.productName,
+   279→          quantity: item.quantity,
+   280→          unit: item.unit,
+   281→          price: item.discountPrice != null ? item.discountPrice : item.price,
+   282→          image: item.image,
+   283→        })),
+   284→      }
+   285→
+   286→      if (isAuthenticated && user?.id) {
+   287→        orderData.userId = user.id
+   288→        orderData.addressId = selectedAddressId
+   289→      } else {
+   290→        orderData.guestName = guestName
+   291→        orderData.guestPhone = guestPhone
+   292→        orderData.guestEmail = guestEmail || undefined
+   293→        orderData.guestAddress = `${guestAddress}, ${guestCity}${guestDistrict ? `, ${guestDistrict}` : ''}`
+   294→      }
+   295→
+   296→      const res = await fetch('/api/orders', {
+   297→        method: 'POST',
+   298→        headers: {
+   299→          'Content-Type': 'application/json',
+   300→          ...(useAppStore.getState().accessToken ? { 'Authorization': `Bearer ${useAppStore.getState().accessToken}` } : {})
+   301→        },
+   302→        body: JSON.stringify(orderData),
+   303→      })
+   304→
+   305→      if (!res.ok) {
+   306→        const data = await res.json()
+   307→        throw new Error(data.error || 'Failed to place order')
+   308→      }
+   309→
+   310→      const order = await res.json()
+   311→      const orderId = order.data?.id || order.id
+   312→      const orderNum = order.data?.orderNumber || order.orderNumber
+   313→
+   314→      if (paymentMethod === 'online') {
+   315→        const initRes = await fetch('/api/payments/sslcommerz/initiate', {
+   316→          method: 'POST',
+   317→          headers: {
+   318→            'Content-Type': 'application/json',
+   319→            ...(useAppStore.getState().accessToken ? { 'Authorization': `Bearer ${useAppStore.getState().accessToken}` } : {})
+   320→          },
+   321→          body: JSON.stringify({ orderId }),
+   322→        })
+   323→        const initData = await initRes.json()
+   324→
+   325→        if (initData.success && initData.data?.gatewayPageURL) {
+   326→          window.location.href = initData.data.gatewayPageURL
+   327→          return
+   328→        } else {
+   329→          throw new Error(initData.error || 'Failed to initialize payment gateway')
+   330→        }
+   331→      } else {
+   332→        await clearCart()
+   333→        toast.success('Order placed successfully!')
+   334→        navigate('order-confirmation', { orderId, orderNumber: orderNum })
+   335→      }
+   336→    } catch (error) {
+   337→      toast.error(error instanceof Error ? error.message : 'Failed to place order')
+   338→      setPlacing(false)
+   339→    }
+   340→  }
+   341→
+   342→  // ─── Empty Cart ───────────────────────────────────────────────────────────
+   343→
+   344→  if (cartItems.length === 0) {
+   345→    return (
+   346→      <div className="min-h-screen flex flex-col">
+   347→        <div className="flex-1 flex items-center justify-center py-16 px-4">
+   348→          <div className="text-center">
+   349→            <div className="h-24 w-24 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
+   350→              <ShoppingBag className="h-12 w-12 text-primary/40" />
+   351→            </div>
+   352→            <h2 className="text-2xl font-bold mb-2">Your cart is empty</h2>
+   353→            <p className="text-muted-foreground mb-6">Add products to your cart before checkout</p>
+   354→            <Button onClick={() => navigate('products')} className="rounded-xl px-8 h-12">
+   355→              Browse Products
+   356→            </Button>
+   357→          </div>
+   358→        </div>
+   359→      </div>
+   360→    )
+   361→  }
+   362→
+   363→  // ─── Section Header (reusable, lightweight) ────────────────────────────────
+   364→  const SectionHeader = ({
+   365→    icon: Icon, title, subtitle, badge,
+   366→  }: { icon: typeof MapPin; title: string; subtitle?: string; badge?: string }) => (
+   367→    <CardHeader className="pb-3">
+   368→      <CardTitle className="text-base flex items-center gap-2">
+   369→        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+   370→          <Icon className="h-4 w-4 text-primary" />
+   371→        </div>
+   372→        <span>{title}</span>
+   373→        {badge && <Badge variant="secondary" className="ml-auto text-xs">{badge}</Badge>}
+   374→      </CardTitle>
+   375→      {subtitle && <p className="text-xs text-muted-foreground mt-1 ml-10">{subtitle}</p>}
+   376→    </CardHeader>
+   377→  )
+   378→
+   379→  // ─── Order Summary Content (shared between desktop sidebar & mobile sheet) ─
+   380→  const renderSummaryItems = (compact = false) => (
+   381→    <div className={`space-y-3 ${compact ? 'max-h-[40vh] overflow-y-auto pr-1' : 'max-h-72 overflow-y-auto pr-1'}`}>
+   382→      {cartItems.map((item) => {
+   383→        const itemPrice = item.discountPrice != null ? item.discountPrice : item.price
+   384→        return (
+   385→          <div key={item.id} className="flex items-center gap-3">
+   386→            <div className="relative h-12 w-12 rounded-lg bg-muted/40 flex-shrink-0 overflow-hidden border">
+   387→              <Image
+   388→                src={item.image}
+   389→                alt={item.productName}
+   390→                fill
+   391→                className="object-cover"
+   392→                sizes="48px"
+   393→                onError={(e) => {
+   394→                  const target = e.target as HTMLImageElement
+   395→                  target.style.display = 'none'
+   396→                }}
+   397→              />
+   398→              <span className="absolute -top-0.5 -right-0.5 h-5 min-w-5 px-1 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
+   399→                {item.quantity}
+   400→              </span>
+   401→            </div>
+   402→            <div className="flex-1 min-w-0">
+   403→              <p className="text-sm font-medium truncate">{item.productName}</p>
+   404→              <p className="text-xs text-muted-foreground">
+   405→                ৳{itemPrice.toLocaleString()} {item.unit && `· ${item.unit}`}
+   406→              </p>
+   407→            </div>
+   408→            <span className="text-sm font-semibold whitespace-nowrap">
+   409→              ৳{(itemPrice * item.quantity).toLocaleString()}
+   410→            </span>
+   411→          </div>
+   412→        )
+   413→      })}
+   414→    </div>
+   415→  )
+   416→
+   417→  const renderTotals = () => (
+   418→    <div className="space-y-2.5 text-sm">
+   419→      <div className="flex justify-between">
+   420→        <span className="text-muted-foreground">Subtotal ({totalItems()} items)</span>
+   421→        <span className="font-medium">৳{sub.toLocaleString()}</span>
+   422→      </div>
+   423→      <div className="flex justify-between">
+   424→        <span className="text-muted-foreground">Delivery Charge</span>
+   425→        <span className={`font-medium ${shipping === 0 ? 'text-emerald-600' : ''}`}>
+   426→          {shipping === 0 ? 'FREE' : `৳${shipping}`}
+   427→        </span>
+   428→      </div>
+   429→      {discount > 0 && (
+   430→        <div className="flex justify-between">
+   431→          <span className="text-muted-foreground">Coupon Discount</span>
+   432→          <span className="text-emerald-600 font-medium">-৳{discount.toLocaleString()}</span>
+   433→        </div>
+   434→      )}
+   435→      {loyaltyDiscount > 0 && (
+   436→        <div className="flex justify-between">
+   437→          <span className="text-muted-foreground">Loyalty Discount</span>
+   438→          <span className="text-amber-600 font-medium">-৳{loyaltyDiscount.toLocaleString()}</span>
+   439→        </div>
+   440→      )}
+   441→      <Separator />
+   442→      <div className="flex justify-between items-center pt-1">
+   443→        <span className="font-semibold">Grand Total</span>
+   444→        <motion.span
+   445→          key={total}
+   446→          initial={{ scale: 1.1 }}
+   447→          animate={{ scale: 1 }}
+   448→          className="text-2xl font-bold text-primary"
+   449→        >
+   450→          ৳{Math.max(0, total).toLocaleString()}
+   451→        </motion.span>
+   452→      </div>
+   453→      {(discount > 0 || loyaltyDiscount > 0) && (
+   454→        <div className="flex items-center gap-1.5 p-2 rounded-lg bg-emerald-50 text-xs">
+   455→          <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+   456→          <span className="text-emerald-700 font-semibold">
+   457→            Total savings: ৳{(discount + loyaltyDiscount).toLocaleString()}!
+   458→          </span>
+   459→        </div>
+   460→      )}
+   461→    </div>
+   462→  )
+   463→
+   464→  const renderCouponSection = () => (
+   465→    <div className="space-y-2">
+   466→      <button
+   467→        type="button"
+   468→        className="flex items-center justify-between w-full text-left"
+   469→        onClick={() => setShowCouponInput(!showCouponInput)}
+   470→      >
+   471→        <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 cursor-pointer">
+   472→          <Tag className="h-3.5 w-3.5 text-primary" />
+   473→          Coupon Code
+   474→        </Label>
+   475→        {showCouponInput ? (
+   476→          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+   477→        ) : (
+   478→          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+   479→        )}
+   480→      </button>
+   481→      <AnimatePresence>
+   482→        {showCouponInput && (
+   483→          <motion.div
+   484→            initial={{ opacity: 0, height: 0 }}
+   485→            animate={{ opacity: 1, height: 'auto' }}
+   486→            exit={{ opacity: 0, height: 0 }}
+   487→            className="overflow-hidden"
+   488→          >
+   489→            {couponApplied ? (
+   490→              <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-50 border border-emerald-200">
+   491→                <div className="flex items-center gap-2">
+   492→                  <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100">
+   493→                    <Gift className="h-3 w-3 mr-1" />
+   494→                    {couponCode}
+   495→                  </Badge>
+   496→                  <span className="text-xs text-emerald-700 font-semibold">-৳{discount.toLocaleString()}</span>
+   497→                </div>
+   498→                <Button
+   499→                  variant="ghost"
+   500→                  size="sm"
+   501→                  onClick={() => { setCouponCode(''); setDiscount(0); setCouponApplied(false) }}
+   502→                  className="text-red-500 h-7 text-xs hover:text-red-600 hover:bg-red-50"
+   503→                >
+   504→                  <X className="h-3 w-3 mr-0.5" /> Remove
+   505→                </Button>
+   506→              </div>
+   507→            ) : (
+   508→              <div className="flex gap-2">
+   509→                <Input
+   510→                  placeholder="Enter coupon code"
+   511→                  value={couponCode}
+   512→                  onChange={(e) => {
+   513→                    setCouponCode(e.target.value)
+   514→                    if (couponApplied) { setDiscount(0); setCouponApplied(false) }
+   515→                  }}
+   516→                  className="h-10 text-sm"
+   517→                  onKeyDown={(e) => e.key === 'Enter' && handleApplyCoupon()}
+   518→                />
+   519→                <Button
+   520→                  variant="outline"
+   521→                  onClick={handleApplyCoupon}
+   522→                  className="h-10 border-primary/30 text-primary hover:bg-primary/5 font-semibold px-5"
+   523→                >
+   524→                  Apply
+   525→                </Button>
+   526→              </div>
+   527→            )}
+   528→          </motion.div>
+   529→        )}
+   530→      </AnimatePresence>
+   531→    </div>
+   532→  )
+   533→
+   534→  const renderLoyaltySection = () => {
+   535→    if (!isAuthenticated || loyaltyBalance <= 0) return null
+   536→    return (
+   537→      <div className="space-y-2">
+   538→        <button
+   539→          type="button"
+   540→          className="flex items-center justify-between w-full text-left"
+   541→          onClick={() => setShowLoyaltyInput(!showLoyaltyInput)}
+   542→        >
+   543→          <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 cursor-pointer">
+   544→            <Star className="h-3.5 w-3.5 text-amber-500" />
+   545→            Use Loyalty Points
+   546→            <Badge variant="outline" className="ml-1 text-[10px] h-5 px-1.5 text-amber-700 border-amber-200 bg-amber-50">
+   547→              {loyaltyBalance} pts
+   548→            </Badge>
+   549→          </Label>
+   550→          {showLoyaltyInput ? (
+   551→            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+   552→          ) : (
+   553→            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+   554→          )}
+   555→        </button>
+   556→        <AnimatePresence>
+   557→          {showLoyaltyInput && (
+   558→            <motion.div
+   559→              initial={{ opacity: 0, height: 0 }}
+   560→              animate={{ opacity: 1, height: 'auto' }}
+   561→              exit={{ opacity: 0, height: 0 }}
+   562→              className="overflow-hidden"
+   563→            >
+   564→              <div className="space-y-3 pt-1">
+   565→                <p className="text-[11px] text-amber-700 leading-relaxed bg-amber-50/50 border border-amber-100 rounded-lg p-2 flex items-start gap-1.5">
+   566→                  <Info className="h-3.5 w-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
+   567→                  <span>
+   568→                    Max <span className="font-bold">20% of subtotal</span> (৳{maxLoyaltyDiscount.toLocaleString()}) can be paid with points. 1 point = ৳1.
+   569→                  </span>
+   570→                </p>
+   571→
+   572→                {loyaltyApplied ? (
+   573→                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-amber-50 border border-amber-200">
+   574→                    <div className="flex items-center gap-2">
+   575→                      <Badge className="bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100">
+   576→                        <Star className="h-3 w-3 mr-1" />
+   577→                        {loyaltyDiscount} pts
+   578→                      </Badge>
+   579→                      <span className="text-xs text-amber-700 font-semibold">-৳{loyaltyDiscount.toLocaleString()}</span>
+   580→                    </div>
+   581→                    <Button
+   582→                      variant="ghost"
+   583→                      size="sm"
+   584→                      onClick={() => { setLoyaltyApplied(false); setLoyaltyPointsToUse(0) }}
+   585→                      className="text-red-500 h-7 text-xs hover:text-red-600 hover:bg-red-50"
+   586→                    >
+   587→                      <X className="h-3 w-3 mr-0.5" /> Remove
+   588→                    </Button>
+   589→                  </div>
+   590→                ) : (
+   591→                  <>
+   592→                    <div className="flex gap-2">
+   593→                      <div className="relative flex-1">
+   594→                        <Star className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-amber-400" />
+   595→                        <Input
+   596→                          type="number"
+   597→                          min={0}
+   598→                          max={Math.min(loyaltyBalance, maxLoyaltyDiscount)}
+   599→                          value={loyaltyPointsToUse || ''}
+   600→                          onChange={(e) => {
+   601→                            const val = parseInt(e.target.value) || 0
+   602→                            setLoyaltyPointsToUse(Math.min(val, loyaltyBalance, maxLoyaltyDiscount))
+   603→                          }}
+   604→                          className="pl-9 h-10 text-sm"
+   605→                          placeholder="Points to use"
+   606→                        />
+   607→                      </div>
+   608→                      <Button
+   609→                        variant="outline"
+   610→                        onClick={() => {
+   611→                          if (loyaltyPointsToUse > 0 && loyaltyPointsToUse <= loyaltyBalance) {
+   612→                            setLoyaltyApplied(true)
+   613→                            toast.success(`${effectiveLoyaltyPoints} loyalty points applied! ৳${effectiveLoyaltyPoints} discount`)
+   614→                          } else {
+   615→                            toast.error('Enter valid points to redeem')
+   616→                          }
+   617→                        }}
+   618→                        className="h-10 border-amber-400 text-amber-700 hover:bg-amber-50 font-semibold px-5"
+   619→                      >
+   620→                        Apply
+   621→                      </Button>
+   622→                    </div>
+   623→
+   624→                    <div className="flex gap-2">
+   625→                      <button
+   626→                        onClick={() => setLoyaltyPointsToUse(Math.min(Math.floor(loyaltyBalance * 0.25), maxLoyaltyDiscount))}
+   627→                        className="flex-1 text-[11px] font-medium py-1.5 rounded-lg border hover:border-amber-300 hover:bg-amber-50 transition-colors text-muted-foreground"
+   628→                      >
+   629→                        25%
+   630→                      </button>
+   631→                      <button
+   632→                        onClick={() => setLoyaltyPointsToUse(Math.min(Math.floor(loyaltyBalance * 0.5), maxLoyaltyDiscount))}
+   633→                        className="flex-1 text-[11px] font-medium py-1.5 rounded-lg border hover:border-amber-300 hover:bg-amber-50 transition-colors text-muted-foreground"
+   634→                      >
+   635→                        50%
+   636→                      </button>
+   637→                      <button
+   638→                        onClick={() => setLoyaltyPointsToUse(Math.min(loyaltyBalance, maxLoyaltyDiscount))}
+   639→                        className="flex-1 text-[11px] font-medium py-1.5 rounded-lg border hover:border-amber-300 hover:bg-amber-50 transition-colors text-muted-foreground"
+   640→                      >
+   641→                        Max
+   642→                      </button>
+   643→                    </div>
+   644→
+   645→                    {loyaltyPointsToUse > maxLoyaltyDiscount && (
+   646→                      <p className="text-[11px] text-orange-600 flex items-center gap-1">
+   647→                        <AlertCircle className="h-3 w-3" />
+   648→                        Capped at {maxLoyaltyDiscount} points (20% of subtotal)
+   649→                      </p>
+   650→                    )}
+   651→                  </>
+   652→                )}
+   653→              </div>
+   654→            </motion.div>
+   655→          )}
+   656→        </AnimatePresence>
+   657→      </div>
+   658→    )
+   659→  }
+   660→
+   661→  const renderFreeShippingProgress = () => {
+   662→    if (freeShippingRemaining <= 0) {
+   663→      return (
+   664→        <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center gap-2 text-sm">
+   665→          <Truck className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+   666→          <span className="font-medium text-emerald-700">You qualify for FREE delivery!</span>
+   667→        </div>
+   668→      )
+   669→    }
+   670→    return (
+   671→      <div className="p-3 rounded-lg bg-amber-50/60 border border-amber-200">
+   672→        <div className="flex items-center justify-between text-xs mb-2">
+   673→          <span className="text-amber-800 font-medium flex items-center gap-1">
+   674→            <Truck className="h-3.5 w-3.5" />
+   675→            Add ৳{freeShippingRemaining.toLocaleString()} more for FREE delivery
+   676→          </span>
+   677→        </div>
+   678→        <Progress
+   679→          value={freeShippingProgress}
+   680→          className="h-1.5 bg-amber-200 [&>div]:bg-amber-500"
+   681→        />
+   682→      </div>
+   683→    )
+   684→  }
+   685→
+   686→  // Sidebar summary card content
+   687→  const SummaryCard = (
+   688→    <Card className="shadow-md">
+   689→      <CardHeader className="pb-3">
+   690→        <CardTitle className="text-base flex items-center justify-between">
+   691→          <span className="flex items-center gap-2">
+   692→            <Package className="h-4 w-4 text-primary" />
+   693→            Order Summary
+   694→          </span>
+   695→          <Badge variant="secondary" className="text-xs">{totalItems()} items</Badge>
+   696→        </CardTitle>
+   697→      </CardHeader>
+   698→      <CardContent className="space-y-4">
+   699→        {renderFreeShippingProgress()}
+   700→        {renderSummaryItems()}
+   701→        <Separator />
+   702→        {renderCouponSection()}
+   703→        {renderLoyaltySection()}
+   704→        <Separator />
+   705→        {renderTotals()}
+   706→      </CardContent>
+   707→    </Card>
+   708→  )
+   709→
+   710→  // Primary next-step CTA label
+   711→  const getPrimaryCtaLabel = () => {
+   712→    if (currentStep === 1) return 'Continue to Shipping'
+   713→    if (currentStep === 2) return 'Continue to Payment'
+   714→    if (currentStep === 3) return 'Review Order'
+   715→    return paymentMethod === 'online' ? 'Pay & Place Order' : 'Place Order'
+   716→  }
+   717→
+   718→  const handlePrimaryCta = () => {
+   719→    if (currentStep < 4) goToStep(currentStep + 1)
+   720→    else handlePlaceOrder()
+   721→  }
+   722→
+   723→  // ─── Main Render ──────────────────────────────────────────────────────────
+   724→
+   725→  return (
+   726→    <div className="min-h-screen flex flex-col bg-muted/20">
+   727→      {/* Compact Header */}
+   728→      <div className="bg-background border-b">
+   729→        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+   730→          <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => navigate('home')}>
+   731→            {siteConfig?.logo ? (
+   732→              <img src={siteConfig.logo} alt="Khati Khadyo" className="h-7 w-auto object-contain" />
+   733→            ) : (
+   734→              <img src="/all_logo.png" alt="Khati Khadyo" className="h-7 w-auto object-contain" />
+   735→            )}
+   736→            <span className="font-bold text-base hidden sm:block">Khati Khadyo</span>
+   737→          </div>
+   738→          <Button
+   739→            variant="ghost"
+   740→            size="sm"
+   741→            className="rounded-lg"
+   742→            onClick={() => navigate('cart')}
+   743→          >
+   744→            <ArrowLeft className="h-4 w-4 mr-1" />
+   745→            Back to Cart
+   746→          </Button>
+   747→        </div>
+   748→      </div>
+   749→
+   750→      {/* Step Indicator */}
+   751→      <CheckoutStepIndicator
+   752→        currentStep={currentStep}
+   753→        onStepClick={goToStep}
+   754→        maxReachedStep={maxReachedStep}
+   755→      />
+   756→
+   757→      {/* Main Content */}
+   758→      <div className="flex-1">
+   759→        <div className="container mx-auto px-4 py-6 sm:py-8">
+   760→          <div className="grid lg:grid-cols-3 gap-6">
+   761→            {/* Left: Forms */}
+   762→            <div className="lg:col-span-2 space-y-4 lg:space-y-6">
+   763→
+   764→              {/* ─── Step 1: Cart Review ─────────────────────────────────────── */}
+   765→              <AnimatePresence mode="wait">
+   766→                {currentStep === 1 && (
+   767→                  <motion.div
+   768→                    key="cart-review"
+   769→                    initial={{ opacity: 0, y: 20 }}
+   770→                    animate={{ opacity: 1, y: 0 }}
+   771→                    exit={{ opacity: 0, y: -20 }}
+   772→                    transition={{ duration: 0.4, ease: 'easeOut' }}
+   773→                    className="space-y-4"
+   774→                  >
+   775→                    <Card className="shadow-sm">
+   776→                      <SectionHeader
+   777→                        icon={ShoppingBag}
+   778→                        title="Review Your Cart"
+   779→                        subtitle={`${totalItems()} item(s) in your cart`}
+   780→                        badge="Step 1"
+   781→                      />
+   782→                      <CardContent className="space-y-3 pt-0">
+   783→                        {cartItems.map((item) => {
+   784→                          const itemPrice = item.discountPrice != null ? item.discountPrice : item.price
+   785→                          return (
+   786→                            <div
+   787→                              key={item.id}
+   788→                              className="flex items-center gap-3 p-2.5 rounded-lg border bg-card hover:bg-muted/30 transition-colors"
+   789→                            >
+   790→                              <div className="relative h-14 w-14 rounded-lg bg-muted/40 flex-shrink-0 overflow-hidden border">
+   791→                                <Image
+   792→                                  src={item.image}
+   793→                                  alt={item.productName}
+   794→                                  fill
+   795→                                  className="object-cover"
+   796→                                  sizes="56px"
+   797→                                  onError={(e) => {
+   798→                                    const target = e.target as HTMLImageElement
+   799→                                    target.style.display = 'none'
+   800→                                  }}
+   801→                                />
+   802→                                <span className="absolute -top-0.5 -right-0.5 h-5 min-w-5 px-1 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
+   803→                                  {item.quantity}
+   804→                                </span>
+   805→                              </div>
+   806→                              <div className="flex-1 min-w-0">
+   807→                                <p className="text-sm font-medium truncate">{item.productName}</p>
+   808→                                <p className="text-xs text-muted-foreground mt-0.5">
+   809→                                  ৳{itemPrice.toLocaleString()} {item.unit && `· per ${item.unit}`}
+   810→                                </p>
+   811→                                <div className="flex items-center gap-1.5 mt-1.5">
+   812→                                  <button
+   813→                                    onClick={() => updateQuantity(item.id, Math.max(1, item.quantity - 1))}
+   814→                                    className="h-6 w-6 rounded-md border flex items-center justify-center hover:bg-primary/10 hover:border-primary/30 transition-colors"
+   815→                                    aria-label="Decrease quantity"
+   816→                                  >
+   817→                                    <Minus className="h-2.5 w-2.5" />
+   818→                                  </button>
+   819→                                  <span className="text-xs font-semibold w-6 text-center">{item.quantity}</span>
+   820→                                  <button
+   821→                                    onClick={() => updateQuantity(item.id, item.quantity + 1)}
+   822→                                    className="h-6 w-6 rounded-md border flex items-center justify-center hover:bg-primary/10 hover:border-primary/30 transition-colors"
+   823→                                    aria-label="Increase quantity"
+   824→                                  >
+   825→                                    <Plus className="h-2.5 w-2.5" />
+   826→                                  </button>
+   827→                                  <button
+   828→                                    onClick={() => removeFromCart(item.id)}
+   829→                                    className="h-6 w-6 rounded-md flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 ml-1 transition-colors"
+   830→                                    aria-label="Remove item"
+   831→                                  >
+   832→                                    <X className="h-3 w-3" />
+   833→                                  </button>
+   834→                                </div>
+   835→                              </div>
+   836→                              <div className="text-right">
+   837→                                <p className="text-sm font-bold whitespace-nowrap">
+   838→                                  ৳{(itemPrice * item.quantity).toLocaleString()}
+   839→                                </p>
+   840→                              </div>
+   841→                            </div>
+   842→                          )
+   843→                        })}
+   844→
+   845→                        <div className="flex justify-between items-center pt-3 border-t">
+   846→                          <Button
+   847→                            variant="ghost"
+   848→                            size="sm"
+   849→                            onClick={() => navigate('cart')}
+   850→                          >
+   851→                            <ArrowLeft className="h-4 w-4 mr-1" />
+   852→                            Edit Cart
+   853→                          </Button>
+   854→                          <Button
+   855→                            onClick={() => goToStep(2)}
+   856→                            className="rounded-xl px-6 h-11"
+   857→                          >
+   858→                            Continue to Shipping
+   859→                            <ChevronRight className="h-4 w-4 ml-1" />
+   860→                          </Button>
+   861→                        </div>
+   862→                      </CardContent>
+   863→                    </Card>
+   864→                  </motion.div>
+   865→                )}
+   866→              </AnimatePresence>
+   867→
+   868→              {/* ─── Step 2: Shipping & Delivery ─────────────────────────────── */}
+   869→              <AnimatePresence mode="wait">
+   870→                {currentStep === 2 && (
+   871→                  <motion.div
+   872→                    key="shipping"
+   873→                    initial={{ opacity: 0, y: 20 }}
+   874→                    animate={{ opacity: 1, y: 0 }}
+   875→                    exit={{ opacity: 0, y: -20 }}
+   876→                    transition={{ duration: 0.4, ease: 'easeOut' }}
+   877→                    className="space-y-4"
+   878→                  >
+   879→                    {/* Delivery Information Card */}
+   880→                    <Card className="shadow-sm">
+   881→                      <SectionHeader
+   882→                        icon={MapPin}
+   883→                        title="Delivery Information"
+   884→                        subtitle="Where should we deliver your order?"
+   885→                        badge="Step 2"
+   886→                      />
+   887→                      <CardContent className="pt-0">
+   888→                        {isAuthenticated ? (
+   889→                          <div className="space-y-4">
+   890→                            {/* Saved Addresses */}
+   891→                            {addresses.length > 0 && (
+   892→                              <div>
+   893→                                <Label className="text-xs font-semibold text-muted-foreground mb-2 block">
+   894→                                  Saved Addresses
+   895→                                </Label>
+   896→                                <RadioGroup value={selectedAddressId} onValueChange={(v) => { setSelectedAddressId(v); setFormErrors((p) => ({ ...p, address: '' })) }}>
+   897→                                  <div className="space-y-2">
+   898→                                    {addresses.map((addr) => (
+   899→                                      <div
+   900→                                        key={addr.id}
+   901→                                        className={`relative flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+   902→                                          selectedAddressId === addr.id
+   903→                                            ? 'border-primary bg-primary/5'
+   904→                                            : 'border-border hover:border-primary/30'
+   905→                                        }`}
+   906→                                        onClick={() => { setSelectedAddressId(addr.id); setFormErrors((p) => ({ ...p, address: '' })) }}
+   907→                                      >
+   908→                                        <RadioGroupItem value={addr.id} id={addr.id} className="mt-1" />
+   909→                                        <Label htmlFor={addr.id} className="flex-1 cursor-pointer">
+   910→                                          <div className="flex items-center gap-2 flex-wrap">
+   911→                                            <span className="font-semibold text-sm">{addr.name}</span>
+   912→                                            {addr.isDefault && (
+   913→                                              <Badge variant="secondary" className="text-[10px] h-5 bg-primary/10 text-primary">Default</Badge>
+   914→                                            )}
+   915→                                          </div>
+   916→                                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
+   917→                                            <Phone className="h-3 w-3 flex-shrink-0" />
+   918→                                            {addr.phone}
+   919→                                          </div>
+   920→                                          <div className="flex items-start gap-1.5 text-xs text-muted-foreground mt-1">
+   921→                                            <MapPin className="h-3 w-3 mt-0.5 flex-shrink-0" />
+   922→                                            {addr.address}, {addr.city}{addr.district ? `, ${addr.district}` : ''} {addr.postalCode || ''}
+   923→                                          </div>
+   924→                                        </Label>
+   925→                                        {selectedAddressId === addr.id && (
+   926→                                          <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0 mt-1" />
+   927→                                        )}
+   928→                                      </div>
+   929→                                    ))}
+   930→                                  </div>
+   931→                                </RadioGroup>
+   932→                                {formErrors.address && (
+   933→                                  <p className="text-xs text-red-500 flex items-center gap-1 mt-2">
+   934→                                    <AlertCircle className="h-3 w-3" /> {formErrors.address}
+   935→                                  </p>
+   936→                                )}
+   937→                              </div>
+   938→                            )}
+   939→
+   940→                            {addresses.length === 0 && !showAddAddress && (
+   941→                              <div className="text-center py-8 bg-muted/30 rounded-xl border-2 border-dashed border-primary/30">
+   942→                                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
+   943→                                  <MapPin className="h-6 w-6 text-primary" />
+   944→                                </div>
+   945→                                <p className="text-sm mb-3 font-medium">No saved addresses yet</p>
+   946→                                <Button variant="outline" onClick={() => setShowAddAddress(true)} className="rounded-lg px-5">
+   947→                                  + Add New Address
+   948→                                </Button>
+   949→                              </div>
+   950→                            )}
+   951→
+   952→                            {/* Add Address Form */}
+   953→                            <AnimatePresence>
+   954→                              {showAddAddress && (
+   955→                                <motion.div
+   956→                                  initial={{ opacity: 0, height: 0 }}
+   957→                                  animate={{ opacity: 1, height: 'auto' }}
+   958→                                  exit={{ opacity: 0, height: 0 }}
+   959→                                  className="border-2 border-primary/30 rounded-xl p-4 bg-primary/5 space-y-4 overflow-hidden"
+   960→                                >
+   961→                                  <h4 className="font-bold text-sm flex items-center gap-2">
+   962→                                    <div className="h-7 w-7 rounded-md bg-primary/10 flex items-center justify-center">
+   963→                                      <MapPin className="h-3.5 w-3.5 text-primary" />
+   964→                                    </div>
+   965→                                    Add New Address
+   966→                                  </h4>
+   967→                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   968→                                    <div>
+   969→                                      <Label className="text-xs font-medium">Full Name *</Label>
+   970→                                      <div className="relative mt-1">
+   971→                                        <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   972→                                        <Input
+   973→                                          value={newAddr.name}
+   974→                                          onChange={(e) => setNewAddr({ ...newAddr, name: e.target.value })}
+   975→                                          className="pl-9 h-10"
+   976→                                          placeholder="Enter full name"
+   977→                                        />
+   978→                                      </div>
+   979→                                    </div>
+   980→                                    <div>
+   981→                                      <Label className="text-xs font-medium">Phone Number *</Label>
+   982→                                      <div className="relative mt-1">
+   983→                                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   984→                                        <Input
+   985→                                          value={newAddr.phone}
+   986→                                          onChange={(e) => setNewAddr({ ...newAddr, phone: e.target.value })}
+   987→                                          className="pl-9 h-10"
+   988→                                          placeholder="01XXXXXXXXX"
+   989→                                        />
+   990→                                      </div>
+   991→                                    </div>
+   992→                                  </div>
+   993→                                  <div>
+   994→                                    <Label className="text-xs font-medium">Address *</Label>
+   995→                                    <Textarea
+   996→                                      value={newAddr.address}
+   997→                                      onChange={(e) => setNewAddr({ ...newAddr, address: e.target.value })}
+   998→                                      placeholder="House, Road, Area"
+   999→                                      className="mt-1 resize-none"
+  1000→                                      rows={2}
+  1001→                                    />
+  1002→                                  </div>
+  1003→                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+  1004→                                    <div>
+  1005→                                      <Label className="text-xs font-medium">City *</Label>
+  1006→                                      <Input
+  1007→                                        value={newAddr.city}
+  1008→                                        onChange={(e) => setNewAddr({ ...newAddr, city: e.target.value })}
+  1009→                                        className="mt-1 h-10"
+  1010→                                        placeholder="e.g. Dhaka"
+  1011→                                      />
+  1012→                                    </div>
+  1013→                                    <div>
+  1014→                                      <Label className="text-xs font-medium">District</Label>
+  1015→                                      <Select value={newAddr.district} onValueChange={(v) => setNewAddr({ ...newAddr, district: v })}>
+  1016→                                        <SelectTrigger className="mt-1 w-full h-10">
+  1017→                                          <SelectValue placeholder="Select district" />
+  1018→                                        </SelectTrigger>
+  1019→                                        <SelectContent>
+  1020→                                          {Object.entries(divisionDistricts).map(([division, dists]) => (
+  1021→                                            <div key={division}>
+  1022→                                              <div className="px-2 py-1.5 text-xs font-bold text-primary bg-primary/5">{division}</div>
+  1023→                                              {dists.map((d) => (
+  1024→                                                <SelectItem key={d} value={d}>{d}</SelectItem>
+  1025→                                              ))}
+  1026→                                            </div>
+  1027→                                          ))}
+  1028→                                        </SelectContent>
+  1029→                                      </Select>
+  1030→                                    </div>
+  1031→                                    <div>
+  1032→                                      <Label className="text-xs font-medium">Postal Code</Label>
+  1033→                                      <Input
+  1034→                                        value={newAddr.postalCode}
+  1035→                                        onChange={(e) => setNewAddr({ ...newAddr, postalCode: e.target.value })}
+  1036→                                        className="mt-1 h-10"
+  1037→                                        placeholder="e.g. 1200"
+  1038→                                      />
+  1039→                                    </div>
+  1040→                                  </div>
+  1041→                                  <div className="flex gap-2 pt-1">
+  1042→                                    <Button onClick={handleAddAddress} className="rounded-lg px-5 h-10">Save Address</Button>
+  1043→                                    <Button variant="outline" onClick={() => setShowAddAddress(false)} className="rounded-lg px-5 h-10">Cancel</Button>
+  1044→                                  </div>
+  1045→                                </motion.div>
+  1046→                              )}
+  1047→                            </AnimatePresence>
+  1048→
+  1049→                            {!showAddAddress && addresses.length > 0 && (
+  1050→                              <Button variant="outline" onClick={() => setShowAddAddress(true)} className="border-dashed border-primary/40 text-primary hover:bg-primary/5 w-full rounded-lg h-11">
+  1051→                                <Plus className="h-4 w-4 mr-2" />
+  1052→                                Add New Address
+  1053→                              </Button>
+  1054→                            )}
+  1055→                          </div>
+  1056→                        ) : (
+  1057→                          /* Guest Checkout Form */
+  1058→                          <div className="space-y-4">
+  1059→                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2.5">
+  1060→                              <div className="h-7 w-7 rounded-md bg-amber-100 flex items-center justify-center flex-shrink-0">
+  1061→                                <Info className="h-3.5 w-3.5 text-amber-600" />
+  1062→                              </div>
+  1063→                              <p className="text-xs text-amber-800 leading-relaxed">
+  1064→                                Have an account?{' '}
+  1065→                                <button className="font-bold underline hover:text-amber-900" onClick={() => navigate('login')}>
+  1066→                                  Login
+  1067→                                </button>{' '}
+  1068→                                for a faster checkout with saved addresses.
+  1069→                              </p>
+  1070→                            </div>
+  1071→
+  1072→                            {/* Contact Info */}
+  1073→                            <div>
+  1074→                              <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-2">
+  1075→                                <User className="h-3.5 w-3.5 text-primary" />
+  1076→                                Contact Information
+  1077→                              </h4>
+  1078→                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  1079→                                <div>
+  1080→                                  <Label className="text-xs font-medium">Full Name *</Label>
+  1081→                                  <div className="relative mt-1">
+  1082→                                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1083→                                    <Input
+  1084→                                      value={guestName}
+  1085→                                      onChange={(e) => { setGuestName(e.target.value); setFormErrors((p) => ({ ...p, guestName: '' })) }}
+  1086→                                      className={`pl-9 h-10 ${formErrors.guestName ? 'border-red-400 focus-visible:ring-red-200' : ''}`}
+  1087→                                      placeholder="Your full name"
+  1088→                                    />
+  1089→                                  </div>
+  1090→                                  {formErrors.guestName && (
+  1091→                                    <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+  1092→                                      <AlertCircle className="h-3 w-3" /> {formErrors.guestName}
+  1093→                                    </p>
+  1094→                                  )}
+  1095→                                </div>
+  1096→                                <div>
+  1097→                                  <Label className="text-xs font-medium">Phone Number *</Label>
+  1098→                                  <div className="relative mt-1">
+  1099→                                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1100→                                    <Input
+  1101→                                      value={guestPhone}
+  1102→                                      onChange={(e) => { setGuestPhone(e.target.value); setFormErrors((p) => ({ ...p, guestPhone: '' })) }}
+  1103→                                      className={`pl-9 h-10 ${formErrors.guestPhone ? 'border-red-400 focus-visible:ring-red-200' : ''}`}
+  1104→                                      placeholder="01XXXXXXXXX"
+  1105→                                    />
+  1106→                                  </div>
+  1107→                                  {formErrors.guestPhone && (
+  1108→                                    <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+  1109→                                      <AlertCircle className="h-3 w-3" /> {formErrors.guestPhone}
+  1110→                                    </p>
+  1111→                                  )}
+  1112→                                </div>
+  1113→                              </div>
+  1114→
+  1115→                              <div className="mt-3">
+  1116→                                <Label className="text-xs font-medium">Email (optional)</Label>
+  1117→                                <div className="relative mt-1">
+  1118→                                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1119→                                  <Input
+  1120→                                    type="email"
+  1121→                                    value={guestEmail}
+  1122→                                    onChange={(e) => setGuestEmail(e.target.value)}
+  1123→                                    className="pl-9 h-10"
+  1124→                                    placeholder="your@email.com"
+  1125→                                  />
+  1126→                                </div>
+  1127→                              </div>
+  1128→                            </div>
+  1129→
+  1130→                            <Separator />
+  1131→
+  1132→                            {/* Shipping Address */}
+  1133→                            <div>
+  1134→                              <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-2">
+  1135→                                <HomeIcon className="h-3.5 w-3.5 text-primary" />
+  1136→                                Shipping Address
+  1137→                              </h4>
+  1138→                              <div>
+  1139→                                <Label className="text-xs font-medium">Delivery Address *</Label>
+  1140→                                <div className="relative mt-1">
+  1141→                                  <HomeIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+  1142→                                  <Textarea
+  1143→                                    value={guestAddress}
+  1144→                                    onChange={(e) => { setGuestAddress(e.target.value); setFormErrors((p) => ({ ...p, guestAddress: '' })) }}
+  1145→                                    className={`pl-9 ${formErrors.guestAddress ? 'border-red-400 focus-visible:ring-red-200' : ''}`}
+  1146→                                    placeholder="House no, Road, Area"
+  1147→                                    rows={2}
+  1148→                                  />
+  1149→                                </div>
+  1150→                                {formErrors.guestAddress && (
+  1151→                                  <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+  1152→                                    <AlertCircle className="h-3 w-3" /> {formErrors.guestAddress}
+  1153→                                  </p>
+  1154→                                )}
+  1155→                              </div>
+  1156→
+  1157→                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+  1158→                                <div>
+  1159→                                  <Label className="text-xs font-medium">City *</Label>
+  1160→                                  <Input
+  1161→                                    value={guestCity}
+  1162→                                    onChange={(e) => { setGuestCity(e.target.value); setFormErrors((p) => ({ ...p, guestCity: '' })) }}
+  1163→                                    className={`mt-1 h-10 ${formErrors.guestCity ? 'border-red-400 focus-visible:ring-red-200' : ''}`}
+  1164→                                    placeholder="e.g. Dhaka"
+  1165→                                  />
+  1166→                                  {formErrors.guestCity && (
+  1167→                                    <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+  1168→                                      <AlertCircle className="h-3 w-3" /> {formErrors.guestCity}
+  1169→                                    </p>
+  1170→                                  )}
+  1171→                                </div>
+  1172→                                <div>
+  1173→                                  <Label className="text-xs font-medium">District</Label>
+  1174→                                  <Select value={guestDistrict} onValueChange={setGuestDistrict}>
+  1175→                                    <SelectTrigger className="mt-1 w-full h-10">
+  1176→                                      <SelectValue placeholder="Select district" />
+  1177→                                    </SelectTrigger>
+  1178→                                    <SelectContent>
+  1179→                                      {Object.entries(divisionDistricts).map(([division, dists]) => (
+  1180→                                        <div key={division}>
+  1181→                                          <div className="px-2 py-1.5 text-xs font-bold text-primary bg-primary/5">{division}</div>
+  1182→                                          {dists.map((d) => (
+  1183→                                            <SelectItem key={d} value={d}>{d}</SelectItem>
+  1184→                                          ))}
+  1185→                                        </div>
+  1186→                                      ))}
+  1187→                                    </SelectContent>
+  1188→                                  </Select>
+  1189→                                </div>
+  1190→                              </div>
+  1191→                            </div>
+  1192→                          </div>
+  1193→                        )}
+  1194→                      </CardContent>
+  1195→                    </Card>
+  1196→
+  1197→                    {/* Delivery Method Card */}
+  1198→                    <Card className="shadow-sm">
+  1199→                      <SectionHeader
+  1200→                        icon={Truck}
+  1201→                        title="Delivery Method"
+  1202→                        subtitle="Choose your preferred delivery speed"
+  1203→                      />
+  1204→                      <CardContent className="pt-0">
+  1205→                        <RadioGroup value={shippingMethod} onValueChange={setShippingMethod}>
+  1206→                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  1207→                            <label
+  1208→                              htmlFor="ship-standard"
+  1209→                              className={`relative flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+  1210→                                shippingMethod === 'standard' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'
+  1211→                              }`}
+  1212→                            >
+  1213→                              <RadioGroupItem value="standard" id="ship-standard" className="sr-only" />
+  1214→                              <div className={`h-10 w-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+  1215→                                shippingMethod === 'standard' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'
+  1216→                              }`}>
+  1217→                                <Truck className="h-5 w-5" />
+  1218→                              </div>
+  1219→                              <div className="flex-1 min-w-0">
+  1220→                                <div className="font-semibold text-sm">Regular Delivery</div>
+  1221→                                <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+  1222→                                  <Clock className="h-3 w-3" /> 3-5 business days
+  1223→                                </div>
+  1224→                              </div>
+  1225→                              <div className="text-right">
+  1226→                                <span className={`font-bold text-sm ${sub >= freeThreshold ? 'text-emerald-600' : ''}`}>
+  1227→                                  {sub >= freeThreshold ? 'FREE' : `৳${standardShipping}`}
+  1228→                                </span>
+  1229→                              </div>
+  1230→                              {shippingMethod === 'standard' && (
+  1231→                                <CheckCircle2 className="h-4 w-4 text-primary absolute top-2 right-2" />
+  1232→                              )}
+  1233→                            </label>
+  1234→
+  1235→                            <label
+  1236→                              htmlFor="ship-express"
+  1237→                              className={`relative flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+  1238→                                shippingMethod === 'express' ? 'border-amber-500 bg-amber-50/40' : 'border-border hover:border-amber-300'
+  1239→                              }`}
+  1240→                            >
+  1241→                              <RadioGroupItem value="express" id="ship-express" className="sr-only" />
+  1242→                              <div className={`h-10 w-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+  1243→                                shippingMethod === 'express' ? 'bg-amber-500 text-white' : 'bg-muted text-muted-foreground'
+  1244→                              }`}>
+  1245→                                <Zap className="h-5 w-5" fill="currentColor" />
+  1246→                              </div>
+  1247→                              <div className="flex-1 min-w-0">
+  1248→                                <div className="font-semibold text-sm flex items-center gap-1.5">
+  1249→                                  Express Delivery
+  1250→                                  <Badge className="bg-amber-100 text-amber-700 border-0 text-[9px] h-4 px-1 font-bold">FAST</Badge>
+  1251→                                </div>
+  1252→                                <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+  1253→                                  <Clock className="h-3 w-3" /> Next day delivery
+  1254→                                </div>
+  1255→                              </div>
+  1256→                              <div className="text-right">
+  1257→                                <span className="font-bold text-sm">
+  1258→                                  ৳{sub >= freeThreshold ? expressShipping - standardShipping : expressShipping}
+  1259→                                </span>
+  1260→                              </div>
+  1261→                              {shippingMethod === 'express' && (
+  1262→                                <CheckCircle2 className="h-4 w-4 text-amber-500 absolute top-2 right-2" />
+  1263→                              )}
+  1264→                            </label>
+  1265→                          </div>
+  1266→                        </RadioGroup>
+  1267→
+  1268→                        <div className="mt-4 flex justify-between">
+  1269→                          <Button variant="ghost" size="sm" onClick={() => goToStep(1)}>
+  1270→                            <ArrowLeft className="h-4 w-4 mr-1" />
+  1271→                            Back to Cart
+  1272→                          </Button>
+  1273→                          <Button onClick={() => goToStep(3)} className="rounded-xl px-6 h-11">
+  1274→                            Continue to Payment
+  1275→                            <ChevronRight className="h-4 w-4 ml-1" />
+  1276→                          </Button>
+  1277→                        </div>
+  1278→                      </CardContent>
+  1279→                    </Card>
+  1280→                  </motion.div>
+  1281→                )}
+  1282→              </AnimatePresence>
+  1283→
+  1284→              {/* ─── Step 3: Payment Method ──────────────────────────────────── */}
+  1285→              <AnimatePresence mode="wait">
+  1286→                {currentStep === 3 && (
+  1287→                  <motion.div
+  1288→                    key="payment"
+  1289→                    initial={{ opacity: 0, y: 20 }}
+  1290→                    animate={{ opacity: 1, y: 0 }}
+  1291→                    exit={{ opacity: 0, y: -20 }}
+  1292→                    transition={{ duration: 0.4, ease: 'easeOut', delay: 0.05 }}
+  1293→                    className="space-y-4"
+  1294→                  >
+  1295→                    <Card className="shadow-sm">
+  1296→                      <SectionHeader
+  1297→                        icon={Wallet}
+  1298→                        title="Payment Method"
+  1299→                        subtitle="Choose how you want to pay"
+  1300→                        badge="Step 3"
+  1301→                      />
+  1302→                      <CardContent className="pt-0">
+  1303→                        <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod} className="space-y-3">
+  1304→                          {/* COD Option */}
+  1305→                          <label
+  1306→                            htmlFor="pay-cod"
+  1307→                            className={`relative flex items-center gap-4 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+  1308→                              paymentMethod === 'cod' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'
+  1309→                            }`}
+  1310→                          >
+  1311→                            <RadioGroupItem value="cod" id="pay-cod" className="sr-only" />
+  1312→                            <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center flex-shrink-0">
+  1313→                              <Banknote className="h-6 w-6 text-white" />
+  1314→                            </div>
+  1315→                            <div className="flex-1 min-w-0">
+  1316→                              <div className="font-bold text-sm">Cash on Delivery</div>
+  1317→                              <div className="text-xs text-muted-foreground mt-0.5">Pay when you receive your order</div>
+  1318→                              <Badge variant="secondary" className="mt-1.5 bg-primary/10 text-primary text-[10px] font-semibold h-5">No extra charge</Badge>
+  1319→                            </div>
+  1320→                            {paymentMethod === 'cod' && (
+  1321→                              <CheckCircle2 className="h-5 w-5 text-primary flex-shrink-0" />
+  1322→                            )}
+  1323→                          </label>
+  1324→
+  1325→                          {/* SSLCommerz Option */}
+  1326→                          <label
+  1327→                            htmlFor="pay-online"
+  1328→                            className={`relative flex flex-col p-3 rounded-lg border-2 cursor-pointer transition-all ${
+  1329→                              paymentMethod === 'online' ? 'border-amber-500 bg-amber-50/40' : 'border-border hover:border-amber-300'
+  1330→                            }`}
+  1331→                          >
+  1332→                            <div className="flex items-center gap-4">
+  1333→                              <RadioGroupItem value="online" id="pay-online" className="sr-only" />
+  1334→                              <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center flex-shrink-0">
+  1335→                                <CreditCard className="h-6 w-6 text-white" />
+  1336→                              </div>
+  1337→                              <div className="flex-1 min-w-0">
+  1338→                                <div className="font-bold text-sm">SSLCommerz Payment Gateway</div>
+  1339→                                <div className="text-xs text-muted-foreground mt-0.5">bKash, Nagad, Rocket, Visa, Mastercard & more</div>
+  1340→                              </div>
+  1341→                              {paymentMethod === 'online' && (
+  1342→                                <CheckCircle2 className="h-5 w-5 text-amber-500 flex-shrink-0" />
+  1343→                              )}
+  1344→                            </div>
+  1345→
+  1346→                            {/* Supported Payment Methods */}
+  1347→                            {paymentMethod === 'online' && (
+  1348→                              <motion.div
+  1349→                                initial={{ opacity: 0, height: 0 }}
+  1350→                                animate={{ opacity: 1, height: 'auto' }}
+  1351→                                transition={{ duration: 0.3 }}
+  1352→                                className="mt-3 pt-3 border-t border-border overflow-hidden"
+  1353→                              >
+  1354→                                <div className="flex flex-wrap gap-1.5">
+  1355→                                  {['bKash', 'Nagad', 'Rocket', 'Visa', 'Mastercard', 'DBBL', 'City Bank'].map((method) => (
+  1356→                                    <Badge key={method} variant="outline" className="text-[10px] h-6 bg-card text-muted-foreground font-medium px-2">
+  1357→                                      {method}
+  1358→                                    </Badge>
+  1359→                                  ))}
+  1360→                                  <Badge variant="outline" className="text-[10px] h-6 bg-card text-muted-foreground font-medium px-2">
+  1361→                                    +more
+  1362→                                  </Badge>
+  1363→                                </div>
+  1364→                                <p className="text-[11px] text-muted-foreground mt-2.5 flex items-center gap-1.5">
+  1365→                                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+  1366→                                  You will be redirected to SSLCommerz secure payment page
+  1367→                                </p>
+  1368→                              </motion.div>
+  1369→                            )}
+  1370→                          </label>
+  1371→                        </RadioGroup>
+  1372→
+  1373→                        {/* Order Note */}
+  1374→                        <div className="mt-4">
+  1375→                          <Label className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-2">
+  1376→                            <Package className="h-3.5 w-3.5 text-primary" />
+  1377→                            Order Note (optional)
+  1378→                          </Label>
+  1379→                          <Textarea
+  1380→                            value={note}
+  1381→                            onChange={(e) => setNote(e.target.value)}
+  1382→                            placeholder="Any special instructions for your delivery..."
+  1383→                            className="resize-none"
+  1384→                            rows={2}
+  1385→                          />
+  1386→                        </div>
+  1387→
+  1388→                        {/* Terms & Conditions */}
+  1389→                        <div className="mt-4 pt-4 border-t">
+  1390→                          <div className="flex items-start gap-2.5 p-2.5 rounded-lg bg-muted/40">
+  1391→                            <Checkbox
+  1392→                              id="terms"
+  1393→                              checked={termsAccepted}
+  1394→                              onCheckedChange={(checked) => setTermsAccepted(checked === true)}
+  1395→                              className="mt-0.5 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+  1396→                            />
+  1397→                            <Label htmlFor="terms" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
+  1398→                              I agree to the{' '}
+  1399→                              <button type="button" className="text-primary font-semibold underline hover:text-primary/80" onClick={() => navigate('terms')}>
+  1400→                                Terms & Conditions
+  1401→                              </button>{' '}
+  1402→                              and{' '}
+  1403→                              <button type="button" className="text-primary font-semibold underline hover:text-primary/80" onClick={() => navigate('privacy')}>
+  1404→                                Privacy Policy
+  1405→                              </button>
+  1406→                            </Label>
+  1407→                          </div>
+  1408→                        </div>
+  1409→
+  1410→                        {/* Step 3 navigation */}
+  1411→                        <div className="flex justify-between mt-4">
+  1412→                          <Button variant="ghost" size="sm" onClick={() => goToStep(2)}>
+  1413→                            <ArrowLeft className="h-4 w-4 mr-1" />
+  1414→                            Back to Shipping
+  1415→                          </Button>
+  1416→                          <Button onClick={() => goToStep(4)} className="rounded-xl px-6 h-11">
+  1417→                            Review Order
+  1418→                            <ChevronRight className="h-4 w-4 ml-1" />
+  1419→                          </Button>
+  1420→                        </div>
+  1421→                      </CardContent>
+  1422→                    </Card>
+  1423→                  </motion.div>
+  1424→                )}
+  1425→              </AnimatePresence>
+  1426→
+  1427→              {/* ─── Step 4: Order Confirmation ─────────────────────────────── */}
+  1428→              <AnimatePresence mode="wait">
+  1429→                {currentStep === 4 && (
+  1430→                  <motion.div
+  1431→                    key="confirmation"
+  1432→                    initial={{ opacity: 0, y: 20 }}
+  1433→                    animate={{ opacity: 1, y: 0 }}
+  1434→                    exit={{ opacity: 0, y: -20 }}
+  1435→                    transition={{ duration: 0.4, ease: 'easeOut' }}
+  1436→                    className="space-y-4"
+  1437→                  >
+  1438→                    <Card className="shadow-sm">
+  1439→                      <SectionHeader
+  1440→                        icon={CheckCircle2}
+  1441→                        title="Confirm & Place Order"
+  1442→                        subtitle="Review your order details and place it"
+  1443→                        badge="Step 4"
+  1444→                      />
+  1445→                      <CardContent className="pt-0 space-y-4">
+  1446→                        {/* Shipping summary */}
+  1447→                        <div className="rounded-lg border p-3 bg-muted/30">
+  1448→                          <div className="flex items-center justify-between mb-1.5">
+  1449→                            <h3 className="text-sm font-semibold flex items-center gap-2">
+  1450→                              <MapPin className="h-4 w-4 text-primary" />
+  1451→                              Delivery To
+  1452→                            </h3>
+  1453→                            <button
+  1454→                              onClick={() => goToStep(2)}
+  1455→                              className="text-xs text-primary font-semibold hover:underline"
+  1456→                            >
+  1457→                              Edit
+  1458→                            </button>
+  1459→                          </div>
+  1460→                          {isAuthenticated ? (
+  1461→                            <p className="text-sm text-muted-foreground">
+  1462→                              {addresses.find((a) => a.id === selectedAddressId)?.name || '—'} ·{' '}
+  1463→                              {addresses.find((a) => a.id === selectedAddressId)?.phone || '—'}
+  1464→                              <br />
+  1465→                              {addresses.find((a) => a.id === selectedAddressId)?.address || '—'},{' '}
+  1466→                              {addresses.find((a) => a.id === selectedAddressId)?.city || '—'}
+  1467→                            </p>
+  1468→                          ) : (
+  1469→                            <p className="text-sm text-muted-foreground">
+  1470→                              {guestName || '—'} · {guestPhone || '—'}
+  1471→                              <br />
+  1472→                              {guestAddress || '—'}, {guestCity || '—'}{guestDistrict ? `, ${guestDistrict}` : ''}
+  1473→                            </p>
+  1474→                          )}
+  1475→                          <p className="text-xs text-muted-foreground mt-1.5 pt-1.5 border-t border-border">
+  1476→                            Method: {shippingMethod === 'express' ? '⚡ Express Delivery' : '🚚 Standard Delivery'}
+  1477→                          </p>
+  1478→                        </div>
+  1479→
+  1480→                        {/* Payment summary */}
+  1481→                        <div className="rounded-lg border p-3 bg-muted/30">
+  1482→                          <div className="flex items-center justify-between mb-1.5">
+  1483→                            <h3 className="text-sm font-semibold flex items-center gap-2">
+  1484→                              <Wallet className="h-4 w-4 text-primary" />
+  1485→                              Payment Method
+  1486→                            </h3>
+  1487→                            <button
+  1488→                              onClick={() => goToStep(3)}
+  1489→                              className="text-xs text-primary font-semibold hover:underline"
+  1490→                            >
+  1491→                              Edit
+  1492→                            </button>
+  1493→                          </div>
+  1494→                          <p className="text-sm text-muted-foreground">
+  1495→                            {paymentMethod === 'cod'
+  1496→                              ? '💵 Cash on Delivery (COD)'
+  1497→                              : '💳 Online Payment (SSLCommerz)'}
+  1498→                          </p>
+  1499→                        </div>
+  1500→
+  1501→                        {/* Order note summary */}
+  1502→                        {note && (
+  1503→                          <div className="rounded-lg border p-3 bg-muted/30">
+  1504→                            <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
+  1505→                              <Package className="h-4 w-4 text-primary" />
+  1506→                              Order Note
+  1507→                            </h3>
+  1508→                            <p className="text-sm text-muted-foreground">{note}</p>
+  1509→                          </div>
+  1510→                        )}
+  1511→
+  1512→                        {/* Terms acceptance */}
+  1513→                        <div className="rounded-lg border p-3">
+  1514→                          <div className="flex items-start gap-2.5">
+  1515→                            <Checkbox
+  1516→                              id="terms-final"
+  1517→                              checked={termsAccepted}
+  1518→                              onCheckedChange={(v) => setTermsAccepted(v === true)}
+  1519→                              className="mt-0.5 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+  1520→                            />
+  1521→                            <Label htmlFor="terms-final" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
+  1522→                              I agree to the{' '}
+  1523→                              <button type="button" className="text-primary font-semibold underline hover:text-primary/80" onClick={() => navigate('terms')}>
+  1524→                                Terms & Conditions
+  1525→                              </button>{' '}
+  1526→                              and{' '}
+  1527→                              <button type="button" className="text-primary font-semibold underline hover:text-primary/80" onClick={() => navigate('privacy')}>
+  1528→                                Privacy Policy
+  1529→                              </button>
+  1530→                            </Label>
+  1531→                          </div>
+  1532→                        </div>
+  1533→
+  1534→                        {/* Step 4 navigation */}
+  1535→                        <div className="flex justify-between items-center">
+  1536→                          <Button variant="ghost" size="sm" onClick={() => goToStep(3)}>
+  1537→                            <ArrowLeft className="h-4 w-4 mr-1" />
+  1538→                            Back to Payment
+  1539→                          </Button>
+  1540→                          <motion.div whileTap={{ scale: 0.98 }}>
+  1541→                            <Button
+  1542→                              className="rounded-xl text-base font-bold shadow-md shadow-primary/20 h-12 px-6"
+  1543→                              size="lg"
+  1544→                              onClick={() => handlePlaceOrder()}
+  1545→                              disabled={placing || !termsAccepted}
+  1546→                            >
+  1547→                              {placing ? (
+  1548→                                <>
+  1549→                                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+  1550→                                  {paymentMethod === 'online' ? 'Redirecting...' : 'Placing Order...'}
+  1551→                                </>
+  1552→                              ) : (
+  1553→                                <>
+  1554→                                  <Lock className="h-4 w-4 mr-2" />
+  1555→                                  {paymentMethod === 'online' ? 'Pay & Place Order' : 'Place Order'}
+  1556→                                  <ChevronRight className="h-4 w-4 ml-1" />
+  1557→                                </>
+  1558→                              )}
+  1559→                            </Button>
+  1560→                          </motion.div>
+  1561→                        </div>
+  1562→                        {!termsAccepted && (
+  1563→                          <p className="text-xs text-amber-600 text-center">
+  1564→                            Please accept the Terms & Conditions to place your order.
+  1565→                          </p>
+  1566→                        )}
+  1567→                      </CardContent>
+  1568→                    </Card>
+  1569→                  </motion.div>
+  1570→                )}
+  1571→              </AnimatePresence>
+  1572→            </div>
+  1573→
+  1574→            {/* Right: Order Summary Sidebar (desktop) */}
+  1575→            <div className="hidden lg:block">
+  1576→              <div className="sticky top-4 space-y-4">
+  1577→                {SummaryCard}
+  1578→                {/* Trust Badges */}
+  1579→                <Card className="bg-muted/30 border-dashed">
+  1580→                  <CardContent className="p-4">
+  1581→                    <div className="grid grid-cols-3 gap-2">
+  1582→                      {[
+  1583→                        { icon: Lock, label: 'Secure SSL' },
+  1584→                        { icon: RefreshCw, label: 'Money Back' },
+  1585→                        { icon: ShieldCheck, label: '100% Safe' },
+  1586→                      ].map((item, idx) => (
+  1587→                        <div key={idx} className="flex flex-col items-center gap-1.5 text-center">
+  1588→                          <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+  1589→                            <item.icon className="h-4 w-4 text-primary" />
+  1590→                          </div>
+  1591→                          <span className="text-[10px] font-semibold text-muted-foreground leading-tight">{item.label}</span>
+  1592→                        </div>
+  1593→                      ))}
+  1594→                    </div>
+  1595→                  </CardContent>
+  1596→                </Card>
+  1597→              </div>
+  1598→            </div>
+  1599→          </div>
+  1600→        </div>
+  1601→      </div>
+  1602→
+  1603→      {/* Mobile sticky bottom bar with summary toggle + primary CTA */}
+  1604→      <div className="lg:hidden sticky bottom-0 left-0 right-0 z-30 bg-background/95 backdrop-blur border-t shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+  1605→        <div className="container mx-auto px-4 py-3 flex items-center gap-3">
+  1606→          <Sheet open={mobileSummaryOpen} onOpenChange={setMobileSummaryOpen}>
+  1607→            <SheetTrigger asChild>
+  1608→              <button
+  1609→                type="button"
+  1610→                className="flex-1 min-w-0 text-left"
+  1611→                aria-label="View order summary"
+  1612→              >
+  1613→                <p className="text-[11px] text-muted-foreground leading-tight flex items-center gap-1">
+  1614→                  <Package className="h-3 w-3" />
+  1615→                  {totalItems()} items · Tap to view summary
+  1616→                </p>
+  1617→                <p className="text-lg font-bold text-primary leading-tight">
+  1618→                  ৳{Math.max(0, total).toLocaleString()}
+  1619→                  {(discount + loyaltyDiscount) > 0 && (
+  1620→                    <span className="ml-1.5 text-xs font-medium text-emerald-600">
+  1621→                      saving ৳{(discount + loyaltyDiscount).toLocaleString()}
+  1622→                    </span>
+  1623→                  )}
+  1624→                </p>
+  1625→              </button>
+  1626→            </SheetTrigger>
+  1627→            <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
+  1628→              <SheetHeader className="pb-2">
+  1629→                <SheetTitle className="flex items-center gap-2">
+  1630→                  <Package className="h-4 w-4 text-primary" />
+  1631→                  Order Summary
+  1632→                </SheetTitle>
+  1633→              </SheetHeader>
+  1634→              <div className="space-y-4 p-4 pt-2">
+  1635→                {renderFreeShippingProgress()}
+  1636→                {renderSummaryItems(true)}
+  1637→                <Separator />
+  1638→                {renderCouponSection()}
+  1639→                {renderLoyaltySection()}
+  1640→                <Separator />
+  1641→                {renderTotals()}
+  1642→              </div>
+  1643→            </SheetContent>
+  1644→          </Sheet>
+  1645→
+  1646→          <motion.div whileTap={{ scale: 0.98 }} className="flex-shrink-0">
+  1647→            <Button
+  1648→              className="h-11 px-5 rounded-xl font-semibold"
+  1649→              onClick={handlePrimaryCta}
+  1650→              disabled={currentStep === 4 && (placing || !termsAccepted)}
+  1651→            >
+  1652→              {currentStep === 4 && placing ? (
+  1653→                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+  1654→              ) : currentStep === 4 ? (
+  1655→                <Lock className="h-4 w-4 mr-1.5" />
+  1656→              ) : null}
+  1657→              {currentStep === 4 && placing
+  1658→                ? (paymentMethod === 'online' ? 'Redirecting...' : 'Placing...')
+  1659→                : getPrimaryCtaLabel()}
+  1660→              {!placing && <ChevronRight className="h-4 w-4 ml-1" />}
+  1661→            </Button>
+  1662→          </motion.div>
+  1663→        </div>
+  1664→      </div>
+  1665→    </div>
+  1666→  )
+  1667→}
+  1668→

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400">
+  <defs>
+    <linearGradient id="bg_deshi-gur-season" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#2D6A4F;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#1B4332;stop-opacity:1"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="400" fill="url(#bg_deshi-gur-season)"/>
+  <rect x="0" y="0" width="1200" height="400" fill="white" fill-opacity="0.05"/>
+  <circle cx="1000" cy="200" r="200" fill="white" fill-opacity="0.06"/>
+  <circle cx="1050" cy="150" r="120" fill="white" fill-opacity="0.04"/>
+  <text x="600" y="140" text-anchor="middle" fill="white" font-size="60" font-weight="bold" font-family="sans-serif">Deshi Gur Season</text>
+  <text x="600" y="210" text-anchor="middle" fill="white" fill-opacity="0.9" font-size="32" font-family="sans-serif">দেশি গুড়ের মৌসুম</text>
+  <text x="600" y="280" text-anchor="middle" fill="white" fill-opacity="0.7" font-size="20" font-family="sans-serif">🍬 উৎসবের স্বাদ অনুভব করুন</text>
+  <rect x="480" y="310" width="240" height="48" rx="24" fill="white" fill-opacity="0.25"/>
+  <text x="600" y="342" text-anchor="middle" fill="white" font-size="16" font-weight="bold" font-family="sans-serif">Shop Now →</text>
+</svg>

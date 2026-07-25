@@ -1,0 +1,648 @@
+     1→'use client'
+     2→
+     3→import { useState } from 'react'
+     4→import { Eye, EyeOff, LogIn, Mail, Phone, Lock, AlertCircle, Truck, ShieldCheck, Award, Heart, Zap, Check } from 'lucide-react'
+     5→import { motion, AnimatePresence } from 'framer-motion'
+     6→import { Button } from '@/components/ui/button'
+     7→import { Input } from '@/components/ui/input'
+     8→import { Label } from '@/components/ui/label'
+     9→import { Checkbox } from '@/components/ui/checkbox'
+    10→import { Separator } from '@/components/ui/separator'
+    11→import { useAppStore } from '@/lib/store'
+    12→import { toast } from 'sonner'
+    13→
+    14→export default function LoginPage() {
+    15→  const { login, navigate, siteConfig } = useAppStore()
+    16→  const [email, setEmail] = useState('')
+    17→  const [phone, setPhone] = useState('')
+    18→  const [password, setPassword] = useState('')
+    19→  const [showPassword, setShowPassword] = useState(false)
+    20→  const [rememberMe, setRememberMe] = useState(false)
+    21→  const [loading, setLoading] = useState(false)
+    22→  const [error, setError] = useState('')
+    23→  const [fieldErrors, setFieldErrors] = useState<Record<string, boolean>>({})
+    24→  const [loginSuccess, setLoginSuccess] = useState(false)
+    25→
+    26→  // Real-time validation
+    27→  const [emailTouched, setEmailTouched] = useState(false)
+    28→  const [phoneTouched, setPhoneTouched] = useState(false)
+    29→  const [passwordTouched, setPasswordTouched] = useState(false)
+    30→
+    31→  const emailValid = !email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    32→  const phoneValid = !phone.trim() || /^[\d+\-\s()]{7,15}$/.test(phone)
+    33→  const passwordValid = password.length === 0 || password.length >= 6
+    34→  const hasIdentifier = email.trim().length > 0 || phone.trim().length > 0
+    35→
+    36→  const handleSubmit = async (e: React.FormEvent) => {
+    37→    e.preventDefault()
+    38→    setError('')
+    39→    setFieldErrors({})
+    40→
+    41→    // Validate
+    42→    const errs: Record<string, boolean> = {}
+    43→    if (!password) {
+    44→      setError('Please enter your password')
+    45→      errs.password = true
+    46→      setPasswordTouched(true)
+    47→      setFieldErrors(errs)
+    48→      return
+    49→    }
+    50→    if (password.length < 6) {
+    51→      setError('Password must be at least 6 characters')
+    52→      errs.password = true
+    53→      setPasswordTouched(true)
+    54→      setFieldErrors(errs)
+    55→      return
+    56→    }
+    57→    if (!email && !phone) {
+    58→      setError('Please enter your email or phone number')
+    59→      errs.email = true
+    60→      errs.phone = true
+    61→      setFieldErrors(errs)
+    62→      return
+    63→    }
+    64→    if (email.trim() && !emailValid) {
+    65→      setError('Please enter a valid email address')
+    66→      errs.email = true
+    67→      setFieldErrors(errs)
+    68→      return
+    69→    }
+    70→    if (phone.trim() && !phoneValid) {
+    71→      setError('Please enter a valid phone number')
+    72→      errs.phone = true
+    73→      setFieldErrors(errs)
+    74→      return
+    75→    }
+    76→
+    77→    setLoading(true)
+    78→    try {
+    79→      await login({ email: email || undefined, phone: phone || undefined, password })
+    80→      setLoginSuccess(true)
+    81→      toast.success('Login successful!')
+    82→      setTimeout(() => {
+    83→        const state = useAppStore.getState()
+    84→        if (state.user?.role === 'admin') {
+    85→          navigate('admin-dashboard')
+    86→        } else {
+    87→          navigate('home')
+    88→        }
+    89→      }, 1500)
+    90→    } catch (err) {
+    91→      const message = err instanceof Error ? err.message : 'Login failed'
+    92→      setError(message)
+    93→      setFieldErrors({ password: true })
+    94→    } finally {
+    95→      setLoading(false)
+    96→    }
+    97→  }
+    98→
+    99→  const handleSocialLogin = (provider: string) => {
+   100→    toast.info(`${provider} login coming soon!`)
+   101→  }
+   102→
+   103→  const handleForgotPassword = () => {
+   104→    toast.info('Password reset link will be sent to your email!', {
+   105→      description: 'This feature is coming soon.',
+   106→    })
+   107→  }
+   108→
+   109→  // ── Login Success Animation ──
+   110→  if (loginSuccess) {
+   111→    return (
+   112→      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-emerald-50 relative overflow-hidden">
+   113→        <motion.div
+   114→          initial={{ scale: 0, rotate: -180 }}
+   115→          animate={{ scale: 1, rotate: 0 }}
+   116→          transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+   117→          className="text-center"
+   118→        >
+   119→          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center mx-auto mb-6 shadow-2xl">
+   120→            <motion.div
+   121→              initial={{ scale: 0 }}
+   122→              animate={{ scale: 1 }}
+   123→              transition={{ delay: 0.3, type: 'spring', stiffness: 300 }}
+   124→            >
+   125→              <Check className="h-12 w-12 text-white" />
+   126→            </motion.div>
+   127→          </div>
+   128→          <motion.h2
+   129→            initial={{ opacity: 0, y: 20 }}
+   130→            animate={{ opacity: 1, y: 0 }}
+   131→            transition={{ delay: 0.5 }}
+   132→            className="text-2xl font-bold text-foreground"
+   133→          >
+   134→            স্বাগতম!
+   135→          </motion.h2>
+   136→          <motion.p
+   137→            initial={{ opacity: 0, y: 10 }}
+   138→            animate={{ opacity: 1, y: 0 }}
+   139→            transition={{ delay: 0.7 }}
+   140→            className="text-muted-foreground mt-2"
+   141→          >
+   142→            Welcome back to Khati Khadyo
+   143→          </motion.p>
+   144→          <motion.div
+   145→            initial={{ opacity: 0 }}
+   146→            animate={{ opacity: 1 }}
+   147→            transition={{ delay: 1 }}
+   148→            className="mt-4 flex justify-center gap-1"
+   149→          >
+   150→            {[0, 1, 2].map((i) => (
+   151→              <motion.div
+   152→                key={i}
+   153→                className="w-2 h-2 rounded-full bg-primary"
+   154→                animate={{ scale: [1, 1.3, 1] }}
+   155→                transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15 }}
+   156→              />
+   157→            ))}
+   158→          </motion.div>
+   159→        </motion.div>
+   160→      </div>
+   161→    )
+   162→  }
+   163→
+   164→  return (
+   165→    <div className="min-h-screen flex relative">
+   166→      {/* Animated Background Pattern */}
+   167→      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+   168→        <svg className="absolute inset-0 w-full h-full opacity-[0.03]" xmlns="http://www.w3.org/2000/svg">
+   169→          <defs>
+   170→            <pattern id="food-pattern" x="0" y="0" width="60" height="60" patternUnits="userSpaceOnUse">
+   171→              <circle cx="30" cy="30" r="8" fill="none" stroke="#2D6A4F" strokeWidth="1.5" />
+   172→              <path d="M30 22 L30 38 M22 30 L38 30" stroke="#2D6A4F" strokeWidth="0.5" opacity="0.5" />
+   173→            </pattern>
+   174→            <pattern id="dot-pattern" x="0" y="0" width="30" height="30" patternUnits="userSpaceOnUse">
+   175→              <circle cx="15" cy="15" r="1" fill="#B8860B" opacity="0.4" />
+   176→            </pattern>
+   177→          </defs>
+   178→          <rect width="100%" height="100%" fill="url(#food-pattern)" />
+   179→          <rect width="100%" height="100%" fill="url(#dot-pattern)" />
+   180→        </svg>
+   181→        <motion.div
+   182→          className="absolute top-[10%] right-[15%] w-64 h-64 rounded-full border border-primary/10"
+   183→          animate={{ scale: [1, 1.05, 1], opacity: [0.3, 0.6, 0.3] }}
+   184→          transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+   185→        />
+   186→        <motion.div
+   187→          className="absolute bottom-[20%] left-[5%] w-40 h-40 rounded-full border border-secondary/10"
+   188→          animate={{ scale: [1, 1.08, 1], opacity: [0.2, 0.5, 0.2] }}
+   189→          transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+   190→        />
+   191→        <motion.div
+   192→          className="absolute top-[60%] right-[5%] w-24 h-24 rounded-full bg-primary/5"
+   193→          animate={{ y: [0, -10, 0] }}
+   194→          transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+   195→        />
+   196→      </div>
+   197→
+   198→      {/* Decorative Left Panel - Hidden on mobile */}
+   199→      <div className="hidden lg:flex lg:w-[45%] bg-gradient-to-br from-primary via-primary to-emerald-800 relative overflow-hidden z-10">
+   200→        {/* Animated background pattern */}
+   201→        <div className="absolute inset-0 opacity-10">
+   202→          <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+   203→            <defs>
+   204→              <pattern id="leaf-pattern" x="0" y="0" width="80" height="80" patternUnits="userSpaceOnUse">
+   205→                <path d="M40 10 C50 25, 55 40, 40 70 C25 40, 30 25, 40 10Z" fill="none" stroke="white" strokeWidth="1" />
+   206→              </pattern>
+   207→            </defs>
+   208→            <rect width="100%" height="100%" fill="url(#leaf-pattern)" />
+   209→          </svg>
+   210→          <motion.div
+   211→            className="absolute top-20 left-10 w-32 h-32 rounded-full border-4 border-white"
+   212→            animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.6, 0.3] }}
+   213→            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+   214→          />
+   215→          <motion.div
+   216→            className="absolute bottom-40 right-20 w-48 h-48 rounded-full border-4 border-white"
+   217→            animate={{ scale: [1, 1.08, 1], opacity: [0.2, 0.5, 0.2] }}
+   218→            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+   219→          />
+   220→          <motion.div
+   221→            className="absolute top-1/2 left-1/3 w-20 h-20 rounded-full bg-white/20"
+   222→            animate={{ y: [0, -15, 0] }}
+   223→            transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+   224→          />
+   225→          <motion.div
+   226→            className="absolute bottom-20 left-20 w-16 h-16 rounded-full bg-white/10"
+   227→            animate={{ y: [0, 10, 0], scale: [1, 1.1, 1] }}
+   228→            transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
+   229→          />
+   230→        </div>
+   231→
+   232→        {/* Floating food icons */}
+   233→        <motion.div className="absolute top-16 right-16 text-5xl opacity-20" animate={{ y: [0, -8, 0], rotate: [0, 5, 0] }} transition={{ duration: 3, repeat: Infinity }}>🍯</motion.div>
+   234→        <motion.div className="absolute top-1/3 right-1/4 text-4xl opacity-20" animate={{ y: [0, -6, 0], rotate: [0, -5, 0] }} transition={{ duration: 4, repeat: Infinity, delay: 1 }}>🌶️</motion.div>
+   235→        <motion.div className="absolute bottom-1/3 left-1/4 text-4xl opacity-20" animate={{ y: [0, -10, 0] }} transition={{ duration: 3.5, repeat: Infinity, delay: 0.5 }}>🫒</motion.div>
+   236→        <motion.div className="absolute bottom-16 right-1/3 text-5xl opacity-20" animate={{ y: [0, -7, 0] }} transition={{ duration: 4.5, repeat: Infinity, delay: 1.5 }}>🍚</motion.div>
+   237→
+   238→        <div className="relative z-10 flex flex-col justify-center items-center px-12 text-white">
+   239→          {/* Bengali Welcome Greeting */}
+   240→          <motion.div
+   241→            initial={{ opacity: 0, y: 30 }}
+   242→            animate={{ opacity: 1, y: 0 }}
+   243→            transition={{ duration: 0.6, delay: 0.2 }}
+   244→            className="text-center mb-8"
+   245→          >
+   246→            <motion.p
+   247→              className="text-white/60 text-sm uppercase tracking-widest mb-2"
+   248→              initial={{ opacity: 0 }}
+   249→              animate={{ opacity: 1 }}
+   250→              transition={{ delay: 0.5 }}
+   251→            >
+   252→              Welcome Back
+   253→            </motion.p>
+   254→            <h1 className="text-5xl font-bold mb-2 gradient-text-white">স্বাগতম!</h1>
+   255→            <p className="text-white/70 text-lg">
+   256→              খাঁটি খাদ্য — Authentic Bangladeshi Food Products
+   257→            </p>
+   258→          </motion.div>
+   259→
+   260→          {/* Brand Logo Area */}
+   261→          <motion.div
+   262→            initial={{ scale: 0, rotate: -90 }}
+   263→            animate={{ scale: 1, rotate: 0 }}
+   264→            transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.3 }}
+   265→            className="w-24 h-24 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center mb-8 shadow-2xl ring-1 ring-white/20 overflow-hidden"
+   266→          >
+   267→            <img
+   268→              src="/all_logo.png"
+   269→              alt="Khati Khadyo"
+   270→              className="h-20 w-auto object-contain"
+   271→            />
+   272→          </motion.div>
+   273→          <motion.h1
+   274→            initial={{ opacity: 0, y: 10 }}
+   275→            animate={{ opacity: 1, y: 0 }}
+   276→            transition={{ delay: 0.4 }}
+   277→            className="text-4xl font-bold mb-2"
+   278→          >
+   279→            Khati Khadyo
+   280→          </motion.h1>
+   281→
+   282→          {/* Benefits Section */}
+   283→          <motion.div
+   284→            initial={{ opacity: 0 }}
+   285→            animate={{ opacity: 1 }}
+   286→            transition={{ delay: 0.6 }}
+   287→            className="w-full max-w-sm space-y-5"
+   288→          >
+   289→            <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50 mb-4">Why shop with us</h3>
+   290→            {[
+   291→              { icon: Truck, text: 'Free Delivery on orders over ৳1,500', color: 'bg-sky-400/20' },
+   292→              { icon: ShieldCheck, text: '100% Authentic Products Guaranteed', color: 'bg-emerald-400/20' },
+   293→              { icon: Award, text: 'Premium Quality You Can Trust', color: 'bg-secondary/30' },
+   294→              { icon: Heart, text: 'Save Favorites to Your Wishlist', color: 'bg-red-400/20' },
+   295→              { icon: Zap, text: 'Lightning-Fast Secure Checkout', color: 'bg-amber-400/20' },
+   296→            ].map((benefit, i) => {
+   297→              const Icon = benefit.icon
+   298→              return (
+   299→                <motion.div
+   300→                  key={benefit.text}
+   301→                  initial={{ opacity: 0, x: -20 }}
+   302→                  animate={{ opacity: 1, x: 0 }}
+   303→                  transition={{ delay: 0.7 + i * 0.1 }}
+   304→                  className="flex items-center gap-4 text-white/90 group"
+   305→                >
+   306→                  <div className={`w-10 h-10 rounded-xl ${benefit.color} backdrop-blur-sm flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200`}>
+   307→                    <Icon className="h-5 w-5 text-white" />
+   308→                  </div>
+   309→                  <span className="text-sm leading-snug">{benefit.text}</span>
+   310→                </motion.div>
+   311→              )
+   312→            })}
+   313→          </motion.div>
+   314→        </div>
+   315→      </div>
+   316→
+   317→      {/* Right Panel - Login Form */}
+   318→      <div className="w-full lg:w-[55%] flex flex-col relative z-10">
+   319→        {/* Mobile Top Banner */}
+   320→        <div className="lg:hidden bg-gradient-to-r from-primary to-emerald-700 p-6 text-white text-center relative overflow-hidden">
+   321→          <div className="absolute inset-0 opacity-10">
+   322→            <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+   323→              <defs>
+   324→                <pattern id="mobile-food-pattern" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+   325→                  <circle cx="20" cy="20" r="5" fill="none" stroke="white" strokeWidth="1" />
+   326→                </pattern>
+   327→              </defs>
+   328→              <rect width="100%" height="100%" fill="url(#mobile-food-pattern)" />
+   329→            </svg>
+   330→          </div>
+   331→          <div className="relative">
+   332→            <div className="w-14 h-14 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center mx-auto mb-3 shadow-lg overflow-hidden">
+   333→              <img
+   334→                src="/all_logo.png"
+   335→                alt="Khati Khadyo"
+   336→                className="h-10 w-auto object-contain"
+   337→              />
+   338→            </div>
+   339→            <h1 className="text-xl font-bold">স্বাগতম!</h1>
+   340→            <p className="text-white/70 text-sm mt-1">খাঁটি খাদ্য — Authentic Bangladeshi Food</p>
+   341→          </div>
+   342→        </div>
+   343→
+   344→        {/* Form Container */}
+   345→        <div className="flex-1 flex items-center justify-center p-6 sm:p-8">
+   346→          <motion.div
+   347→            initial={{ opacity: 0, y: 20 }}
+   348→            animate={{ opacity: 1, y: 0 }}
+   349→            transition={{ duration: 0.5 }}
+   350→            className="w-full max-w-md"
+   351→          >
+   352→            {/* Glassmorphism Form Card */}
+   353→            <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-xl ring-1 ring-white/50 p-8">
+   354→              <div className="mb-8 text-center">
+   355→                {siteConfig?.logo && (
+   356→                  <div className="flex justify-center mb-4">
+   357→                    <img
+   358→                      src={siteConfig.logo}
+   359→                      alt="Khati Khadyo"
+   360→                      className="h-12 w-auto object-contain"
+   361→                    />
+   362→                  </div>
+   363→                )}
+   364→                <motion.h2
+   365→                  initial={{ opacity: 0, y: 10 }}
+   366→                  animate={{ opacity: 1, y: 0 }}
+   367→                  transition={{ delay: 0.2 }}
+   368→                  className="text-2xl font-bold text-foreground"
+   369→                >
+   370→                  Welcome Back
+   371→                </motion.h2>
+   372→                <motion.p
+   373→                  initial={{ opacity: 0 }}
+   374→                  animate={{ opacity: 1 }}
+   375→                  transition={{ delay: 0.3 }}
+   376→                  className="text-muted-foreground mt-1"
+   377→                >
+   378→                  Sign in to your Khati Khadyo account
+   379→                </motion.p>
+   380→              </div>
+   381→
+   382→              {/* Social Login Buttons */}
+   383→              <motion.div
+   384→                initial={{ opacity: 0, y: 10 }}
+   385→                animate={{ opacity: 1, y: 0 }}
+   386→                transition={{ delay: 0.3 }}
+   387→                className="grid grid-cols-2 gap-3 mb-6"
+   388→              >
+   389→                <Button
+   390→                  type="button"
+   391→                  variant="outline"
+   392→                  className="h-11 rounded-xl font-medium text-sm hover:shadow-md transition-all"
+   393→                  onClick={() => handleSocialLogin('Google')}
+   394→                >
+   395→                  <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24">
+   396→                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+   397→                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+   398→                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+   399→                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+   400→                  </svg>
+   401→                  Google
+   402→                </Button>
+   403→                <Button
+   404→                  type="button"
+   405→                  variant="outline"
+   406→                  className="h-11 rounded-xl font-medium text-sm hover:shadow-md transition-all"
+   407→                  onClick={() => handleSocialLogin('Facebook')}
+   408→                >
+   409→                  <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="#1877F2">
+   410→                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+   411→                  </svg>
+   412→                  Facebook
+   413→                </Button>
+   414→              </motion.div>
+   415→
+   416→              {/* Divider */}
+   417→              <div className="relative mb-6">
+   418→                <Separator />
+   419→                <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/70 backdrop-blur-sm px-3 text-xs text-muted-foreground">
+   420→                  or sign in with email
+   421→                </span>
+   422→              </div>
+   423→
+   424→              {/* Error Message */}
+   425→              <AnimatePresence>
+   426→                {error && (
+   427→                  <motion.div
+   428→                    initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+   429→                    animate={{ opacity: 1, height: 'auto', marginBottom: 24 }}
+   430→                    exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+   431→                    className="overflow-hidden"
+   432→                  >
+   433→                    <div className="p-4 rounded-xl bg-red-50 border-2 border-red-200 flex items-start gap-3">
+   434→                      <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+   435→                      <div>
+   436→                        <p className="text-sm font-semibold text-red-800">Login Failed</p>
+   437→                        <p className="text-sm text-red-600 mt-0.5">{error}</p>
+   438→                      </div>
+   439→                    </div>
+   440→                  </motion.div>
+   441→                )}
+   442→              </AnimatePresence>
+   443→
+   444→              <form onSubmit={handleSubmit} className="space-y-5">
+   445→                {/* Email Field */}
+   446→                <motion.div
+   447→                  initial={{ opacity: 0, x: -10 }}
+   448→                  animate={{ opacity: 1, x: 0 }}
+   449→                  transition={{ delay: 0.4 }}
+   450→                  className="space-y-2"
+   451→                >
+   452→                  <Label htmlFor="email" className="text-sm font-medium flex items-center gap-1">
+   453→                    Email Address
+   454→                    {emailTouched && email.trim() && emailValid && <Check className="h-3.5 w-3.5 text-emerald-500" />}
+   455→                  </Label>
+   456→                  <div className="relative">
+   457→                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   458→                    <Input
+   459→                      id="email"
+   460→                      type="email"
+   461→                      placeholder="your@email.com"
+   462→                      value={email}
+   463→                      onChange={(e) => { setEmail(e.target.value); setFieldErrors(prev => ({ ...prev, email: false })) }}
+   464→                      onBlur={() => setEmailTouched(true)}
+   465→                      className={`pl-10 h-11 transition-colors ${
+   466→                        fieldErrors.email ? 'border-red-400 ring-2 ring-red-100 focus-visible:ring-red-200' :
+   467→                        emailTouched && email.trim() && !emailValid ? 'border-red-400 ring-2 ring-red-100 focus-visible:ring-red-200' :
+   468→                        emailTouched && email.trim() && emailValid ? 'border-emerald-300 focus-visible:ring-emerald-200' :
+   469→                        'focus-visible:ring-primary/20'
+   470→                      }`}
+   471→                    />
+   472→                  </div>
+   473→                  {emailTouched && email.trim() && !emailValid && (
+   474→                    <motion.p
+   475→                      initial={{ opacity: 0, y: -5 }}
+   476→                      animate={{ opacity: 1, y: 0 }}
+   477→                      className="text-xs text-red-500 flex items-center gap-1"
+   478→                    >
+   479→                      <AlertCircle className="h-3 w-3" /> Please enter a valid email address
+   480→                    </motion.p>
+   481→                  )}
+   482→                </motion.div>
+   483→
+   484→                {/* Divider */}
+   485→                <div className="relative">
+   486→                  <Separator />
+   487→                  <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/70 backdrop-blur-sm px-3 text-xs text-muted-foreground">
+   488→                    or sign in with phone
+   489→                  </span>
+   490→                </div>
+   491→
+   492→                {/* Phone Field */}
+   493→                <motion.div
+   494→                  initial={{ opacity: 0, x: -10 }}
+   495→                  animate={{ opacity: 1, x: 0 }}
+   496→                  transition={{ delay: 0.5 }}
+   497→                  className="space-y-2"
+   498→                >
+   499→                  <Label htmlFor="phone" className="text-sm font-medium flex items-center gap-1">
+   500→                    Phone Number
+   501→                    {phoneTouched && phone.trim() && phoneValid && <Check className="h-3.5 w-3.5 text-emerald-500" />}
+   502→                  </Label>
+   503→                  <div className="relative">
+   504→                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   505→                    <Input
+   506→                      id="phone"
+   507→                      type="tel"
+   508→                      placeholder="01XXXXXXXXX"
+   509→                      value={phone}
+   510→                      onChange={(e) => { setPhone(e.target.value); setFieldErrors(prev => ({ ...prev, phone: false })) }}
+   511→                      onBlur={() => setPhoneTouched(true)}
+   512→                      className={`pl-10 h-11 transition-colors ${
+   513→                        fieldErrors.phone ? 'border-red-400 ring-2 ring-red-100 focus-visible:ring-red-200' :
+   514→                        phoneTouched && phone.trim() && !phoneValid ? 'border-red-400 ring-2 ring-red-100 focus-visible:ring-red-200' :
+   515→                        phoneTouched && phone.trim() && phoneValid ? 'border-emerald-300 focus-visible:ring-emerald-200' :
+   516→                        'focus-visible:ring-primary/20'
+   517→                      }`}
+   518→                    />
+   519→                  </div>
+   520→                  {phoneTouched && phone.trim() && !phoneValid && (
+   521→                    <motion.p
+   522→                      initial={{ opacity: 0, y: -5 }}
+   523→                      animate={{ opacity: 1, y: 0 }}
+   524→                      className="text-xs text-red-500 flex items-center gap-1"
+   525→                    >
+   526→                      <AlertCircle className="h-3 w-3" /> Please enter a valid phone number
+   527→                    </motion.p>
+   528→                  )}
+   529→                </motion.div>
+   530→
+   531→                {/* Password Field */}
+   532→                <motion.div
+   533→                  initial={{ opacity: 0, x: -10 }}
+   534→                  animate={{ opacity: 1, x: 0 }}
+   535→                  transition={{ delay: 0.6 }}
+   536→                  className="space-y-2"
+   537→                >
+   538→                  <Label htmlFor="password" className="text-sm font-medium flex items-center gap-1">
+   539→                    Password <span className="text-red-500">*</span>
+   540→                    {passwordTouched && passwordValid && password.length > 0 && <Check className="h-3.5 w-3.5 text-emerald-500" />}
+   541→                  </Label>
+   542→                  <div className="relative">
+   543→                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   544→                    <Input
+   545→                      id="password"
+   546→                      type={showPassword ? 'text' : 'password'}
+   547→                      placeholder="Enter your password"
+   548→                      value={password}
+   549→                      onChange={(e) => { setPassword(e.target.value); setFieldErrors(prev => ({ ...prev, password: false })) }}
+   550→                      onBlur={() => setPasswordTouched(true)}
+   551→                      className={`pl-10 pr-10 h-11 transition-colors ${
+   552→                        fieldErrors.password ? 'border-red-400 ring-2 ring-red-100 focus-visible:ring-red-200' :
+   553→                        passwordTouched && !passwordValid ? 'border-red-400 ring-2 ring-red-100 focus-visible:ring-red-200' :
+   554→                        'focus-visible:ring-primary/20'
+   555→                      }`}
+   556→                    />
+   557→                    <button
+   558→                      type="button"
+   559→                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+   560→                      onClick={() => setShowPassword(!showPassword)}
+   561→                    >
+   562→                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+   563→                    </button>
+   564→                  </div>
+   565→                  {passwordTouched && password.length > 0 && password.length < 6 && (
+   566→                    <motion.p
+   567→                      initial={{ opacity: 0, y: -5 }}
+   568→                      animate={{ opacity: 1, y: 0 }}
+   569→                      className="text-xs text-amber-600 flex items-center gap-1"
+   570→                    >
+   571→                      <AlertCircle className="h-3 w-3" /> Password must be at least 6 characters
+   572→                    </motion.p>
+   573→                  )}
+   574→                </motion.div>
+   575→
+   576→                {/* Remember Me & Forgot Password */}
+   577→                <motion.div
+   578→                  initial={{ opacity: 0 }}
+   579→                  animate={{ opacity: 1 }}
+   580→                  transition={{ delay: 0.7 }}
+   581→                  className="flex items-center justify-between"
+   582→                >
+   583→                  <div className="flex items-center gap-2">
+   584→                    <Checkbox
+   585→                      id="remember"
+   586→                      checked={rememberMe}
+   587→                      onCheckedChange={(checked) => setRememberMe(checked === true)}
+   588→                      className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+   589→                    />
+   590→                    <Label htmlFor="remember" className="text-sm text-muted-foreground cursor-pointer">
+   591→                      Remember me
+   592→                    </Label>
+   593→                  </div>
+   594→                  <button
+   595→                    type="button"
+   596→                    className="text-sm text-primary hover:underline font-medium"
+   597→                    onClick={handleForgotPassword}
+   598→                  >
+   599→                    Forgot Password?
+   600→                  </button>
+   601→                </motion.div>
+   602→
+   603→                {/* Submit Button */}
+   604→                <motion.div
+   605→                  initial={{ opacity: 0, y: 10 }}
+   606→                  animate={{ opacity: 1, y: 0 }}
+   607→                  transition={{ delay: 0.8 }}
+   608→                >
+   609→                  <Button type="submit" className="w-full h-12 text-base font-semibold rounded-xl shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all relative overflow-hidden" disabled={loading}>
+   610→                    {loading ? (
+   611→                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+   612→                    ) : (
+   613→                      <>
+   614→                        <LogIn className="h-5 w-5 mr-2" />
+   615→                        Sign In
+   616→                      </>
+   617→                    )}
+   618→                  </Button>
+   619→                </motion.div>
+   620→              </form>
+   621→
+   622→              {/* Register Link */}
+   623→              <motion.div
+   624→                initial={{ opacity: 0 }}
+   625→                animate={{ opacity: 1 }}
+   626→                transition={{ delay: 0.9 }}
+   627→                className="mt-6 pt-5 border-t"
+   628→              >
+   629→                <p className="text-center text-sm text-muted-foreground">
+   630→                  Don&apos;t have an account?{' '}
+   631→                  <button
+   632→                    type="button"
+   633→                    className="text-primary hover:underline font-semibold inline-flex items-center gap-1 group"
+   634→                    onClick={() => navigate('register')}
+   635→                  >
+   636→                    Create Account
+   637→                    <span className="inline-block group-hover:translate-x-0.5 transition-transform">&rarr;</span>
+   638→                  </button>
+   639→                </p>
+   640→              </motion.div>
+   641→            </div>
+   642→          </motion.div>
+   643→        </div>
+   644→      </div>
+   645→    </div>
+   646→  )
+   647→}
+   648→

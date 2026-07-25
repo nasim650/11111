@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" role="img" aria-labelledby="title">
+  <title id="title">Khati Khadyo special offers</title>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1">
+      <stop stop-color="#1f513d"/>
+      <stop offset="1" stop-color="#b8860b"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="420" rx="32" fill="url(#bg)"/>
+  <circle cx="1030" cy="75" r="150" fill="#fff" opacity=".08"/>
+  <circle cx="1100" cy="350" r="210" fill="#fff" opacity=".06"/>
+  <text x="90" y="170" fill="#fff" font-family="Arial, sans-serif" font-size="66" font-weight="700">Special Offers</text>
+  <text x="90" y="235" fill="#fff" font-family="Arial, sans-serif" font-size="30" opacity=".9">Authentic food, seasonal savings</text>
+  <rect x="90" y="285" width="250" height="62" rx="31" fill="#fff"/>
+  <text x="215" y="326" text-anchor="middle" fill="#1f513d" font-family="Arial, sans-serif" font-size="24" font-weight="700">Khati Khadyo</text>
+</svg>

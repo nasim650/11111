@@ -1,0 +1,635 @@
+     1→'use client'
+     2→
+     3→import React, { useEffect, useState, useCallback } from 'react'
+     4→import { Card, CardContent } from '@/components/ui/card'
+     5→import { Button } from '@/components/ui/button'
+     6→import { Badge } from '@/components/ui/badge'
+     7→import { Checkbox } from '@/components/ui/checkbox'
+     8→import {
+     9→  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+    10→} from '@/components/ui/table'
+    11→import {
+    12→  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+    13→} from '@/components/ui/dialog'
+    14→import {
+    15→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    16→} from '@/components/ui/select'
+    17→import {
+    18→  DropdownMenu,
+    19→  DropdownMenuContent,
+    20→  DropdownMenuItem,
+    21→  DropdownMenuTrigger,
+    22→} from '@/components/ui/dropdown-menu'
+    23→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    24→import { Skeleton } from '@/components/ui/skeleton'
+    25→import { Separator } from '@/components/ui/separator'
+    26→import { toast } from 'sonner'
+    27→import { extractItems } from '@/lib/api'
+    28→import { useAppStore } from '@/lib/store'
+    29→import {
+    30→  ShoppingCart, Eye, Truck, Package,
+    31→  X, Loader2, ArrowUpDown, CheckCircle2, ListChecks,
+    32→} from 'lucide-react'
+    33→import {
+    34→  ORDER_STATUS,
+    35→  PRODUCTION_FLOW,
+    36→  TERMINAL_STATUSES,
+    37→  ALL_STATUSES,
+    38→  getStatusMeta,
+    39→  getStatusLabel,
+    40→  getStatusBadgeClass,
+    41→  getNextStatus,
+    42→  isTerminal,
+    43→  getFlowProgress,
+    44→} from '@/lib/order-status'
+    45→
+    46→interface OrderItem {
+    47→  id: string
+    48→  productId: string
+    49→  productName: string
+    50→  quantity: number
+    51→  unit: string
+    52→  price: number
+    53→  total: number
+    54→  image?: string
+    55→}
+    56→
+    57→interface Order {
+    58→  id: string
+    59→  orderNumber: string
+    60→  userId: string
+    61→  customerName?: string
+    62→  customerEmail?: string
+    63→  customerPhone?: string
+    64→  items: OrderItem[]
+    65→  subtotal: number
+    66→  deliveryCharge: number
+    67→  discount: number
+    68→  total: number
+    69→  status: string
+    70→  paymentMethod: string
+    71→  paymentStatus: string
+    72→  shippingAddress?: string
+    73→  note?: string
+    74→  createdAt: string
+    75→  updatedAt: string
+    76→}
+    77→
+    78→// ─── Status config comes from the shared `@/lib/order-status` module ─────────
+    79→// (single source of truth — reused by AdminOrdersPage,
+    80→// OrderDetailPage, OrderTrackingPage). Local aliases keep call sites terse.
+    81→
+    82→const statusColors = (s: string) => getStatusBadgeClass(s)
+    83→const statusFlow = ALL_STATUSES.map((s) => s as string)
+    84→const statusLabels = (s: string) => getStatusLabel(s)
+    85→
+    86→export default function AdminOrdersPage() {
+    87→  const { navigate } = useAppStore()
+    88→  const [orders, setOrders] = useState<Order[]>([])
+    89→  const [loading, setLoading] = useState(true)
+    90→  const [statusFilter, setStatusFilter] = useState('all')
+    91→  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+    92→  const [detailOpen, setDetailOpen] = useState(false)
+    93→  const [updating, setUpdating] = useState(false)
+    94→
+    95→  // ─── Multi-select state ──────────────────────────────────────────────────
+    96→  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+    97→
+    98→  const fetchOrders = useCallback(async () => {
+    99→    try {
+   100→      const params = new URLSearchParams()
+   101→      if (statusFilter !== 'all') params.set('status', statusFilter)
+   102→      params.set('limit', '50')
+   103→      const res = await fetch(`/api/orders?${params.toString()}`)
+   104→      if (res.ok) {
+   105→        const data = await res.json()
+   106→        setOrders(extractItems(data))
+   107→      }
+   108→    } catch {
+   109→      toast.error('Failed to fetch orders')
+   110→    } finally {
+   111→      setLoading(false)
+   112→    }
+   113→  }, [statusFilter])
+   114→
+   115→  useEffect(() => { fetchOrders() }, [fetchOrders])
+   116→
+   117→  // ─── Selection helpers ────────────────────────────────────────────────────
+   118→
+   119→  const allSelected = orders.length > 0 && selectedIds.size === orders.length
+   120→  const someSelected = selectedIds.size > 0 && !allSelected
+   121→
+   122→  function toggleSelectAll() {
+   123→    if (allSelected) {
+   124→      setSelectedIds(new Set())
+   125→    } else {
+   126→      setSelectedIds(new Set(orders.map((o) => o.id)))
+   127→    }
+   128→  }
+   129→
+   130→  function toggleSelect(orderId: string) {
+   131→    setSelectedIds((prev) => {
+   132→      const next = new Set(prev)
+   133→      if (next.has(orderId)) {
+   134→        next.delete(orderId)
+   135→      } else {
+   136→        next.add(orderId)
+   137→      }
+   138→      return next
+   139→    })
+   140→  }
+   141→
+   142→  function clearSelection() {
+   143→    setSelectedIds(new Set())
+   144→  }
+   145→
+   146→  // ─── Open detail ─────────────────────────────────────────────────────────
+   147→
+   148→  function openDetail(order: Order) {
+   149→    setSelectedOrder(order)
+   150→    setDetailOpen(true)
+   151→  }
+   152→
+   153→  // ─── Update status ───────────────────────────────────────────────────────
+   154→
+   155→  async function updateStatus(orderId: string, status: string) {
+   156→    setUpdating(true)
+   157→    try {
+   158→      const res = await fetch(`/api/orders/${orderId}/status-history`, {
+   159→        method: 'POST',
+   160→        headers: { 'Content-Type': 'application/json' },
+   161→        body: JSON.stringify({ status, note: `Status updated to ${status}` }),
+   162→      })
+   163→      if (!res.ok) {
+   164→        const data = await res.json()
+   165→        throw new Error(data.error || 'Failed to update status')
+   166→      }
+   167→      toast.success(`Order status updated to ${statusLabels(status) || status}`)
+   168→      fetchOrders()
+   169→      if (selectedOrder?.id === orderId) {
+   170→        setSelectedOrder((prev) => prev ? { ...prev, status } : null)
+   171→      }
+   172→    } catch (error) {
+   173→      toast.error(error instanceof Error ? error.message : 'Failed to update order status')
+   174→    } finally {
+   175→      setUpdating(false)
+   176→    }
+   177→  }
+   178→
+   179→  // ─── Bulk status update ──────────────────────────────────────────────────
+   180→
+   181→  async function bulkUpdateStatus(newStatus: string) {
+   182→    if (selectedIds.size === 0) return
+   183→    setUpdating(true)
+   184→    let successCount = 0
+   185→    for (const orderId of selectedIds) {
+   186→      try {
+   187→        const res = await fetch(`/api/orders/${orderId}/status-history`, {
+   188→          method: 'POST',
+   189→          headers: { 'Content-Type': 'application/json' },
+   190→          body: JSON.stringify({ status: newStatus, note: `Bulk status update to ${newStatus}` }),
+   191→        })
+   192→        if (res.ok) successCount++
+   193→      } catch {
+   194→        // continue
+   195→      }
+   196→    }
+   197→    toast.success(`${successCount} order${successCount !== 1 ? 's' : ''} updated to ${statusLabels(newStatus) || newStatus}`)
+   198→    clearSelection()
+   199→    fetchOrders()
+   200→    setUpdating(false)
+   201→  }
+   202→
+   203→  // ─── Status counts ───────────────────────────────────────────────────────
+   204→
+   205→  const countFor = (key: string) =>
+   206→    orders.filter((o) => o.status === key || o.status === key.toUpperCase()).length
+   207→
+   208→  const counts = {
+   209→    all: orders.length,
+   210→    [ORDER_STATUS.PENDING]: countFor(ORDER_STATUS.PENDING),
+   211→    [ORDER_STATUS.CONFIRMED]: countFor(ORDER_STATUS.CONFIRMED),
+   212→    [ORDER_STATUS.PROCESSING]: countFor(ORDER_STATUS.PROCESSING),
+   213→    [ORDER_STATUS.PACKED]: countFor(ORDER_STATUS.PACKED),
+   214→    [ORDER_STATUS.READY_TO_SHIP]: countFor(ORDER_STATUS.READY_TO_SHIP),
+   215→    [ORDER_STATUS.SHIPPED]: countFor(ORDER_STATUS.SHIPPED),
+   216→    [ORDER_STATUS.DELIVERED]: countFor(ORDER_STATUS.DELIVERED),
+   217→    [ORDER_STATUS.CANCELLED]: countFor(ORDER_STATUS.CANCELLED),
+   218→    [ORDER_STATUS.RETURNED]: countFor(ORDER_STATUS.RETURNED),
+   219→  }
+   220→
+   221→  return (
+   222→    <div className="space-y-4">
+   223→      {/* ─── Header with Print Queue Link ──────────────────────────────────── */}
+   224→      <div className="flex items-center justify-between">
+   225→        <div />
+   226→        <Button
+   227→          variant="outline"
+   228→          size="sm"
+   229→          className="gap-1.5 rounded-xl border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+   230→          onClick={() => navigate('admin-print-queue')}
+   231→        >
+   232→          <ListChecks className="size-3.5" />
+   233→          Print Queue Monitor
+   234→        </Button>
+   235→      </div>
+   236→
+   237→      {/* ─── Status Tabs ──────────────────────────────────────────────────── */}
+   238→      <Tabs value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setLoading(true) }}>
+   239→        <TabsList className="flex-wrap h-auto">
+   240→          <TabsTrigger value="all">All ({counts.all})</TabsTrigger>
+   241→          {PRODUCTION_FLOW.map((s) => (
+   242→            <TabsTrigger key={s} value={s}>
+   243→              {getStatusLabel(s)} ({counts[s]})
+   244→            </TabsTrigger>
+   245→          ))}
+   246→          {TERMINAL_STATUSES.map((s) => (
+   247→            <TabsTrigger key={s} value={s}>
+   248→              {getStatusLabel(s)} ({counts[s]})
+   249→            </TabsTrigger>
+   250→          ))}
+   251→        </TabsList>
+   252→      </Tabs>
+   253→
+   254→      {/* ─── Bulk Actions Bar ─────────────────────────────────────────────── */}
+   255→      {selectedIds.size > 0 && (
+   256→        <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-200 animate-in fade-in slide-in-from-top-2">
+   257→          <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-200 font-semibold">
+   258→            {selectedIds.size} order{selectedIds.size !== 1 ? 's' : ''} selected
+   259→          </Badge>
+   260→
+   261→          <DropdownMenu>
+   262→            <DropdownMenuTrigger asChild>
+   263→              <Button variant="outline" size="sm" className="gap-1.5 rounded-xl border-amber-200 text-amber-700 hover:bg-amber-50">
+   264→                <ArrowUpDown className="size-3.5" />
+   265→                Update Status
+   266→              </Button>
+   267→            </DropdownMenuTrigger>
+   268→            <DropdownMenuContent>
+   269→              {statusFlow.map((s) => (
+   270→                <DropdownMenuItem
+   271→                  key={s}
+   272→                  onClick={() => bulkUpdateStatus(s)}
+   273→                  disabled={updating}
+   274→                  className="cursor-pointer"
+   275→                >
+   276→                  <Badge variant="secondary" className={`text-[10px] mr-2 ${statusColors(s)}`}>
+   277→                    {s}
+   278→                  </Badge>
+   279→                  Set to {s}
+   280→                </DropdownMenuItem>
+   281→              ))}
+   282→            </DropdownMenuContent>
+   283→          </DropdownMenu>
+   284→
+   285→          <div className="flex-1" />
+   286→
+   287→          <Button
+   288→            variant="ghost"
+   289→            size="sm"
+   290→            onClick={clearSelection}
+   291→            className="gap-1.5 text-gray-500 hover:text-gray-700 rounded-xl"
+   292→          >
+   293→            <X className="size-3.5" />
+   294→            Clear
+   295→          </Button>
+   296→        </div>
+   297→      )}
+   298→
+   299→      {/* ─── Orders Table ─────────────────────────────────────────────────── */}
+   300→      <Card>
+   301→        <CardContent className="p-0">
+   302→          {loading ? (
+   303→            <div className="p-6 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+   304→          ) : orders.length === 0 ? (
+   305→            <div className="text-center py-12">
+   306→              <ShoppingCart className="mx-auto size-10 text-muted-foreground mb-2" />
+   307→              <p className="text-muted-foreground">No orders found</p>
+   308→            </div>
+   309→          ) : (
+   310→            <Table>
+   311→              <TableHeader>
+   312→                <TableRow>
+   313→                  <TableHead className="w-10">
+   314→                    <Checkbox
+   315→                      checked={allSelected}
+   316→                      ref={(el) => {
+   317→                        if (el) {
+   318→                          (el as unknown as HTMLButtonElement).dataset.state = someSelected ? 'indeterminate' : allSelected ? 'checked' : 'unchecked'
+   319→                        }
+   320→                      }}
+   321→                      onCheckedChange={toggleSelectAll}
+   322→                      className="data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+   323→                    />
+   324→                  </TableHead>
+   325→                  <TableHead>Order #</TableHead>
+   326→                  <TableHead>Customer</TableHead>
+   327→                  <TableHead>Items</TableHead>
+   328→                  <TableHead>Total</TableHead>
+   329→                  <TableHead>Payment</TableHead>
+   330→                  <TableHead>Status</TableHead>
+   331→                  <TableHead>Date</TableHead>
+   332→                  <TableHead className="w-24 text-center">Actions</TableHead>
+   333→                </TableRow>
+   334→              </TableHeader>
+   335→              <TableBody>
+   336→                {orders.map((order) => (
+   337→                  <TableRow
+   338→                    key={order.id}
+   339→                    className={selectedIds.has(order.id) ? 'bg-emerald-50/50' : ''}
+   340→                  >
+   341→                    <TableCell>
+   342→                      <Checkbox
+   343→                        checked={selectedIds.has(order.id)}
+   344→                        onCheckedChange={() => toggleSelect(order.id)}
+   345→                        className="data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+   346→                      />
+   347→                    </TableCell>
+   348→                    <TableCell className="font-medium text-sm">{order.orderNumber}</TableCell>
+   349→                    <TableCell>
+   350→                      <div>
+   351→                        <p className="text-sm">{order.customerName ?? 'N/A'}</p>
+   352→                        <p className="text-xs text-muted-foreground">{order.customerPhone ?? ''}</p>
+   353→                      </div>
+   354→                    </TableCell>
+   355→                    <TableCell>
+   356→                      <Badge variant="secondary" className="text-xs">{order.items?.length ?? 0} items</Badge>
+   357→                    </TableCell>
+   358→                    <TableCell className="font-medium">৳{order.total.toLocaleString()}</TableCell>
+   359→                    <TableCell>
+   360→                      <div>
+   361→                        <Badge variant={order.paymentStatus === 'PAID' ? 'default' : 'secondary'} className="text-xs">
+   362→                          {order.paymentStatus}
+   363→                        </Badge>
+   364→                        <p className="text-xs text-muted-foreground mt-0.5">{order.paymentMethod}</p>
+   365→                      </div>
+   366→                    </TableCell>
+   367→                    <TableCell>
+   368→                      <div className="flex items-center gap-1.5">
+   369→                        <Badge variant="secondary" className={statusColors(order.status)}>
+   370→                          {statusLabels(order.status) || order.status}
+   371→                        </Badge>
+   372→                        <DropdownMenu>
+   373→                          <DropdownMenuTrigger asChild>
+   374→                            <Button
+   375→                              variant="ghost"
+   376→                              size="icon"
+   377→                              className="size-6 hover:bg-emerald-50 hover:text-emerald-700"
+   378→                              disabled={updating}
+   379→                            >
+   380→                              <ArrowUpDown className="size-3" />
+   381→                            </Button>
+   382→                          </DropdownMenuTrigger>
+   383→                          <DropdownMenuContent align="end">
+   384→                            {statusFlow.map((s) => (
+   385→                              <DropdownMenuItem
+   386→                                key={s}
+   387→                                onClick={() => updateStatus(order.id, s)}
+   388→                                disabled={updating || order.status === s}
+   389→                                className="cursor-pointer"
+   390→                              >
+   391→                                <Badge variant="secondary" className={`text-[10px] mr-2 ${statusColors(s)}`}>
+   392→                                  {statusLabels(s) || s}
+   393→                                </Badge>
+   394→                                Set to {statusLabels(s) || s}
+   395→                              </DropdownMenuItem>
+   396→                            ))}
+   397→                          </DropdownMenuContent>
+   398→                        </DropdownMenu>
+   399→                      </div>
+   400→                    </TableCell>
+   401→                    <TableCell className="text-xs text-muted-foreground">
+   402→                      {new Date(order.createdAt).toLocaleDateString()}
+   403→                    </TableCell>
+   404→                    <TableCell>
+   405→                      <div className="flex items-center justify-center gap-0.5">
+   406→                        <Button variant="ghost" size="icon" className="size-7" onClick={() => openDetail(order)}>
+   407→                          <Eye className="size-3" />
+   408→                        </Button>
+   409→                      </div>
+   410→                    </TableCell>
+   411→                  </TableRow>
+   412→                ))}
+   413→              </TableBody>
+   414→            </Table>
+   415→          )}
+   416→        </CardContent>
+   417→      </Card>
+   418→
+   419→      {/* ─── Order Detail Dialog ───────────────────────────────────────────── */}
+   420→      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+   421→        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+   422→          <DialogHeader>
+   423→            <DialogTitle className="flex items-center gap-2">
+   424→              <Package className="size-5" /> Order {selectedOrder?.orderNumber}
+   425→            </DialogTitle>
+   426→          </DialogHeader>
+   427→          {selectedOrder && (
+   428→            <div className="space-y-6">
+   429→              {/* ─── Status Summary + Flow ─────────────────────────────────── */}
+   430→              <div className="space-y-3">
+   431→                <div className="flex flex-wrap items-center gap-3">
+   432→                  <Badge variant="secondary" className={statusColors(selectedOrder.status)}>
+   433→                    {statusLabels(selectedOrder.status) || selectedOrder.status}
+   434→                  </Badge>
+   435→                  {isTerminal(selectedOrder.status) && (
+   436→                    <Badge variant="outline" className="text-xs text-muted-foreground border-gray-300">
+   437→                      Terminal state
+   438→                    </Badge>
+   439→                  )}
+   440→                  {updating && <Loader2 className="size-4 animate-spin text-emerald-600" />}
+   441→                </div>
+   442→
+   443→                {/* Production flow progress bar */}
+   444→                {!isTerminal(selectedOrder.status) && (
+   445→                  <div className="rounded-xl border bg-gray-50/50 p-3">
+   446→                    <div className="flex items-center justify-between mb-2">
+   447→                      <span className="text-xs font-semibold text-gray-600">Production Flow</span>
+   448→                      <span className="text-xs text-muted-foreground">
+   449→                        {getFlowProgress(selectedOrder.status)}% complete
+   450→                      </span>
+   451→                    </div>
+   452→                    <div className="flex items-center gap-1">
+   453→                      {PRODUCTION_FLOW.map((s, i) => {
+   454→                        const meta = getStatusMeta(s)
+   455→                        const Icon = meta.icon
+   456→                        const currentIdx = PRODUCTION_FLOW.indexOf(selectedOrder.status as never)
+   457→                        const isDone = i <= currentIdx
+   458→                        const isCurrent = s === selectedOrder.status
+   459→                        return (
+   460→                          <div key={s} className="flex items-center flex-1 last:flex-none">
+   461→                            <div
+   462→                              className={`flex flex-col items-center gap-1 ${isCurrent ? 'scale-110' : ''} transition-transform`}
+   463→                              title={meta.label}
+   464→                            >
+   465→                              <div
+   466→                                className={`h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-bold ${
+   467→                                  isDone
+   468→                                    ? `${meta.dotClass} text-white`
+   469→                                    : 'bg-gray-200 text-gray-400'
+   470→                                } ${isCurrent ? 'ring-2 ring-offset-1 ring-emerald-400' : ''}`}
+   471→                              >
+   472→                                <Icon className="size-3.5" />
+   473→                              </div>
+   474→                              <span className={`text-[9px] ${isDone ? 'text-gray-700 font-medium' : 'text-gray-400'}`}>
+   475→                                {meta.shortLabel}
+   476→                              </span>
+   477→                            </div>
+   478→                            {i < PRODUCTION_FLOW.length - 1 && (
+   479→                              <div className={`flex-1 h-0.5 mx-1 ${i < currentIdx ? 'bg-emerald-400' : 'bg-gray-200'}`} />
+   480→                            )}
+   481→                          </div>
+   482→                        )
+   483→                      })}
+   484→                    </div>
+   485→                  </div>
+   486→                )}
+   487→
+   488→                {/* Status actions: quick advance + full selector */}
+   489→                <div className="flex flex-wrap items-center gap-2">
+   490→                  {!isTerminal(selectedOrder.status) && getNextStatus(selectedOrder.status) && (
+   491→                    <Button
+   492→                      size="sm"
+   493→                      className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 rounded-xl"
+   494→                      disabled={updating}
+   495→                      onClick={() => updateStatus(selectedOrder.id, getNextStatus(selectedOrder.status)!)}
+   496→                    >
+   497→                      <CheckCircle2 className="size-3.5" />
+   498→                      Advance to {getStatusLabel(getNextStatus(selectedOrder.status)!)}
+   499→                    </Button>
+   500→                  )}
+   501→                  <Select
+   502→                    value={selectedOrder.status}
+   503→                    onValueChange={(v) => updateStatus(selectedOrder.id, v)}
+   504→                    disabled={updating}
+   505→                  >
+   506→                    <SelectTrigger className="w-48 h-9">
+   507→                      <SelectValue />
+   508→                    </SelectTrigger>
+   509→                    <SelectContent>
+   510→                      <span className="text-[10px] text-muted-foreground uppercase tracking-wide px-2 py-1 block">
+   511→                        Production Flow
+   512→                      </span>
+   513→                      {PRODUCTION_FLOW.map((s) => (
+   514→                        <SelectItem key={s} value={s}>{getStatusLabel(s)}</SelectItem>
+   515→                      ))}
+   516→                      <span className="text-[10px] text-muted-foreground uppercase tracking-wide px-2 py-1 block">
+   517→                        Terminal
+   518→                      </span>
+   519→                      {TERMINAL_STATUSES.map((s) => (
+   520→                        <SelectItem key={s} value={s}>{getStatusLabel(s)}</SelectItem>
+   521→                      ))}
+   522→                    </SelectContent>
+   523→                  </Select>
+   524→                </div>
+   525→              </div>
+   526→
+   527→              {/* ─── Status Visibility: Payment / Delivery / Print ─────────── */}
+   528→              <div className="grid grid-cols-3 gap-3">
+   529→                <div className="rounded-xl border p-3 text-center">
+   530→                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Payment</p>
+   531→                  <Badge
+   532→                    variant="secondary"
+   533→                    className={`text-[11px] ${
+   534→                      selectedOrder.paymentStatus === 'paid'
+   535→                        ? 'bg-emerald-100 text-emerald-800'
+   536→                        : selectedOrder.paymentStatus === 'pending'
+   537→                        ? 'bg-amber-100 text-amber-800'
+   538→                        : 'bg-gray-100 text-gray-800'
+   539→                    }`}
+   540→                  >
+   541→                    {selectedOrder.paymentStatus || '—'}
+   542→                  </Badge>
+   543→                  <p className="text-[10px] text-muted-foreground mt-1">{selectedOrder.paymentMethod || '—'}</p>
+   544→                </div>
+   545→                <div className="rounded-xl border p-3 text-center">
+   546→                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Delivery</p>
+   547→                  <Badge variant="secondary" className={`text-[11px] ${statusColors(selectedOrder.status)}`}>
+   548→                    {statusLabels(selectedOrder.status) || '—'}
+   549→                  </Badge>
+   550→                  <p className="text-[10px] text-muted-foreground mt-1">
+   551→                    {isTerminal(selectedOrder.status) ? 'Closed' : 'In progress'}
+   552→                  </p>
+   553→                </div>
+   554→                <div className="rounded-xl border p-3 text-center">
+   555→                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Print</p>
+   556→                  <Badge variant="secondary" className="text-[11px] bg-emerald-100 text-emerald-800">
+   557→                    Ready
+   558→                  </Badge>
+   559→                  <p className="text-[10px] text-muted-foreground mt-1">5 document types</p>
+   560→                </div>
+   561→              </div>
+   562→
+   563→              {/* Customer Info */}
+   564→              <div className="grid gap-4 sm:grid-cols-2">
+   565→                <Card>
+   566→                  <CardContent className="p-4">
+   567→                    <h4 className="text-sm font-semibold mb-2">Customer Info</h4>
+   568→                    <p className="text-sm">{selectedOrder.customerName ?? 'N/A'}</p>
+   569→                    <p className="text-sm text-muted-foreground">{selectedOrder.customerEmail ?? ''}</p>
+   570→                    <p className="text-sm text-muted-foreground">{selectedOrder.customerPhone ?? ''}</p>
+   571→                  </CardContent>
+   572→                </Card>
+   573→                <Card>
+   574→                  <CardContent className="p-4">
+   575→                    <h4 className="text-sm font-semibold mb-2">Shipping Address</h4>
+   576→                    <p className="text-sm">{selectedOrder.shippingAddress ?? 'N/A'}</p>
+   577→                  </CardContent>
+   578→                </Card>
+   579→              </div>
+   580→
+   581→              {/* Items */}
+   582→              <div>
+   583→                <h4 className="text-sm font-semibold mb-2">Order Items</h4>
+   584→                <Table>
+   585→                  <TableHeader>
+   586→                    <TableRow>
+   587→                      <TableHead>Product</TableHead>
+   588→                      <TableHead>Price</TableHead>
+   589→                      <TableHead>Qty</TableHead>
+   590→                      <TableHead>Total</TableHead>
+   591→                    </TableRow>
+   592→                  </TableHeader>
+   593→                  <TableBody>
+   594→                    {(selectedOrder.items ?? []).map((item) => (
+   595→                      <TableRow key={item.id}>
+   596→                        <TableCell className="text-sm">{item.productName}</TableCell>
+   597→                        <TableCell className="text-sm">৳{item.price}</TableCell>
+   598→                        <TableCell className="text-sm">{item.quantity} {item.unit}</TableCell>
+   599→                        <TableCell className="text-sm font-medium">৳{item.total}</TableCell>
+   600→                      </TableRow>
+   601→                    ))}
+   602→                  </TableBody>
+   603→                </Table>
+   604→              </div>
+   605→
+   606→              {/* Totals */}
+   607→              <div className="border-t pt-4 space-y-1 text-sm">
+   608→                <div className="flex justify-between"><span>Subtotal</span><span>৳{selectedOrder.subtotal.toLocaleString()}</span></div>
+   609→                <div className="flex justify-between"><span>Delivery Charge</span><span>৳{selectedOrder.deliveryCharge.toLocaleString()}</span></div>
+   610→                {selectedOrder.discount > 0 && (
+   611→                  <div className="flex justify-between text-green-600"><span>Discount</span><span>-৳{selectedOrder.discount.toLocaleString()}</span></div>
+   612→                )}
+   613→                <div className="flex justify-between font-bold text-base pt-2 border-t"><span>Total</span><span>৳{selectedOrder.total.toLocaleString()}</span></div>
+   614→              </div>
+   615→
+   616→              {selectedOrder.note && (
+   617→                <div>
+   618→                  <h4 className="text-sm font-semibold mb-1">Order Note</h4>
+   619→                  <p className="text-sm text-muted-foreground">{selectedOrder.note}</p>
+   620→                </div>
+   621→              )}
+   622→
+   623→              <div className="text-xs text-muted-foreground">
+   624→                <p>Order Date: {new Date(selectedOrder.createdAt).toLocaleString()}</p>
+   625→                <p>Last Updated: {new Date(selectedOrder.updatedAt).toLocaleString()}</p>
+   626→                <p>Payment: {selectedOrder.paymentMethod} - {selectedOrder.paymentStatus}</p>
+   627→              </div>
+   628→            </div>
+   629→          )}
+   630→        </DialogContent>
+   631→      </Dialog>
+   632→    </div>
+   633→  )
+   634→}
+   635→

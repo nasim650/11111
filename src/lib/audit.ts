@@ -1,0 +1,27 @@
+import { db } from '@/lib/db'
+
+export async function createAuditLog(params: {
+  adminId?: string
+  action: string
+  module: string
+  referenceId?: string
+  oldData?: unknown
+  newData?: unknown
+  ipAddress?: string
+}) {
+  try {
+    return await db.auditLog.create({
+      data: {
+        adminId: params.adminId,
+        action: params.action,
+        module: params.module,
+        referenceId: params.referenceId,
+        oldData: params.oldData ? JSON.stringify(params.oldData) : null,
+        newData: params.newData ? JSON.stringify(params.newData) : null,
+        ipAddress: params.ipAddress,
+      },
+    })
+  } catch {
+    // Audit logging is best-effort — never fail the request because of it
+  }
+}

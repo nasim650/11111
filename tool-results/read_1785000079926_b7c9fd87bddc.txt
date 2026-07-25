@@ -1,0 +1,1528 @@
+     1→'use client'
+     2→
+     3→import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+     4→import Image from 'next/image'
+     5→import {
+     6→  ChevronLeft,
+     7→  ChevronRight,
+     8→  Search,
+     9→  ShieldCheck,
+    10→  Truck,
+    11→  RefreshCw,
+    12→  Award,
+    13→  Leaf,
+    14→  Star,
+    15→  Send,
+    16→  ArrowRight,
+    17→  Sparkles,
+    18→  TrendingUp,
+    19→  Tag,
+    20→  Clock,
+    21→  Zap,
+    22→  Handshake,
+    23→  X,
+    24→  ChevronDown,
+    25→  Smartphone,
+    26→  Play,
+    27→  Flame,
+    28→  Package,
+    29→  Check,
+    30→  MapPin,
+    31→  Quote,
+    32→  Users,
+    33→  Gift,
+    34→  QuoteIcon,
+    35→  GripHorizontal,
+    36→} from 'lucide-react'
+    37→import { motion, AnimatePresence, useInView, useScroll, useTransform } from 'framer-motion'
+    38→import { Button } from '@/components/ui/button'
+    39→import { Input } from '@/components/ui/input'
+    40→import { Badge } from '@/components/ui/badge'
+    41→import { Skeleton } from '@/components/ui/skeleton'
+    42→import { Progress } from '@/components/ui/progress'
+    43→import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+    44→import { useAppStore, type PageName } from '@/lib/store'
+    45→import { extractItems } from '@/lib/api'
+    46→import ProductCard from '@/components/shared/ProductCard'
+    47→import { toast } from 'sonner'
+    48→
+    49→// ── Types ──
+    50→interface Banner {
+    51→  id: string
+    52→  title: string
+    53→  subtitle?: string
+    54→  desktopImage?: string
+    55→  mobileImage?: string
+    56→  ctaText?: string
+    57→  ctaLink?: string
+    58→  link?: string
+    59→  bgColor?: string
+    60→  location?: string
+    61→}
+    62→
+    63→interface Category {
+    64→  id: string
+    65→  name: string
+    66→  slug: string
+    67→  image?: string
+    68→  icon?: string
+    69→  description?: string
+    70→  showInHome?: boolean
+    71→  bengaliName?: string
+    72→}
+    73→
+    74→interface Product {
+    75→  id: string
+    76→  name: string
+    77→  slug: string
+    78→  price: number
+    79→  discountPrice?: number | null
+    80→  unit: string
+    81→  stock: number
+    82→  images?: Array<{ url: string; alt?: string }>
+    83→  category?: { name: string; slug: string }
+    84→  status?: string
+    85→  isNewArrival?: boolean
+    86→  isBestSeller?: boolean
+    87→  shortDescription?: string
+    88→}
+    89→
+    90→interface Testimonial {
+    91→  id: string
+    92→  name: string
+    93→  role?: string
+    94→  content: string
+    95→  rating: number
+    96→  image?: string
+    97→}
+    98→
+    99→interface HomepageSection {
+   100→  id: string
+   101→  title: string
+   102→  type: string
+   103→  subtitle?: string
+   104→  description?: string
+   105→  content?: string
+   106→  image?: string
+   107→  bgColor?: string
+   108→  layout?: string
+   109→  limit?: number
+   110→  categoryId?: string
+   111→  category?: { id: string; name: string; slug: string; image?: string }
+   112→  sortOrder?: number
+   113→}
+   114→
+   115→interface Partner {
+   116→  id: string
+   117→  name: string
+   118→  logo?: string
+   119→}
+   120→
+   121→interface FeatureContent {
+   122→  icon?: string
+   123→  title: string
+   124→  description: string
+   125→}
+   126→
+   127→interface PromoContent {
+   128→  title?: string
+   129→  description?: string
+   130→  ctaText?: string
+   131→}
+   132→
+   133→const featureIcons: Record<string, React.ElementType> = {
+   134→  'shield-check': ShieldCheck,
+   135→  truck: Truck,
+   136→  leaf: Leaf,
+   137→  award: Award,
+   138→  refresh: RefreshCw,
+   139→}
+   140→
+   141→function parseSectionContent<T>(content?: string): T | null {
+   142→  if (!content) return null
+   143→  try {
+   144→    return JSON.parse(content) as T
+   145→  } catch {
+   146→    return null
+   147→  }
+   148→}
+   149→
+   150→// Bengali category names mapping
+   151→const bengaliCategoryNames: Record<string, string> = {
+   152→  'Honey & Jaggery': 'মধু ও গুড়',
+   153→  'Ghee & Oils': 'ঘি ও তেল',
+   154→  'Rice & Grains': 'চাল ও শস্য',
+   155→  'Spices & Masala': 'মশলা',
+   156→  'Sweets & Snacks': 'মিষ্টি ও স্ন্যাকস',
+   157→  'Tea & Beverages': 'চা ও পানীয়',
+   158→  'Pickles & Chutney': 'আচার ও চাটনি',
+   159→  'Dry Fruits & Nuts': 'শুকনো ফল ও বাদাম',
+   160→  'Deshi Gur': 'দেশি গুড়',
+   161→  'Organic Products': 'জৈব পণ্য',
+   162→  'Special Combos': 'স্পেশাল কম্বো',
+   163→}
+   164→
+   165→// Bengali testimonial locations
+   166→const bengaliLocations = [
+   167→  'ঢাকা', 'চট্টগ্রাম', 'সিলেট', 'রাজশাহী', 'খুলনা', 'বরিশাল', 'রংপুর', 'ময়মনসিংহ'
+   168→]
+   169→
+   170→// ── Animated Section Wrapper ──
+   171→function AnimatedSection({ children, className, delay = 0, style }: {
+   172→  children: React.ReactNode
+   173→  className?: string
+   174→  delay?: number
+   175→  style?: React.CSSProperties
+   176→}) {
+   177→  const ref = useRef<HTMLDivElement>(null)
+   178→  const isInView = useInView(ref, { once: true, margin: '-50px' })
+   179→
+   180→  return (
+   181→    <motion.div
+   182→      ref={ref}
+   183→      initial={{ opacity: 0, y: 40 }}
+   184→      animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 40 }}
+   185→      transition={{ duration: 0.6, delay, ease: 'easeOut' }}
+   186→      className={className}
+   187→      style={style}
+   188→    >
+   189→      {children}
+   190→    </motion.div>
+   191→  )
+   192→}
+   193→
+   194→// ── Flip Digit Component ──
+   195→function FlipDigit({ value, label }: { value: string; label: string }) {
+   196→  return (
+   197→    <div className="flex flex-col items-center">
+   198→      <div className="relative overflow-hidden rounded-lg">
+   199→        <div className="bg-white text-red-600 px-2.5 py-1.5 min-w-[40px] text-center font-bold text-xl tabular-nums shadow-md">
+   200→          {value}
+   201→        </div>
+   202→        {/* Flip effect overlay */}
+   203→        <motion.div
+   204→          key={value}
+   205→          initial={{ rotateX: -90, opacity: 0.5 }}
+   206→          animate={{ rotateX: 0, opacity: 0 }}
+   207→          transition={{ duration: 0.3, ease: 'easeOut' }}
+   208→          className="absolute inset-0 bg-white/60 origin-top"
+   209→        />
+   210→      </div>
+   211→      <span className="text-[9px] text-white/70 mt-0.5 font-medium">{label}</span>
+   212→    </div>
+   213→  )
+   214→}
+   215→
+   216→// ── Flash Sale Countdown ──
+   217→function FlashSaleCountdown() {
+   218→  const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 })
+   219→
+   220→  useEffect(() => {
+   221→    const getTargetTime = () => {
+   222→      const now = new Date()
+   223→      const end = new Date(now)
+   224→      end.setHours(23, 59, 59, 999)
+   225→      return end.getTime()
+   226→    }
+   227→
+   228→    const updateCountdown = () => {
+   229→      const target = getTargetTime()
+   230→      const now = Date.now()
+   231→      const diff = Math.max(target - now, 0)
+   232→
+   233→      setTimeLeft({
+   234→        hours: Math.floor(diff / (1000 * 60 * 60)),
+   235→        minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
+   236→        seconds: Math.floor((diff % (1000 * 60)) / 1000),
+   237→      })
+   238→    }
+   239→
+   240→    updateCountdown()
+   241→    const timer = setInterval(updateCountdown, 1000)
+   242→    return () => clearInterval(timer)
+   243→  }, [])
+   244→
+   245→  const pad = (n: number) => n.toString().padStart(2, '0')
+   246→  const isEndingSoon = timeLeft.hours === 0 && timeLeft.minutes < 60
+   247→
+   248→  return (
+   249→    <div className="flex items-center gap-2">
+   250→      {isEndingSoon && (
+   251→        <span
+   252→          className="text-[10px] font-medium bg-white/15 text-white px-2 py-0.5 rounded-full mr-1"
+   253→        >
+   254→          Ending soon
+   255→        </span>
+   256→      )}
+   257→      <div className="flex items-center gap-1">
+   258→        <FlipDigit value={pad(timeLeft.hours)} label="ঘণ্টা" />
+   259→        <span className="text-white font-bold text-xl mx-0.5 animate-pulse">:</span>
+   260→        <FlipDigit value={pad(timeLeft.minutes)} label="মিনিট" />
+   261→        <span className="text-white font-bold text-xl mx-0.5 animate-pulse">:</span>
+   262→        <FlipDigit value={pad(timeLeft.seconds)} label="সেকেন্ড" />
+   263→      </div>
+   264→    </div>
+   265→  )
+   266→}
+   267→
+   268→// ── Section Heading Component ──
+   269→function SectionHeading({ label, labelIcon: LabelIcon, labelColor, title, subtitle, bengaliTitle }: {
+   270→  label: string
+   271→  labelIcon: React.ElementType
+   272→  labelColor: string
+   273→  title: string
+   274→  subtitle?: string
+   275→  bengaliTitle?: string
+   276→}) {
+   277→  return (
+   278→    <div>
+   279→      <div className={`inline-flex items-center gap-2 ${labelColor} mb-2`}>
+   280→        <LabelIcon className="h-4 w-4" />
+   281→        <span className="text-xs font-semibold uppercase tracking-wider">{label}</span>
+   282→        <div className="h-[2px] w-8 bg-current opacity-30" />
+   283→      </div>
+   284→      <h2 className="text-2xl md:text-3xl font-bold text-foreground">{title}</h2>
+   285→      {bengaliTitle && (
+   286→        <p className="text-sm text-emerald-600/70 font-medium mt-0.5">{bengaliTitle}</p>
+   287→      )}
+   288→      {subtitle && (
+   289→        <p className="text-muted-foreground mt-1.5 max-w-lg">{subtitle}</p>
+   290→      )}
+   291→    </div>
+   292→  )
+   293→}
+   294→
+   295→// ── Announcement Bar ──
+   296→function AnnouncementBar({ siteConfig }: { siteConfig: import('@/lib/store').SiteConfig | null }) {
+   297→  const [isVisible, setIsVisible] = useState(true)
+   298→
+   299→  // Round 3E: admin-controlled enable/disable
+   300→  if (!isVisible) return null
+   301→  if (siteConfig && siteConfig.announcementEnabled === false) return null
+   302→
+   303→  // Round 3E: admin-controlled text (with safe fallbacks to existing copy)
+   304→  const announcementText = siteConfig?.announcementText || 'Selected items at special prices'
+   305→  const freeDeliveryEnabled = siteConfig ? siteConfig.freeDeliveryEnabled !== false : true
+   306→  const freeDeliveryMessage = siteConfig?.freeDeliveryMessage || 'Free Delivery on Orders Above ৳1,500'
+   307→  const promoText = siteConfig?.homepagePromoText || '100% Authentic Bangladeshi Products'
+   308→
+   309→  return (
+   310→    <div className="relative bg-gradient-to-r from-emerald-700 via-teal-600 to-emerald-700 text-white overflow-hidden">
+   311→      {/* Decorative pattern overlay */}
+   312→      <div className="absolute inset-0 opacity-10">
+   313→        <div
+   314→          className="absolute inset-0"
+   315→          style={{
+   316→            backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.1) 10px, rgba(255,255,255,0.1) 20px)`,
+   317→          }}
+   318→        />
+   319→      </div>
+   320→      <div className="relative flex items-center">
+   321→        {/* Marquee container */}
+   322→        <div className="flex-1 overflow-hidden py-2">
+   323→          <div className="flex animate-marquee whitespace-nowrap">
+   324→            {[1, 2].map((set) => (
+   325→              <div key={set} className="flex items-center gap-8 mr-8">
+   326→                <span className="flex items-center gap-2 text-sm font-medium">
+   327→                  <Zap className="h-3.5 w-3.5 text-amber-300" />
+   328→                  {announcementText}
+   329→                </span>
+   330→                <span className="text-amber-300 font-bold text-sm">|</span>
+   331→                <span className="flex items-center gap-2 text-sm font-medium">
+   332→                  <Gift className="h-3.5 w-3.5 text-amber-300" />
+   333→                  Use code <span className="bg-white/20 px-2 py-0.5 rounded font-medium text-amber-300">KHATI20</span> for 20% off
+   334→                </span>
+   335→                <span className="text-amber-300 font-bold text-sm">|</span>
+   336→                {freeDeliveryEnabled && (
+   337→                  <span className="flex items-center gap-2 text-sm font-medium">
+   338→                    <Truck className="h-3.5 w-3.5 text-amber-300" />
+   339→                    {freeDeliveryMessage}
+   340→                  </span>
+   341→                )}
+   342→                {freeDeliveryEnabled && <span className="text-amber-300 font-bold text-sm">|</span>}
+   343→                <span className="flex items-center gap-2 text-sm font-medium">
+   344→                  <Leaf className="h-3.5 w-3.5 text-amber-300" />
+   345→                  {promoText}
+   346→                </span>
+   347→                <span className="text-amber-300 font-bold text-sm">|</span>
+   348→                <span className="flex items-center gap-2 text-sm font-medium">
+   349→                  <Sparkles className="h-3.5 w-3.5 text-amber-300" />
+   350→                  সতেজ ও খাঁটি পণ্য — সরাসরি কৃষক থেকে
+   351→                </span>
+   352→              </div>
+   353→            ))}
+   354→          </div>
+   355→        </div>
+   356→        {/* Close button */}
+   357→        <button
+   358→          onClick={() => setIsVisible(false)}
+   359→          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-white/20 rounded-full transition-colors z-10"
+   360→          aria-label="Close announcement"
+   361→        >
+   362→          <X className="h-3.5 w-3.5" />
+   363→        </button>
+   364→      </div>
+   365→    </div>
+   366→  )
+   367→}
+   368→
+   369→// ── Hero Banner Carousel ──
+   370→function HeroBannerCarousel({ banners, navigate }: {
+   371→  banners: Banner[]
+   372→  navigate: (page: PageName, params?: Record<string, unknown>) => void
+   373→}) {
+   374→  const [currentBanner, setCurrentBanner] = useState(0)
+   375→  const [isPaused, setIsPaused] = useState(false)
+   376→  const [progress, setProgress] = useState(0)
+   377→  const [scrollY, setScrollY] = useState(0)
+   378→  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+   379→
+   380→  // Parallax scroll tracking
+   381→  useEffect(() => {
+   382→    const handleScroll = () => {
+   383→      setScrollY(window.scrollY)
+   384→    }
+   385→    window.addEventListener('scroll', handleScroll, { passive: true })
+   386→    return () => window.removeEventListener('scroll', handleScroll)
+   387→  }, [])
+   388→
+   389→  // Auto-play with progress
+   390→  useEffect(() => {
+   391→    if (banners.length <= 1 || isPaused) return
+   392→
+   393→    const SLIDE_DURATION = 5000
+   394→    const TICK = 50
+   395→    let elapsed = 0
+   396→
+   397→    intervalRef.current = setInterval(() => {
+   398→      elapsed += TICK
+   399→      setProgress((elapsed / SLIDE_DURATION) * 100)
+   400→
+   401→      if (elapsed >= SLIDE_DURATION) {
+   402→        elapsed = 0
+   403→        setCurrentBanner((prev) => (prev + 1) % banners.length)
+   404→        setProgress(0)
+   405→      }
+   406→    }, TICK)
+   407→
+   408→    return () => {
+   409→      if (intervalRef.current) clearInterval(intervalRef.current)
+   410→    }
+   411→  }, [banners.length, isPaused, currentBanner])
+   412→
+   413→  const handlePrev = () => {
+   414→    setCurrentBanner((prev) => (prev - 1 + banners.length) % banners.length)
+   415→    setProgress(0)
+   416→  }
+   417→
+   418→  const handleNext = () => {
+   419→    setCurrentBanner((prev) => (prev + 1) % banners.length)
+   420→    setProgress(0)
+   421→  }
+   422→
+   423→  const handleDotClick = (idx: number) => {
+   424→    setCurrentBanner(idx)
+   425→    setProgress(0)
+   426→  }
+   427→
+   428→  if (banners.length === 0) return null
+   429→
+   430→  // Parallax offset - capped at 60px
+   431→  const parallaxOffset = Math.min(scrollY * 0.3, 60)
+   432→
+   433→  return (
+   434→    <div
+   435→      className="relative h-64 sm:h-80 md:h-[440px] lg:h-[520px] overflow-hidden bg-muted"
+   436→      onMouseEnter={() => setIsPaused(true)}
+   437→      onMouseLeave={() => setIsPaused(false)}
+   438→    >
+   439→      <AnimatePresence mode="wait">
+   440→        <motion.div
+   441→          key={currentBanner}
+   442→          initial={{ opacity: 0, x: 60 }}
+   443→          animate={{ opacity: 1, x: 0 }}
+   444→          exit={{ opacity: 0, x: -60 }}
+   445→          transition={{ duration: 0.5, ease: 'easeInOut' }}
+   446→          className="absolute inset-0"
+   447→        >
+   448→          {banners[currentBanner].desktopImage ? (
+   449→            <>
+   450→              {/* Parallax image container */}
+   451→              <div
+   452→                className="absolute inset-0 w-full h-full"
+   453→                style={{ transform: `translateY(${parallaxOffset}px) scale(1.1)` }}
+   454→              >
+   455→                <Image
+   456→                  src={banners[currentBanner].desktopImage}
+   457→                  alt={banners[currentBanner].title}
+   458→                  fill
+   459→                  className="object-cover"
+   460→                  priority={currentBanner === 0}
+   461→                  sizes="100vw"
+   462→                />
+   463→              </div>
+   464→              {/* Gradient overlays - enhanced for text readability */}
+   465→              <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-black/20" />
+   466→              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30" />
+   467→              {/* Subtle emerald tint */}
+   468→              <div className="absolute inset-0 bg-emerald-900/10" />
+   469→              {/* Content */}
+   470→              <div className="absolute inset-0 flex items-center">
+   471→                <div className="p-6 md:p-12 lg:p-16 max-w-2xl">
+   472→                  <motion.div
+   473→                    initial={{ opacity: 0, y: 20 }}
+   474→                    animate={{ opacity: 1, y: 0 }}
+   475→                    transition={{ delay: 0.2, duration: 0.5 }}
+   476→                  >
+   477→                    <h1 className="text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-extrabold text-white mb-3 leading-tight drop-shadow-lg">
+   478→                      {banners[currentBanner].title}
+   479→                    </h1>
+   480→                  </motion.div>
+   481→                  {banners[currentBanner].subtitle && (
+   482→                    <motion.p
+   483→                      initial={{ opacity: 0, y: 15 }}
+   484→                      animate={{ opacity: 1, y: 0 }}
+   485→                      transition={{ delay: 0.35, duration: 0.5 }}
+   486→                      className="text-sm sm:text-lg md:text-xl text-white/90 mb-6 drop-shadow max-w-lg"
+   487→                    >
+   488→                      {banners[currentBanner].subtitle}
+   489→                    </motion.p>
+   490→                  )}
+   491→                  {banners[currentBanner].ctaText && (
+   492→                    <motion.div
+   493→                      initial={{ opacity: 0, y: 10 }}
+   494→                      animate={{ opacity: 1, y: 0 }}
+   495→                      transition={{ delay: 0.5, duration: 0.5 }}
+   496→                    >
+   497→                      <Button
+   498→                        size="lg"
+   499→                        className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold px-8 h-12 text-base shadow-lg hover:shadow-xl transition-all hover:scale-105 rounded-full"
+   500→                        onClick={() => {
+   501→                          const banner = banners[currentBanner]
+   502→                          if (banner.ctaLink) {
+   503→                            if (banner.ctaLink.startsWith('/')) {
+   504→                              navigate('products')
+   505→                            } else {
+   506→                              window.open(banner.ctaLink, '_blank')
+   507→                            }
+   508→                          } else {
+   509→                            navigate('products')
+   510→                          }
+   511→                        }}
+   512→                      >
+   513→                        {banners[currentBanner].ctaText}
+   514→                        <ArrowRight className="h-5 w-5 ml-2 group-hover:translate-x-1 transition-transform" />
+   515→                      </Button>
+   516→                    </motion.div>
+   517→                  )}
+   518→                </div>
+   519→              </div>
+   520→            </>
+   521→          ) : (
+   522→            <div
+   523→              className="w-full h-full flex items-center justify-center"
+   524→              style={{ backgroundColor: banners[currentBanner].bgColor || '#1B4332' }}
+   525→            >
+   526→              <div className="text-center text-white px-6">
+   527→                <h1 className="text-2xl sm:text-3xl md:text-5xl font-bold mb-3">
+   528→                  {banners[currentBanner].title}
+   529→                </h1>
+   530→                {banners[currentBanner].subtitle && (
+   531→                  <p className="text-base sm:text-xl opacity-90 mb-4">
+   532→                    {banners[currentBanner].subtitle}
+   533→                  </p>
+   534→                )}
+   535→                {banners[currentBanner].ctaText && (
+   536→                  <Button
+   537→                    size="lg"
+   538→                    className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold mt-2 rounded-full"
+   539→                    onClick={() => {
+   540→                      const banner = banners[currentBanner]
+   541→                      if (banner.ctaLink) {
+   542→                        if (banner.ctaLink.startsWith('/')) {
+   543→                          navigate('products')
+   544→                        } else {
+   545→                          window.open(banner.ctaLink, '_blank')
+   546→                        }
+   547→                      }
+   548→                    }}
+   549→                  >
+   550→                    {banners[currentBanner].ctaText}
+   551→                    <ArrowRight className="h-5 w-5 ml-2" />
+   552→                  </Button>
+   553→                )}
+   554→              </div>
+   555→            </div>
+   556→          )}
+   557→        </motion.div>
+   558→      </AnimatePresence>
+   559→
+   560→      {/* Carousel Controls */}
+   561→      {banners.length > 1 && (
+   562→        <>
+   563→          <button
+   564→            className="absolute left-3 md:left-6 top-1/2 -translate-y-1/2 bg-black/20 backdrop-blur-sm hover:bg-black/40 rounded-full p-2 md:p-3 shadow-lg transition-all hover:scale-110 z-20"
+   565→            onClick={handlePrev}
+   566→            aria-label="Previous banner"
+   567→          >
+   568→            <ChevronLeft className="h-5 w-5 md:h-6 md:w-6 text-white" />
+   569→          </button>
+   570→          <button
+   571→            className="absolute right-3 md:right-6 top-1/2 -translate-y-1/2 bg-black/20 backdrop-blur-sm hover:bg-black/40 rounded-full p-2 md:p-3 shadow-lg transition-all hover:scale-110 z-20"
+   572→            onClick={handleNext}
+   573→            aria-label="Next banner"
+   574→          >
+   575→            <ChevronRight className="h-5 w-5 md:h-6 md:w-6 text-white" />
+   576→          </button>
+   577→          {/* Dot indicators with progress */}
+   578→          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+   579→            {banners.map((_, idx) => (
+   580→              <button
+   581→                key={idx}
+   582→                className="relative h-2.5 rounded-full transition-all duration-300 overflow-hidden"
+   583→                style={{
+   584→                  width: idx === currentBanner ? '32px' : '10px',
+   585→                }}
+   586→                onClick={() => handleDotClick(idx)}
+   587→                aria-label={`Go to slide ${idx + 1}`}
+   588→              >
+   589→                <div className={`absolute inset-0 rounded-full ${idx === currentBanner ? 'bg-white/40' : 'bg-white/40'}`} />
+   590→                {idx === currentBanner && (
+   591→                  <motion.div
+   592→                    className="absolute inset-0 bg-white rounded-full"
+   593→                    initial={{ width: '0%' }}
+   594→                    animate={{ width: `${progress}%` }}
+   595→                    transition={{ duration: 0.05 }}
+   596→                  />
+   597→                )}
+   598→              </button>
+   599→            ))}
+   600→          </div>
+   601→
+   602→          {/* Mobile Swipe Indicator */}
+   603→          <motion.div
+   604→            initial={{ opacity: 0 }}
+   605→            animate={{ opacity: 1 }}
+   606→            transition={{ delay: 2 }}
+   607→            className="sm:hidden absolute bottom-12 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-black/30 backdrop-blur-sm rounded-full px-3 py-1"
+   608→          >
+   609→            <GripHorizontal className="h-3 w-3 text-white/70" />
+   610→            <span className="text-[10px] text-white/70 font-medium">Swipe</span>
+   611→          </motion.div>
+   612→        </>
+   613→      )}
+   614→    </div>
+   615→  )
+   616→}
+   617→
+   618→// ── Category Section ──
+   619→function CategorySection({ categories, navigate }: {
+   620→  categories: Category[]
+   621→  navigate: (page: PageName, params?: Record<string, unknown>) => void
+   622→}) {
+   623→  const scrollRef = useRef<HTMLDivElement>(null)
+   624→  const [canScrollLeft, setCanScrollLeft] = useState(false)
+   625→  const [canScrollRight, setCanScrollRight] = useState(true)
+   626→
+   627→  const checkScroll = useCallback(() => {
+   628→    if (!scrollRef.current) return
+   629→    const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current
+   630→    setCanScrollLeft(scrollLeft > 5)
+   631→    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 5)
+   632→  }, [])
+   633→
+   634→  useEffect(() => {
+   635→    checkScroll()
+   636→    const el = scrollRef.current
+   637→    if (el) el.addEventListener('scroll', checkScroll, { passive: true })
+   638→    return () => { if (el) el.removeEventListener('scroll', checkScroll) }
+   639→  }, [checkScroll])
+   640→
+   641→  const handleScroll = (direction: 'left' | 'right') => {
+   642→    if (!scrollRef.current) return
+   643→    scrollRef.current.scrollBy({
+   644→      left: direction === 'left' ? -300 : 300,
+   645→      behavior: 'smooth',
+   646→    })
+   647→  }
+   648→
+   649→  if (categories.length === 0) return null
+   650→
+   651→  return (
+   652→    <section className="py-14 bg-gradient-to-b from-emerald-50/60 via-white to-white relative">
+   653→      {/* Decorative top border */}
+   654→      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-600 via-teal-500 to-emerald-600" />
+   655→
+   656→      <div className="container mx-auto px-4">
+   657→        {/* Section Header */}
+   658→        <AnimatedSection>
+   659→          <div className="text-center mb-10">
+   660→            <div className="inline-flex items-center gap-2 text-amber-600 mb-2">
+   661→              <Sparkles className="h-5 w-5" />
+   662→              <span className="text-sm font-semibold uppercase tracking-wider">Explore</span>
+   663→              <div className="h-[2px] w-8 bg-amber-600/30" />
+   664→            </div>
+   665→            <h2 className="text-2xl md:text-3xl font-bold">Shop by Category</h2>
+   666→            <p className="text-sm text-emerald-700/60 font-medium mt-1">ক্যাটাগরি অনুযায়ী কিনুন</p>
+   667→            <p className="text-muted-foreground mt-2 max-w-md mx-auto text-sm">
+   668→              Discover our authentic Bangladeshi food categories, sourced directly from trusted producers
+   669→            </p>
+   670→          </div>
+   671→        </AnimatedSection>
+   672→
+   673→        {/* Scrollable Category Row */}
+   674→        <div className="relative">
+   675→          {/* Mobile scroll indicators */}
+   676→          {canScrollLeft && (
+   677→            <button
+   678→              onClick={() => handleScroll('left')}
+   679→              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 shadow-lg rounded-full p-2 hover:bg-white transition-all -translate-x-1 hidden sm:block"
+   680→              aria-label="Scroll left"
+   681→            >
+   682→              <ChevronLeft className="h-5 w-5 text-emerald-700" />
+   683→            </button>
+   684→          )}
+   685→          {canScrollRight && (
+   686→            <button
+   687→              onClick={() => handleScroll('right')}
+   688→              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 shadow-lg rounded-full p-2 hover:bg-white transition-all translate-x-1 hidden sm:block"
+   689→              aria-label="Scroll right"
+   690→            >
+   691→              <ChevronRight className="h-5 w-5 text-emerald-700" />
+   692→            </button>
+   693→          )}
+   694→
+   695→          <div
+   696→            ref={scrollRef}
+   697→            className="flex gap-5 md:gap-6 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory px-2"
+   698→            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+   699→          >
+   700→            {categories.slice(0, 12).map((cat, idx) => (
+   701→              <motion.button
+   702→                key={cat.id}
+   703→                initial={{ opacity: 0, y: 20 }}
+   704→                animate={{ opacity: 1, y: 0 }}
+   705→                transition={{ delay: idx * 0.05, duration: 0.4 }}
+   706→                className="group flex flex-col items-center gap-2.5 p-3 rounded-2xl hover:bg-emerald-50/80 transition-all duration-300 snap-start shrink-0 w-[100px] md:w-[120px]"
+   707→                onClick={() => navigate('products', { category: cat.slug })}
+   708→              >
+   709→                <div className="relative h-20 w-20 md:h-24 md:w-24 rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-100 to-teal-50 shadow-md group-hover:shadow-xl group-hover:shadow-emerald-500/20 transition-all duration-500 ring-2 ring-transparent group-hover:ring-emerald-400/60 group-hover:scale-110">
+   710→                  {cat.image ? (
+   711→                    <Image
+   712→                      src={cat.image}
+   713→                      alt={cat.name}
+   714→                      fill
+   715→                      className="object-cover transition-transform duration-500 group-hover:scale-125"
+   716→                      sizes="96px"
+   717→                    />
+   718→                  ) : (
+   719→                    <div className="flex items-center justify-center h-full text-3xl">
+   720→                      🍽️
+   721→                    </div>
+   722→                  )}
+   723→                  {/* Emerald glow overlay on hover */}
+   724→                  <div className="absolute inset-0 bg-emerald-500/0 group-hover:bg-emerald-500/10 transition-all duration-500 rounded-2xl" />
+   725→                </div>
+   726→                <h3 className="font-semibold text-xs md:text-sm text-center line-clamp-1 group-hover:text-emerald-700 transition-colors duration-300 tracking-tight">
+   727→                  {cat.name}
+   728→                </h3>
+   729→                {(bengaliCategoryNames[cat.name] || cat.bengaliName) && (
+   730→                  <p className="text-[10px] text-emerald-600/50 text-center -mt-1 font-medium">
+   731→                    {bengaliCategoryNames[cat.name] || cat.bengaliName}
+   732→                  </p>
+   733→                )}
+   734→              </motion.button>
+   735→            ))}
+   736→          </div>
+   737→        </div>
+   738→
+   739→        {/* View All Button */}
+   740→        <div className="text-center mt-8">
+   741→          <Button
+   742→            variant="outline"
+   743→            onClick={() => navigate('products')}
+   744→            className="gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 rounded-full px-6"
+   745→          >
+   746→            View All Categories
+   747→            <ArrowRight className="h-4 w-4" />
+   748→          </Button>
+   749→        </div>
+   750→      </div>
+   751→    </section>
+   752→  )
+   753→}
+   754→
+   755→// ── Flash Sale Section ──
+   756→function FlashSaleSection({ products, navigate, siteConfig }: {
+   757→  products: Product[]
+   758→  navigate: (page: PageName, params?: Record<string, unknown>) => void
+   759→  siteConfig: import('@/lib/store').SiteConfig | null
+   760→}) {
+   761→  const scrollRef = useRef<HTMLDivElement>(null)
+   762→
+   763→  // Round 3E: admin-controlled enable/disable + title/subtitle (with safe fallbacks)
+   764→  if (siteConfig && siteConfig.flashSaleEnabled === false) return null
+   765→  if (products.length === 0) return null
+   766→
+   767→  const flashSaleTitle = siteConfig?.flashSaleTitle || 'Flash Sale'
+   768→  const flashSaleSubtitle = siteConfig?.flashSaleSubtitle || 'Today'
+   769→
+   770→  return (
+   771→    <section className="py-6 bg-gradient-to-r from-red-600 via-red-500 to-rose-500 text-white relative overflow-hidden">
+   772→      {/* Decorative elements */}
+   773→      <div className="absolute inset-0 opacity-10">
+   774→        <div className="absolute top-0 left-0 w-40 h-40 bg-white rounded-full -translate-x-1/2 -translate-y-1/2" />
+   775→        <div className="absolute bottom-0 right-0 w-56 h-56 bg-white rounded-full translate-x-1/3 translate-y-1/3" />
+   776→        <div className="absolute top-1/2 right-1/4 w-20 h-20 bg-white rounded-full" />
+   777→      </div>
+   778→      {/* Zigzag pattern */}
+   779→      <div className="absolute top-0 left-0 right-0 h-3 overflow-hidden">
+   780→        <svg viewBox="0 0 1200 12" className="w-full h-full" preserveAspectRatio="none">
+   781→          <path d="M0 12 L30 0 L60 12 L90 0 L120 12 L150 0 L180 12 L210 0 L240 12 L270 0 L300 12 L330 0 L360 12 L390 0 L420 12 L450 0 L480 12 L510 0 L540 12 L570 0 L600 12 L630 0 L660 12 L690 0 L720 12 L750 0 L780 12 L810 0 L840 12 L870 0 L900 12 L930 0 L960 12 L990 0 L1020 12 L1050 0 L1080 12 L1110 0 L1140 12 L1170 0 L1200 12" fill="white" opacity="0.15" />
+   782→        </svg>
+   783→      </div>
+   784→
+   785→      <div className="container mx-auto px-4 relative z-10">
+   786→        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
+   787→          <div className="flex items-center gap-3">
+   788→            <div className="relative">
+   789→              <Flame className="h-6 w-6 text-amber-300" />
+   790→            </div>
+   791→            <h2 className="text-lg md:text-xl font-semibold">{flashSaleTitle}</h2>
+   792→            <Badge className="bg-amber-400 text-red-700 font-semibold text-xs px-2 py-0.5">
+   793→              {flashSaleSubtitle}
+   794→            </Badge>
+   795→          </div>
+   796→          <div className="flex items-center gap-3">
+   797→            <Clock className="h-4 w-4 text-white/80" />
+   798→            <span className="text-sm text-white/80">Ends in:</span>
+   799→            <FlashSaleCountdown />
+   800→          </div>
+   801→          <Button
+   802→            variant="secondary"
+   803→            size="sm"
+   804→            className="bg-white text-red-600 hover:bg-white/90 font-semibold rounded-full shadow-md"
+   805→            onClick={() => navigate('products')}
+   806→          >
+   807→            View All Deals <ArrowRight className="h-4 w-4 ml-1" />
+   808→          </Button>
+   809→        </div>
+   810→
+   811→        {/* Product cards with deal styling */}
+   812→        <div
+   813→          ref={scrollRef}
+   814→          className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory"
+   815→          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+   816→        >
+   817→          {products.slice(0, 8).map((product, idx) => {
+   818→            const hasDiscount = product.discountPrice != null && product.discountPrice < product.price
+   819→            const discountPercent = hasDiscount
+   820→              ? Math.round(((product.price - product.discountPrice!) / product.price) * 100)
+   821→              : 0
+   822→            const soldCount = Math.floor(Math.random() * 70 + 30) // Simulated sold percentage
+   823→            return (
+   824→              <motion.div
+   825→                key={product.id}
+   826→                initial={{ opacity: 0, scale: 0.9 }}
+   827→                animate={{ opacity: 1, scale: 1 }}
+   828→                transition={{ delay: idx * 0.08, duration: 0.4 }}
+   829→                className="min-w-[200px] sm:min-w-[220px] snap-start"
+   830→              >
+   831→                <div className="relative bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow group">
+   832→                  {/* Discount Badge */}
+   833→                  {discountPercent > 20 && (
+   834→                    <div className="absolute top-2 left-2 z-20">
+   835→                      <div className="bg-amber-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
+   836→                        {discountPercent}% off
+   837→                      </div>
+   838→                    </div>
+   839→                  )}
+   840→                  <div className="min-w-[200px] sm:min-w-[220px]">
+   841→                    <ProductCard product={product} />
+   842→                  </div>
+   843→                  {/* Progress bar showing items sold */}
+   844→                  <div className="px-3 pb-3">
+   845→                    <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+   846→                      <span>Sold: {soldCount}%</span>
+   847→                      <span className="text-muted-foreground">In demand</span>
+   848→                    </div>
+   849→                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+   850→                      <motion.div
+   851→                        initial={{ width: 0 }}
+   852→                        animate={{ width: `${soldCount}%` }}
+   853→                        transition={{ delay: 0.5 + idx * 0.1, duration: 0.8 }}
+   854→                        className="h-full bg-gradient-to-r from-amber-400 to-red-500 rounded-full"
+   855→                      />
+   856→                    </div>
+   857→                  </div>
+   858→                </div>
+   859→              </motion.div>
+   860→            )
+   861→          })}
+   862→        </div>
+   863→      </div>
+   864→    </section>
+   865→  )
+   866→}
+   867→
+   868→// ── Testimonials Carousel ──
+   869→function TestimonialsCarousel({ testimonials }: {
+   870→  testimonials: Testimonial[]
+   871→}) {
+   872→  const [current, setCurrent] = useState(0)
+   873→  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+   874→
+   875→  useEffect(() => {
+   876→    if (testimonials.length <= 1) return
+   877→    intervalRef.current = setInterval(() => {
+   878→      setCurrent((prev) => (prev + 1) % testimonials.length)
+   879→    }, 4000)
+   880→    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
+   881→  }, [testimonials.length])
+   882→
+   883→  if (testimonials.length === 0) {
+   884→    return (
+   885→      <p className="text-center text-muted-foreground">No testimonials yet</p>
+   886→    )
+   887→  }
+   888→
+   889→  return (
+   890→    <div className="relative max-w-4xl mx-auto">
+   891→      <div className="overflow-hidden">
+   892→        <AnimatePresence mode="wait">
+   893→          <motion.div
+   894→            key={current}
+   895→            initial={{ opacity: 0, x: 50 }}
+   896→            animate={{ opacity: 1, x: 0 }}
+   897→            exit={{ opacity: 0, x: -50 }}
+   898→            transition={{ duration: 0.4 }}
+   899→            className="bg-background rounded-2xl border border-border/50 p-8 md:p-10 shadow-lg relative overflow-hidden"
+   900→          >
+   901→            {/* Quote decoration - enhanced with icon */}
+   902→            <div className="absolute top-4 left-4 z-10">
+   903→              <div className="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center">
+   904→                <Quote className="h-5 w-5 text-emerald-600" />
+   905→              </div>
+   906→            </div>
+   907→            {/* Background large quote */}
+   908→            <div className="absolute top-2 right-6 text-emerald-50 text-9xl font-serif leading-none select-none pointer-events-none">
+   909→              &rdquo;
+   910→            </div>
+   911→
+   912→            {/* Star ratings - filled stars */}
+   913→            <div className="flex gap-1 mb-4 relative z-10">
+   914→              {Array.from({ length: 5 }).map((_, i) => (
+   915→                <motion.div
+   916→                  key={`${current}-${i}`}
+   917→                  initial={{ scale: 0, rotate: -180 }}
+   918→                  animate={{ scale: 1, rotate: 0 }}
+   919→                  transition={{ delay: i * 0.08, type: 'spring', stiffness: 400, damping: 15 }}
+   920→                >
+   921→                  <Star
+   922→                    className={`h-5 w-5 ${i < testimonials[current].rating ? 'fill-amber-400 text-amber-400' : 'text-gray-200'}`}
+   923→                  />
+   924→                </motion.div>
+   925→              ))}
+   926→              <span className="ml-2 text-sm font-semibold text-foreground">
+   927→                {testimonials[current].rating}.0
+   928→              </span>
+   929→            </div>
+   930→
+   931→            {/* Content */}
+   932→            <p className="text-base md:text-lg text-foreground/80 line-clamp-4 mb-6 relative z-10 italic">
+   933→              {testimonials[current].content}
+   934→            </p>
+   935→
+   936→            {/* Author with avatar ring animation */}
+   937→            <div className="flex items-center gap-4 relative z-10">
+   938→              <div className="relative">
+   939→                <motion.div
+   940→                  animate={{ boxShadow: [
+   941→                    '0 0 0 0 rgba(16, 185, 129, 0)',
+   942→                    '0 0 0 4px rgba(16, 185, 129, 0.3)',
+   943→                    '0 0 0 0 rgba(16, 185, 129, 0)',
+   944→                  ]}}
+   945→                  transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+   946→                  className="rounded-full"
+   947→                >
+   948→                  <Avatar className="h-12 w-12 ring-2 ring-emerald-200">
+   949→                    {testimonials[current].image ? (
+   950→                      <AvatarImage src={testimonials[current].image} alt={testimonials[current].name} />
+   951→                    ) : (
+   952→                      <AvatarFallback className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white font-bold text-lg">
+   953→                        {testimonials[current].name.charAt(0)}
+   954→                      </AvatarFallback>
+   955→                    )}
+   956→                  </Avatar>
+   957→                </motion.div>
+   958→              </div>
+   959→              <div>
+   960→                <p className="font-semibold text-foreground">{testimonials[current].name}</p>
+   961→                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+   962→                  <MapPin className="h-3 w-3" />
+   963→                  {testimonials[current].role || bengaliLocations[current % bengaliLocations.length]}
+   964→                </div>
+   965→              </div>
+   966→            </div>
+   967→          </motion.div>
+   968→        </AnimatePresence>
+   969→      </div>
+   970→
+   971→      {/* Dots */}
+   972→      {testimonials.length > 1 && (
+   973→        <div className="flex justify-center gap-2 mt-6">
+   974→          {testimonials.map((_, idx) => (
+   975→            <button
+   976→              key={idx}
+   977→              onClick={() => setCurrent(idx)}
+   978→              className={`h-2.5 rounded-full transition-all duration-300 ${
+   979→                idx === current
+   980→                  ? 'w-8 bg-emerald-600'
+   981→                  : 'w-2.5 bg-emerald-200 hover:bg-emerald-300'
+   982→              }`}
+   983→              aria-label={`View testimonial ${idx + 1}`}
+   984→            />
+   985→          ))}
+   986→        </div>
+   987→      )}
+   988→    </div>
+   989→  )
+   990→}
+   991→
+   992→// ── Trust & Guarantees Section ──
+   993→function TrustSection() {
+   994→  const guarantees = [
+   995→    {
+   996→      icon: ShieldCheck,
+   997→      title: '100% Authentic',
+   998→      bengaliTitle: '১০০% খাঁটি',
+   999→      description: 'Every product is verified for authenticity. We source directly from trusted Bangladeshi producers.',
+  1000→      color: 'emerald',
+  1001→    },
+  1002→    {
+  1003→      icon: Truck,
+  1004→      title: 'Fast Delivery',
+  1005→      bengaliTitle: 'দ্রুত ডেলিভারি',
+  1006→      description: 'Same-day delivery in Dhaka. Nationwide delivery within 2-3 business days.',
+  1007→      color: 'teal',
+  1008→    },
+  1009→    {
+  1010→      icon: RefreshCw,
+  1011→      title: 'Easy Returns',
+  1012→      bengaliTitle: 'সহজ রিটার্ন',
+  1013→      description: '7-day hassle-free return policy. If you\'re not satisfied, we\'ll make it right.',
+  1014→      color: 'amber',
+  1015→    },
+  1016→    {
+  1017→      icon: Leaf,
+  1018→      title: 'Organic & Natural',
+  1019→      bengaliTitle: 'জৈব ও প্রাকৃতিক',
+  1020→      description: 'Carefully selected organic products. No artificial preservatives or additives.',
+  1021→      color: 'green',
+  1022→    },
+  1023→  ]
+  1024→
+  1025→  const colorMap: Record<string, { bg: string; icon: string; ring: string }> = {
+  1026→    emerald: { bg: 'from-emerald-100 to-emerald-50', icon: 'text-emerald-600', ring: 'ring-emerald-200' },
+  1027→    teal: { bg: 'from-teal-100 to-teal-50', icon: 'text-teal-600', ring: 'ring-teal-200' },
+  1028→    amber: { bg: 'from-amber-100 to-amber-50', icon: 'text-amber-600', ring: 'ring-amber-200' },
+  1029→    green: { bg: 'from-green-100 to-green-50', icon: 'text-green-600', ring: 'ring-green-200' },
+  1030→  }
+  1031→
+  1032→  return (
+  1033→    <section className="py-14 bg-white relative">
+  1034→      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-200 to-transparent" />
+  1035→      <div className="container mx-auto px-4">
+  1036→        <AnimatedSection>
+  1037→          <div className="text-center mb-10">
+  1038→            <div className="inline-flex items-center gap-2 text-emerald-600 mb-2">
+  1039→              <ShieldCheck className="h-5 w-5" />
+  1040→              <span className="text-sm font-semibold uppercase tracking-wider">Our Promise</span>
+  1041→              <div className="h-[2px] w-8 bg-emerald-600/30" />
+  1042→            </div>
+  1043→            <h2 className="text-2xl md:text-3xl font-bold">Why Choose Khati Khadyo?</h2>
+  1044→            <p className="text-sm text-emerald-700/60 font-medium mt-1">কেন খাঁটি খাদ্য বেছে নেবেন?</p>
+  1045→          </div>
+  1046→        </AnimatedSection>
+  1047→
+  1048→        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+  1049→          {guarantees.map((item, idx) => {
+  1050→            const Icon = item.icon
+  1051→            const colors = colorMap[item.color]
+  1052→            return (
+  1053→              <AnimatedSection key={item.title} delay={idx * 0.1}>
+  1054→                <div className="group text-center p-5 md:p-6 rounded-2xl border border-border/30 hover:border-emerald-200 hover:shadow-xl transition-all duration-300 bg-white hover:-translate-y-1">
+  1055→                  <div className={`h-16 w-16 rounded-2xl bg-gradient-to-br ${colors.bg} flex items-center justify-center mx-auto mb-4 ring-2 ${colors.ring} group-hover:scale-110 transition-transform duration-300 relative`}>
+  1056→                    <Icon className={`h-8 w-8 ${colors.icon}`} />
+  1057→                    {/* Subtle pulse ring on hover */}
+  1058→                    <motion.div
+  1059→                      className="absolute inset-0 rounded-2xl ring-2 ring-current opacity-0 group-hover:opacity-20"
+  1060→                      animate={{ scale: [1, 1.2, 1] }}
+  1061→                      transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+  1062→                    />
+  1063→                  </div>
+  1064→                  <h3 className="font-bold text-sm md:text-base mb-0.5">{item.title}</h3>
+  1065→                  <p className="text-[11px] text-emerald-600/60 font-medium mb-2">{item.bengaliTitle}</p>
+  1066→                  <p className="text-xs md:text-sm text-muted-foreground leading-relaxed">{item.description}</p>
+  1067→                </div>
+  1068→              </AnimatedSection>
+  1069→            )
+  1070→          })}
+  1071→        </div>
+  1072→      </div>
+  1073→    </section>
+  1074→  )
+  1075→}
+  1076→
+  1077→// ── Partner Logos Ticker ──
+  1078→function PartnerTicker({ partners }: { partners: Partner[] }) {
+  1079→  if (partners.length === 0) return null
+  1080→
+  1081→  // Double the partners for seamless loop
+  1082→  const doubled = [...partners, ...partners]
+  1083→
+  1084→  return (
+  1085→    <section className="py-10 bg-muted/20 overflow-hidden">
+  1086→      <div className="container mx-auto px-4 mb-8">
+  1087→        <div className="text-center">
+  1088→          <div className="inline-flex items-center gap-2 text-muted-foreground mb-2">
+  1089→            <Handshake className="h-5 w-5" />
+  1090→            <span className="text-sm font-semibold uppercase tracking-wider">Trusted Partners</span>
+  1091→            <div className="h-[2px] w-8 bg-muted-foreground/30" />
+  1092→          </div>
+  1093→          <h2 className="text-xl md:text-2xl font-bold">Brands We Work With</h2>
+  1094→        </div>
+  1095→      </div>
+  1096→      <div className="relative">
+  1097→        <div className="absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-muted/20 to-transparent z-10" />
+  1098→        <div className="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-muted/20 to-transparent z-10" />
+  1099→        <div className="flex animate-ticker">
+  1100→          {doubled.map((partner, idx) => (
+  1101→            <div
+  1102→              key={`${partner.id}-${idx}`}
+  1103→              className="flex items-center justify-center h-20 w-40 md:h-24 md:w-48 shrink-0 mx-2 rounded-xl bg-background border border-border/30 p-4 grayscale hover:grayscale-0 opacity-50 hover:opacity-100 transition-all duration-300 hover:shadow-md"
+  1104→            >
+  1105→              {partner.logo ? (
+  1106→                <img
+  1107→                  src={partner.logo}
+  1108→                  alt={partner.name}
+  1109→                  className="max-h-full max-w-full object-contain"
+  1110→                />
+  1111→              ) : (
+  1112→                <span className="text-sm font-semibold text-muted-foreground">{partner.name}</span>
+  1113→              )}
+  1114→            </div>
+  1115→          ))}
+  1116→        </div>
+  1117→      </div>
+  1118→    </section>
+  1119→  )
+  1120→}
+  1121→
+  1122→// ── Mobile App CTA ──
+  1123→function MobileAppCTA({ navigate }: {
+  1124→  navigate: (page: PageName, params?: Record<string, unknown>) => void
+  1125→}) {
+  1126→  return (
+  1127→    <section className="py-14 bg-gradient-to-br from-emerald-800 via-emerald-700 to-teal-700 text-white relative overflow-hidden">
+  1128→      {/* Decorative elements */}
+  1129→      <div className="absolute inset-0 opacity-10">
+  1130→        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-400 rounded-full translate-x-1/3 -translate-y-1/3" />
+  1131→        <div className="absolute bottom-0 left-0 w-48 h-48 bg-teal-300 rounded-full -translate-x-1/4 translate-y-1/4" />
+  1132→      </div>
+  1133→      <div className="absolute inset-0 opacity-5">
+  1134→        <div
+  1135→          className="absolute inset-0"
+  1136→          style={{
+  1137→            backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
+  1138→            backgroundSize: '32px 32px',
+  1139→          }}
+  1140→        />
+  1141→      </div>
+  1142→
+  1143→      <div className="container mx-auto px-4 relative z-10">
+  1144→        <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12">
+  1145→          <div className="flex-1 text-center md:text-left">
+  1146→            <div className="inline-flex items-center gap-2 text-amber-400 mb-3">
+  1147→              <Smartphone className="h-5 w-5" />
+  1148→              <span className="text-sm font-semibold uppercase tracking-wider">Mobile App</span>
+  1149→            </div>
+  1150→            <h2 className="text-2xl md:text-4xl font-bold mb-3">
+  1151→              Get the Khati Khadyo App
+  1152→            </h2>
+  1153→            <p className="text-white/80 mb-2 max-w-lg text-sm md:text-base">
+  1154→              Shop on the go! Get exclusive app-only deals, faster checkout, and real-time order tracking.
+  1155→            </p>
+  1156→            <p className="text-amber-300/80 text-sm mb-6">
+  1157→              অ্যাপ থেকে কিনুন — এক্সক্লুসিভ ডিসকাউন্ট পান!
+  1158→            </p>
+  1159→            <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
+  1160→              <Button
+  1161→                size="lg"
+  1162→                className="bg-white text-emerald-800 hover:bg-white/90 font-semibold gap-2 rounded-full h-12 px-6 shadow-lg"
+  1163→                onClick={() => navigate('products')}
+  1164→              >
+  1165→                <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
+  1166→                  <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
+  1167→                </svg>
+  1168→                App Store
+  1169→              </Button>
+  1170→              <Button
+  1171→                size="lg"
+  1172→                className="bg-white text-emerald-800 hover:bg-white/90 font-semibold gap-2 rounded-full h-12 px-6 shadow-lg"
+  1173→                onClick={() => navigate('products')}
+  1174→              >
+  1175→                <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
+  1176→                  <path d="M3.18 23.49c.34.44.95.58 1.44.3L12 19.87l7.38 3.92c.49.28 1.1.14 1.44-.3.34-.44.28-1.06-.13-1.43L13 13.77V2.5c0-.83-.67-1.5-1.5-1.5S10 1.67 10 2.5v11.27L2.31 22.06c-.41.37-.47.99-.13 1.43z" />
+  1177→                </svg>
+  1178→                Google Play
+  1179→              </Button>
+  1180→            </div>
+  1181→          </div>
+  1182→          {/* Phone mockup */}
+  1183→          <div className="flex-shrink-0 relative">
+  1184→            <div className="relative w-48 h-80 md:w-56 md:h-96">
+  1185→              <div className="absolute inset-0 bg-gradient-to-b from-emerald-400 to-teal-500 rounded-[2rem] shadow-2xl border-4 border-white/20" />
+  1186→              <div className="absolute top-3 left-1/2 -translate-x-1/2 w-16 h-4 bg-black/30 rounded-full" />
+  1187→              <div className="absolute inset-4 rounded-[1.5rem] bg-white/10 backdrop-blur-sm flex items-center justify-center">
+  1188→                <div className="text-center">
+  1189→                  <Leaf className="h-10 w-10 text-white/80 mx-auto mb-2" />
+  1190→                  <p className="text-white/90 font-bold text-sm">Khati Khadyo</p>
+  1191→                  <p className="text-white/60 text-[10px]">খাঁটি খাদ্য</p>
+  1192→                </div>
+  1193→              </div>
+  1194→            </div>
+  1195→            {/* Floating notification */}
+  1196→            <motion.div
+  1197→              animate={{ y: [0, -8, 0] }}
+  1198→              transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
+  1199→              className="absolute -top-4 -right-4 bg-white rounded-xl shadow-xl px-3 py-2 flex items-center gap-2"
+  1200→            >
+  1201→              <div className="h-8 w-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+  1202→                <Gift className="h-4 w-4 text-emerald-600" />
+  1203→              </div>
+  1204→              <div>
+  1205→                <p className="text-[10px] font-bold text-foreground">App Only!</p>
+  1206→                <p className="text-[9px] text-emerald-600 font-semibold">15% Extra Off</p>
+  1207→              </div>
+  1208→            </motion.div>
+  1209→          </div>
+  1210→        </div>
+  1211→      </div>
+  1212→    </section>
+  1213→  )
+  1214→}
+  1215→
+  1216→// ── Newsletter Section ──
+  1217→function NewsletterSection({ email, setEmail, handleNewsletter }: {
+  1218→  email: string
+  1219→  setEmail: (v: string) => void
+  1220→  handleNewsletter: (e: React.FormEvent) => void
+  1221→}) {
+  1222→  return (
+  1223→    <section className="py-16 bg-gradient-to-br from-emerald-800 via-emerald-700 to-teal-700 text-white relative overflow-hidden">
+  1224→      <div className="absolute inset-0 opacity-10">
+  1225→        <div className="absolute top-0 left-0 w-40 h-40 bg-amber-400 rounded-full -translate-x-1/2 -translate-y-1/2" />
+  1226→        <div className="absolute bottom-0 right-0 w-60 h-60 bg-teal-300 rounded-full translate-x-1/3 translate-y-1/3" />
+  1227→        <div className="absolute top-1/2 left-1/2 w-32 h-32 bg-white rounded-full -translate-x-1/2 -translate-y-1/2" />
+  1228→      </div>
+  1229→      <div className="container mx-auto px-4 text-center relative z-10">
+  1230→        <div className="inline-flex items-center gap-2 text-amber-400 mb-3">
+  1231→          <Send className="h-5 w-5" />
+  1232→          <span className="text-sm font-semibold uppercase tracking-wider">Newsletter</span>
+  1233→        </div>
+  1234→        <h2 className="text-2xl md:text-4xl font-bold mb-2">Stay Updated</h2>
+  1235→        <p className="text-sm text-emerald-200/70 font-medium mb-1">আপডেট থাকুন</p>
+  1236→        <p className="opacity-80 mb-8 max-w-lg mx-auto text-sm md:text-base">
+  1237→          Subscribe to our newsletter for the latest products, offers, and authentic Bangladeshi food updates
+  1238→        </p>
+  1239→        <form
+  1240→          onSubmit={handleNewsletter}
+  1241→          className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto"
+  1242→        >
+  1243→          <Input
+  1244→            placeholder="Enter your email"
+  1245→            type="email"
+  1246→            value={email}
+  1247→            onChange={(e) => setEmail(e.target.value)}
+  1248→            className="bg-white/10 border-white/20 text-white placeholder:text-white/60 h-12 text-base rounded-full px-5"
+  1249→          />
+  1250→          <Button
+  1251→            type="submit"
+  1252→            className="h-12 px-8 font-semibold bg-amber-500 hover:bg-amber-600 text-white rounded-full shadow-lg"
+  1253→          >
+  1254→            <Send className="h-4 w-4 mr-2" />
+  1255→            Subscribe
+  1256→          </Button>
+  1257→        </form>
+  1258→      </div>
+  1259→    </section>
+  1260→  )
+  1261→}
+  1262→
+  1263→// ── Product Grid Section ──
+  1264→function ProductGridSection({ section, products, navigate }: {
+  1265→  section: HomepageSection
+  1266→  products: Product[]
+  1267→  navigate: (page: PageName, params?: Record<string, unknown>) => void
+  1268→}) {
+  1269→  if (products.length === 0) return null
+  1270→
+  1271→  const sectionLabels: Record<string, { label: string; icon: React.ElementType; bengali: string }> = {
+  1272→    'New Arrivals': { label: 'Just In', icon: Sparkles, bengali: 'নতুন পণ্য' },
+  1273→    'Best Sellers': { label: 'Popular', icon: TrendingUp, bengali: 'সেরা বিক্রি' },
+  1274→    'Featured': { label: 'Featured', icon: Star, bengali: 'বিশেষ পণ্য' },
+  1275→  }
+  1276→
+  1277→  const meta = sectionLabels[section.title] || { label: 'Featured', icon: TrendingUp, bengali: 'বিশেষ পণ্য' }
+  1278→
+  1279→  return (
+  1280→    <section
+  1281→      className="py-14 relative"
+  1282→      style={{ backgroundColor: section.bgColor || undefined }}
+  1283→    >
+  1284→      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+  1285→      <div className="container mx-auto px-4">
+  1286→        {/* Section Header */}
+  1287→        <div className="flex items-center justify-between mb-8">
+  1288→          <SectionHeading
+  1289→            label={meta.label}
+  1290→            labelIcon={meta.icon}
+  1291→            labelColor="text-amber-600"
+  1292→            title={section.title}
+  1293→            subtitle={section.subtitle}
+  1294→            bengaliTitle={meta.bengali}
+  1295→          />
+  1296→          <Button
+  1297→            variant="ghost"
+  1298→            onClick={() => section.categoryId && navigate('products', { category: section.categoryId })}
+  1299→            className="hidden sm:flex gap-2 text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 rounded-full"
+  1300→          >
+  1301→            View All <ArrowRight className="h-4 w-4" />
+  1302→          </Button>
+  1303→        </div>
+  1304→
+  1305→        {/* Desktop: grid, Mobile: horizontal scroll */}
+  1306→        <div className="hidden sm:grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 md:gap-5">
+  1307→          {products.slice(0, section.limit || 8).map((product, idx) => (
+  1308→            <motion.div
+  1309→              key={product.id}
+  1310→              initial={{ opacity: 0, y: 20 }}
+  1311→              animate={{ opacity: 1, y: 0 }}
+  1312→              transition={{ delay: idx * 0.05, duration: 0.4 }}
+  1313→            >
+  1314→              <ProductCard product={product} />
+  1315→            </motion.div>
+  1316→          ))}
+  1317→        </div>
+  1318→        <div
+  1319→          id={`section-${section.id}-scroll`}
+  1320→          className="sm:hidden flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory"
+  1321→          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+  1322→        >
+  1323→          {products.slice(0, section.limit || 8).map((product) => (
+  1324→            <div key={product.id} className="min-w-[220px] snap-start">
+  1325→              <ProductCard product={product} />
+  1326→            </div>
+  1327→          ))}
+  1328→        </div>
+  1329→        <div className="text-center mt-6 sm:hidden">
+  1330→          <Button
+  1331→            variant="outline"
+  1332→            onClick={() => section.categoryId && navigate('products', { category: section.categoryId })}
+  1333→            className="gap-2 border-emerald-200 text-emerald-700 rounded-full"
+  1334→          >
+  1335→            View All <ArrowRight className="h-4 w-4" />
+  1336→          </Button>
+  1337→        </div>
+  1338→      </div>
+  1339→    </section>
+  1340→  )
+  1341→}
+  1342→
+  1343→// ── Loading Skeleton ──
+  1344→function HomeLoadingSkeleton() {
+  1345→  return (
+  1346→    <div className="space-y-0">
+  1347→      {/* Announcement bar skeleton */}
+  1348→      <Skeleton className="h-9 w-full rounded-none" />
+  1349→      {/* Hero skeleton */}
+  1350→      <Skeleton className="h-64 md:h-[440px] w-full rounded-none" />
+  1351→      {/* Search skeleton */}
+  1352→      <div className="py-8 px-4">
+  1353→        <Skeleton className="h-12 max-w-2xl mx-auto rounded-full" />
+  1354→      </div>
+  1355→      {/* Category skeleton */}
+  1356→      <div className="py-14">
+  1357→        <div className="container mx-auto px-4">
+  1358→          <div className="flex gap-5 overflow-hidden">
+  1359→            {Array.from({ length: 6 }).map((_, i) => (
+  1360→              <div key={i} className="flex flex-col items-center gap-2 shrink-0">
+  1361→                <Skeleton className="h-20 w-20 md:h-24 md:w-24 rounded-2xl" />
+  1362→                <Skeleton className="h-4 w-16" />
+  1363→              </div>
+  1364→            ))}
+  1365→          </div>
+  1366→        </div>
+  1367→      </div>
+  1368→      {/* Flash sale skeleton */}
+  1369→      <Skeleton className="h-72 w-full rounded-none" />
+  1370→      {/* Products skeleton */}
+  1371→      <div className="py-14">
+  1372→        <div className="container mx-auto px-4">
+  1373→          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+  1374→            {Array.from({ length: 4 }).map((_, i) => (
+  1375→              <Skeleton key={i} className="h-72 rounded-xl" />
+  1376→            ))}
+  1377→          </div>
+  1378→        </div>
+  1379→      </div>
+  1380→    </div>
+  1381→  )
+  1382→}
+  1383→
+  1384→// ── Main Component ──
+  1385→export default function HomePage() {
+  1386→  const { navigate, setSearchQuery, loadSiteConfig, siteConfig } = useAppStore()
+  1387→  const [heroBanners, setHeroBanners] = useState<Banner[]>([])
+  1388→  const [categories, setCategories] = useState<Category[]>([])
+  1389→  const [discountProducts, setDiscountProducts] = useState<Product[]>([])
+  1390→  const [featuredProducts, setFeaturedProducts] = useState<Product[]>([])
+  1391→  const [loading, setLoading] = useState(true)
+  1392→
+  1393→  useEffect(() => {
+  1394→    loadSiteConfig()
+  1395→  }, [loadSiteConfig])
+  1396→
+  1397→  useEffect(() => {
+  1398→    const loadAll = async () => {
+  1399→      setLoading(true)
+  1400→      try {
+  1401→        const [heroBannersRes, catRes, discRes, featRes] = await Promise.all([
+  1402→          fetch('/api/banners?status=active&location=hero').catch(() => null),
+  1403→          fetch('/api/categories').catch(() => null),
+  1404→          fetch('/api/products?status=active&minPrice=1&sort=discount&limit=8').catch(() => null),
+  1405→          fetch('/api/products?status=active&isFeatured=true&limit=8').catch(() => null),
+  1406→        ])
+  1407→
+  1408→        if (heroBannersRes?.ok) {
+  1409→          const data = await heroBannersRes.json()
+  1410→          setHeroBanners(extractItems<Banner>(data))
+  1411→        }
+  1412→        if (catRes?.ok) {
+  1413→          const data = await catRes.json()
+  1414→          const cats = extractItems<Category>(data)
+  1415→          setCategories(cats.filter((c: Category) => c.showInHome !== false))
+  1416→        }
+  1417→        if (discRes?.ok) {
+  1418→          const data = await discRes.json()
+  1419→          const prods = extractItems<Product>(data)
+  1420→          setDiscountProducts(
+  1421→            prods.filter((p: Product) => p.discountPrice != null && p.discountPrice < p.price)
+  1422→          )
+  1423→        }
+  1424→        if (featRes?.ok) {
+  1425→          const data = await featRes.json()
+  1426→          setFeaturedProducts(extractItems<Product>(data))
+  1427→        }
+  1428→      } catch (error) {
+  1429→        console.error('Failed to load homepage data:', error)
+  1430→      } finally {
+  1431→        setLoading(false)
+  1432→      }
+  1433→    }
+  1434→    loadAll()
+  1435→  }, [])
+  1436→
+  1437→  const handleSearchSubmit = (query: string) => {
+  1438→    setSearchQuery(query)
+  1439→    navigate('products')
+  1440→  }
+  1441→
+  1442→  if (loading) {
+  1443→    return <HomeLoadingSkeleton />
+  1444→  }
+  1445→
+  1446→  return (
+  1447→    <div className="min-h-screen">
+  1448→      {/* ── 1. Announcement Bar ── */}
+  1449→      <AnnouncementBar siteConfig={siteConfig} />
+  1450→
+  1451→      {/* ── 2. Search Bar (moved above Hero) ── */}
+  1452→      <div className="bg-gradient-to-b from-emerald-50/40 to-transparent py-6 md:py-8">
+  1453→        <div className="container mx-auto px-4 max-w-2xl">
+  1454→          <form
+  1455→            onSubmit={(e) => {
+  1456→              e.preventDefault()
+  1457→              const form = e.target as HTMLFormElement
+  1458→              const input = form.querySelector('input') as HTMLInputElement
+  1459→              if (input.value.trim()) handleSearchSubmit(input.value)
+  1460→            }}
+  1461→            className="flex gap-2"
+  1462→          >
+  1463→            <div className="relative flex-1">
+  1464→              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-emerald-500" />
+  1465→              <Input
+  1466→                placeholder="Search for authentic Bangladeshi food products..."
+  1467→                className="pl-11 h-12 bg-white shadow-md border-emerald-200/50 focus:border-emerald-400 rounded-full text-sm"
+  1468→              />
+  1469→            </div>
+  1470→            <Button
+  1471→              type="submit"
+  1472→              size="lg"
+  1473→              className="h-12 px-6 shadow-md bg-emerald-700 hover:bg-emerald-800 rounded-full"
+  1474→            >
+  1475→              Search
+  1476→            </Button>
+  1477→          </form>
+  1478→        </div>
+  1479→      </div>
+  1480→
+  1481→      {/* ── 3. Categories (moved immediately below Search) ── */}
+  1482→      <CategorySection categories={categories} navigate={navigate} />
+  1483→
+  1484→      {/* ── 4. Hero Banner Carousel (moved below Categories) ── */}
+  1485→      <HeroBannerCarousel banners={heroBanners} navigate={navigate} />
+  1486→
+  1487→      {/* ── 5. Flash Sale / Deal Timer Section (visual priority slightly reduced) ── */}
+  1488→      <FlashSaleSection products={discountProducts} navigate={navigate} siteConfig={siteConfig} />
+  1489→
+  1490→      {/* ── 5. Featured Products ── */}
+  1491→      {featuredProducts.length > 0 && (
+  1492→        <AnimatedSection className="py-10 md:py-14">
+  1493→          <div className="container mx-auto px-4">
+  1494→            <div className="flex items-end justify-between mb-6 md:mb-8">
+  1495→              <div>
+  1496→                <div className="inline-flex items-center gap-2 text-emerald-600 mb-1.5">
+  1497→                  <Star className="h-4 w-4" />
+  1498→                  <span className="text-xs font-semibold uppercase tracking-wider">Handpicked</span>
+  1499→                </div>
+  1500→                <h2 className="text-2xl md:text-3xl font-bold">Featured Products</h2>
+  1501→                <p className="text-sm text-muted-foreground mt-1">Premium picks our customers love</p>
+  1502→              </div>
+  1503→              <Button
+  1504→                variant="ghost"
+  1505→                className="hidden sm:flex items-center gap-1 text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 rounded-full"
+  1506→                onClick={() => navigate('products')}
+  1507→              >
+  1508→                View All <ArrowRight className="h-4 w-4" />
+  1509→              </Button>
+  1510→            </div>
+  1511→            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5">
+  1512→              {featuredProducts.map((p: Product) => (
+  1513→                <ProductCard key={p.id} product={p} />
+  1514→              ))}
+  1515→            </div>
+  1516→          </div>
+  1517→        </AnimatedSection>
+  1518→      )}
+  1519→
+  1520→      {/* ── 6. Trust & Guarantees Section ── */}
+  1521→      <TrustSection />
+  1522→
+  1523→      {/* ── 7. Mobile App CTA ── */}
+  1524→      <MobileAppCTA navigate={navigate} />
+  1525→    </div>
+  1526→  )
+  1527→}
+  1528→

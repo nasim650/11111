@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2D6A4F;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1B4332;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="shine" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:rgba(255,255,255,0.15);stop-opacity:1" />
+      <stop offset="100%" style="stop-color:rgba(255,255,255,0);stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Circle background -->
+  <circle cx="100" cy="100" r="100" fill="url(#bg)"/>
+  <!-- Shine overlay -->
+  <circle cx="100" cy="100" r="100" fill="url(#shine)"/>
+  <!-- Head silhouette -->
+  <circle cx="100" cy="72" r="30" fill="rgba(255,255,255,0.25)"/>
+  <!-- Body silhouette -->
+  <ellipse cx="100" cy="155" rx="45" ry="35" fill="rgba(255,255,255,0.2)"/>
+  <!-- Initials -->
+  <text x="100" y="112" text-anchor="middle" dominant-baseline="middle"
+        font-family="'Segoe UI', Arial, sans-serif" font-size="48" font-weight="700"
+        fill="white" letter-spacing="2">IH</text>
+</svg>

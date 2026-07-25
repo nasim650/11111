@@ -1,0 +1,1108 @@
+     1→'use client'
+     2→
+     3→import React, { useEffect, useState, useCallback } from 'react'
+     4→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+     5→import { Button } from '@/components/ui/button'
+     6→import { Input } from '@/components/ui/input'
+     7→import { Label } from '@/components/ui/label'
+     8→import { Textarea } from '@/components/ui/textarea'
+     9→import { Badge } from '@/components/ui/badge'
+    10→import { Switch } from '@/components/ui/switch'
+    11→import {
+    12→  Table,
+    13→  TableBody,
+    14→  TableCell,
+    15→  TableHead,
+    16→  TableHeader,
+    17→  TableRow,
+    18→} from '@/components/ui/table'
+    19→import {
+    20→  Dialog,
+    21→  DialogContent,
+    22→  DialogHeader,
+    23→  DialogTitle,
+    24→  DialogFooter,
+    25→} from '@/components/ui/dialog'
+    26→import {
+    27→  Select,
+    28→  SelectContent,
+    29→  SelectItem,
+    30→  SelectTrigger,
+    31→  SelectValue,
+    32→} from '@/components/ui/select'
+    33→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    34→import {
+    35→  AlertDialog,
+    36→  AlertDialogAction,
+    37→  AlertDialogCancel,
+    38→  AlertDialogContent,
+    39→  AlertDialogDescription,
+    40→  AlertDialogFooter,
+    41→  AlertDialogHeader,
+    42→  AlertDialogTitle,
+    43→} from '@/components/ui/alert-dialog'
+    44→import { Checkbox } from '@/components/ui/checkbox'
+    45→import { Skeleton } from '@/components/ui/skeleton'
+    46→import { toast } from 'sonner'
+    47→import { extractItems } from '@/lib/api'
+    48→import {
+    49→  Plus,
+    50→  Search,
+    51→  Pencil,
+    52→  Trash2,
+    53→  Upload,
+    54→  X,
+    55→  MoreHorizontal,
+    56→  Package,
+    57→} from 'lucide-react'
+    58→import {
+    59→  DropdownMenu,
+    60→  DropdownMenuContent,
+    61→  DropdownMenuItem,
+    62→  DropdownMenuTrigger,
+    63→} from '@/components/ui/dropdown-menu'
+    64→
+    65→interface Product {
+    66→  id: string
+    67→  name: string
+    68→  slug: string
+    69→  description?: string
+    70→  shortDescription?: string
+    71→  price: number
+    72→  discountPrice?: number | null
+    73→  unit: string
+    74→  stock: number
+    75→  categoryId: string
+    76→  subcategoryId?: string | null
+    77→  origin?: string
+    78→  qualityNote?: string
+    79→  ingredients?: string
+    80→  storageInstruction?: string
+    81→  deliveryNote?: string
+    82→  status: string
+    83→  isFeatured: boolean
+    84→  isBestSeller: boolean
+    85→  isNewArrival: boolean
+    86→  tags?: string[] | string
+    87→  specifications?: Record<string, string> | string
+    88→  images?: Array<{ id: string; url: string; alt?: string }>
+    89→  videoUrl?: string
+    90→  metaTitle?: string
+    91→  metaDescription?: string
+    92→  metaKeywords?: string
+    93→  category?: { id: string; name: string }
+    94→  createdAt: string
+    95→}
+    96→
+    97→interface Category {
+    98→  id: string
+    99→  name: string
+   100→  subcategories?: Array<{ id: string; name: string }>
+   101→}
+   102→
+   103→const emptyProduct: Partial<Product> = {
+   104→  name: '',
+   105→  slug: '',
+   106→  description: '',
+   107→  shortDescription: '',
+   108→  price: 0,
+   109→  discountPrice: null,
+   110→  unit: 'kg',
+   111→  stock: 0,
+   112→  categoryId: '',
+   113→  subcategoryId: '',
+   114→  origin: '',
+   115→  qualityNote: '',
+   116→  ingredients: '',
+   117→  storageInstruction: '',
+   118→  deliveryNote: '',
+   119→  status: 'active',
+   120→  isFeatured: false,
+   121→  isBestSeller: false,
+   122→  isNewArrival: false,
+   123→  tags: [],
+   124→  specifications: {},
+   125→  images: [],
+   126→  videoUrl: '',
+   127→  metaTitle: '',
+   128→  metaDescription: '',
+   129→  metaKeywords: '',
+   130→}
+   131→
+   132→export default function AdminProductsPage() {
+   133→  const [products, setProducts] = useState<Product[]>([])
+   134→  const [categories, setCategories] = useState<Category[]>([])
+   135→  const [loading, setLoading] = useState(true)
+   136→  const [search, setSearch] = useState('')
+   137→  const [statusFilter, setStatusFilter] = useState('all')
+   138→  const [categoryFilter, setCategoryFilter] = useState('all')
+   139→  const [dialogOpen, setDialogOpen] = useState(false)
+   140→  const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null)
+   141→  const [deleteId, setDeleteId] = useState<string | null>(null)
+   142→  const [saving, setSaving] = useState(false)
+   143→  const [selectedIds, setSelectedIds] = useState<string[]>([])
+   144→  const [tagInput, setTagInput] = useState('')
+   145→  const [specKey, setSpecKey] = useState('')
+   146→  const [specValue, setSpecValue] = useState('')
+   147→  const [activeTab, setActiveTab] = useState('basic')
+   148→
+   149→  const fetchProducts = useCallback(async () => {
+   150→    try {
+   151→      const params = new URLSearchParams()
+   152→      if (search) params.set('search', search)
+   153→      if (statusFilter !== 'all') params.set('status', statusFilter)
+   154→      if (categoryFilter !== 'all') params.set('categoryId', categoryFilter)
+   155→      params.set('limit', '50')
+   156→      const res = await fetch(`/api/products?${params.toString()}`)
+   157→      if (res.ok) {
+   158→        const data = await res.json()
+   159→        setProducts(extractItems(data))
+   160→      }
+   161→    } catch {
+   162→      toast.error('Failed to fetch products')
+   163→    } finally {
+   164→      setLoading(false)
+   165→    }
+   166→  }, [search, statusFilter, categoryFilter])
+   167→
+   168→  const fetchCategories = useCallback(async () => {
+   169→    try {
+   170→      const res = await fetch('/api/categories')
+   171→      if (res.ok) {
+   172→        const data = await res.json()
+   173→        setCategories(extractItems(data))
+   174→      }
+   175→    } catch {
+   176→      // silent
+   177→    }
+   178→  }, [])
+   179→
+   180→  useEffect(() => {
+   181→    fetchCategories()
+   182→  }, [fetchCategories])
+   183→
+   184→  useEffect(() => {
+   185→    fetchProducts()
+   186→  }, [fetchProducts])
+   187→
+   188→  function generateSlug(name: string): string {
+   189→    return name
+   190→      .toLowerCase()
+   191→      .replace(/[^a-z0-9\s-]/g, '')
+   192→      .replace(/\s+/g, '-')
+   193→      .replace(/-+/g, '-')
+   194→      .trim()
+   195→  }
+   196→
+   197→  function openCreate() {
+   198→    setEditingProduct({ ...emptyProduct })
+   199→    setActiveTab('basic')
+   200→    setDialogOpen(true)
+   201→  }
+   202→
+   203→  function openEdit(product: Product) {
+   204→    setEditingProduct({
+   205→      ...product,
+   206→      tags: Array.isArray(product.tags)
+   207→        ? product.tags
+   208→        : typeof product.tags === 'string'
+   209→          ? product.tags.split(',').map((tag) => tag.trim()).filter(Boolean)
+   210→          : [],
+   211→      specifications:
+   212→        typeof product.specifications === 'string'
+   213→          ? JSON.parse(product.specifications || '{}')
+   214→          : product.specifications ?? {},
+   215→    })
+   216→    setActiveTab('basic')
+   217→    setDialogOpen(true)
+   218→  }
+   219→
+   220→  async function handleSave() {
+   221→    if (!editingProduct?.name) {
+   222→      toast.error('Product name is required')
+   223→      return
+   224→    }
+   225→    setSaving(true)
+   226→    try {
+   227→      const payload = {
+   228→        ...editingProduct,
+   229→        slug: editingProduct.slug || generateSlug(editingProduct.name),
+   230→        price: Number(editingProduct.price) || 0,
+   231→        discountPrice: editingProduct.discountPrice ? Number(editingProduct.discountPrice) : null,
+   232→        stock: Number(editingProduct.stock) || 0,
+   233→      }
+   234→
+   235→      const isEdit = !!editingProduct.id
+   236→      const url = isEdit ? `/api/products/${editingProduct.id}` : '/api/products'
+   237→      const method = isEdit ? 'PUT' : 'POST'
+   238→
+   239→      const res = await fetch(url, {
+   240→        method,
+   241→        headers: { 'Content-Type': 'application/json' },
+   242→        body: JSON.stringify(payload),
+   243→      })
+   244→
+   245→      if (!res.ok) {
+   246→        const data = await res.json()
+   247→        throw new Error(data.error || 'Failed to save product')
+   248→      }
+   249→
+   250→      toast.success(isEdit ? 'Product updated' : 'Product created')
+   251→      setDialogOpen(false)
+   252→      fetchProducts()
+   253→    } catch (err) {
+   254→      toast.error(err instanceof Error ? err.message : 'Failed to save product')
+   255→    } finally {
+   256→      setSaving(false)
+   257→    }
+   258→  }
+   259→
+   260→  async function handleDelete(id: string) {
+   261→    try {
+   262→      const res = await fetch(`/api/products/${id}`, { method: 'DELETE' })
+   263→      if (!res.ok) throw new Error('Failed to delete')
+   264→      toast.success('Product deleted')
+   265→      fetchProducts()
+   266→    } catch {
+   267→      toast.error('Failed to delete product')
+   268→    } finally {
+   269→      setDeleteId(null)
+   270→    }
+   271→  }
+   272→
+   273→  async function handleBulkAction(action: string) {
+   274→    if (selectedIds.length === 0) return
+   275→    try {
+   276→      await Promise.all(
+   277→        selectedIds.map((id) =>
+   278→          fetch(`/api/products/${id}`, {
+   279→            method: 'PUT',
+   280→            headers: { 'Content-Type': 'application/json' },
+   281→            body: JSON.stringify({ status: action }),
+   282→          })
+   283→        )
+   284→      )
+   285→      toast.success(`${selectedIds.length} products updated`)
+   286→      setSelectedIds([])
+   287→      fetchProducts()
+   288→    } catch {
+   289→      toast.error('Bulk action failed')
+   290→    }
+   291→  }
+   292→
+   293→  function toggleSelect(id: string) {
+   294→    setSelectedIds((prev) =>
+   295→      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+   296→    )
+   297→  }
+   298→
+   299→  function addTag() {
+   300→    if (!tagInput.trim()) return
+   301→    const currentTags = Array.isArray(editingProduct?.tags) ? editingProduct.tags : []
+   302→    const tags = [...currentTags, tagInput.trim()]
+   303→    setEditingProduct((prev) => ({ ...prev, tags }) as Partial<Product>)
+   304→    setTagInput('')
+   305→  }
+   306→
+   307→  function removeTag(index: number) {
+   308→    const tags = Array.isArray(editingProduct?.tags)
+   309→      ? editingProduct.tags.filter((_, i) => i !== index)
+   310→      : []
+   311→    setEditingProduct((prev) => ({ ...prev, tags }) as Partial<Product>)
+   312→  }
+   313→
+   314→  function addSpec() {
+   315→    if (!specKey.trim()) return
+   316→    const currentSpecifications =
+   317→      editingProduct?.specifications && typeof editingProduct.specifications !== 'string'
+   318→        ? editingProduct.specifications
+   319→        : {}
+   320→    const specifications = { ...currentSpecifications, [specKey.trim()]: specValue.trim() }
+   321→    setEditingProduct((prev) => ({ ...prev, specifications }) as Partial<Product>)
+   322→    setSpecKey('')
+   323→    setSpecValue('')
+   324→  }
+   325→
+   326→  function removeSpec(key: string) {
+   327→    const specifications =
+   328→      editingProduct?.specifications && typeof editingProduct.specifications !== 'string'
+   329→        ? { ...editingProduct.specifications }
+   330→        : {}
+   331→    delete specifications[key]
+   332→    setEditingProduct((prev) => ({ ...prev, specifications }) as Partial<Product>)
+   333→  }
+   334→
+   335→  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+   336→    const files = e.target.files
+   337→    if (!files) return
+   338→    const formData = new FormData()
+   339→    Array.from(files).forEach((f) => formData.append('files', f))
+   340→    try {
+   341→      const res = await fetch('/api/uploads', { method: 'POST', body: formData })
+   342→      if (!res.ok) throw new Error('Upload failed')
+   343→      const data = await res.json()
+   344→      const newImages = (data.files ?? []).map((f: { url: string; id?: string }) => ({
+   345→        id: f.id ?? `img_${Date.now()}`,
+   346→        url: f.url,
+   347→        alt: '',
+   348→      }))
+   349→      setEditingProduct((prev) => ({
+   350→        ...prev,
+   351→        images: [...(prev?.images ?? []), ...newImages],
+   352→      }) as Partial<Product>)
+   353→    } catch {
+   354→      toast.error('Image upload failed')
+   355→    }
+   356→  }
+   357→
+   358→  function removeImage(index: number) {
+   359→    const images = editingProduct?.images?.filter((_, i) => i !== index) ?? []
+   360→    setEditingProduct((prev) => ({ ...prev, images }) as Partial<Product>)
+   361→  }
+   362→
+   363→  const selectedCategory = categories.find((c) => c.id === editingProduct?.categoryId)
+   364→
+   365→  return (
+   366→    <div className="space-y-4">
+   367→      {/* Filters */}
+   368→      <Card>
+   369→        <CardContent className="p-4">
+   370→          <div className="flex flex-col sm:flex-row gap-3">
+   371→            <div className="relative flex-1">
+   372→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   373→              <Input
+   374→                placeholder="Search products..."
+   375→                value={search}
+   376→                onChange={(e) => setSearch(e.target.value)}
+   377→                className="pl-9"
+   378→              />
+   379→            </div>
+   380→            <Select value={statusFilter} onValueChange={setStatusFilter}>
+   381→              <SelectTrigger className="w-full sm:w-40">
+   382→                <SelectValue placeholder="Status" />
+   383→              </SelectTrigger>
+   384→              <SelectContent>
+   385→                <SelectItem value="all">All Status</SelectItem>
+   386→                <SelectItem value="active">Active</SelectItem>
+   387→                <SelectItem value="inactive">Inactive</SelectItem>
+   388→                <SelectItem value="archived">Archived</SelectItem>
+   389→              </SelectContent>
+   390→            </Select>
+   391→            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+   392→              <SelectTrigger className="w-full sm:w-48">
+   393→                <SelectValue placeholder="Category" />
+   394→              </SelectTrigger>
+   395→              <SelectContent>
+   396→                <SelectItem value="all">All Categories</SelectItem>
+   397→                {categories.filter((cat) => cat.id).map((cat) => (
+   398→                  <SelectItem key={cat.id} value={cat.id}>
+   399→                    {cat.name}
+   400→                  </SelectItem>
+   401→                ))}
+   402→              </SelectContent>
+   403→            </Select>
+   404→            <Button onClick={openCreate} className="gap-2">
+   405→              <Plus className="size-4" /> Add Product
+   406→            </Button>
+   407→          </div>
+   408→        </CardContent>
+   409→      </Card>
+   410→
+   411→      {/* Bulk Actions */}
+   412→      {selectedIds.length > 0 && (
+   413→        <Card>
+   414→          <CardContent className="p-3">
+   415→            <div className="flex items-center gap-3">
+   416→              <span className="text-sm text-muted-foreground">
+   417→                {selectedIds.length} selected
+   418→              </span>
+   419→              <Button size="sm" variant="outline" onClick={() => handleBulkAction('active')}>
+   420→                Set Active
+   421→              </Button>
+   422→              <Button size="sm" variant="outline" onClick={() => handleBulkAction('inactive')}>
+   423→                Set Inactive
+   424→              </Button>
+   425→              <Button
+   426→                size="sm"
+   427→                variant="ghost"
+   428→                onClick={() => setSelectedIds([])}
+   429→              >
+   430→                Clear
+   431→              </Button>
+   432→            </div>
+   433→          </CardContent>
+   434→        </Card>
+   435→      )}
+   436→
+   437→      {/* Products Table */}
+   438→      <Card>
+   439→        <CardContent className="p-0">
+   440→          {loading ? (
+   441→            <div className="p-6 space-y-3">
+   442→              {[...Array(5)].map((_, i) => (
+   443→                <Skeleton key={i} className="h-12 w-full" />
+   444→              ))}
+   445→            </div>
+   446→          ) : (
+   447→            <Table>
+   448→              <TableHeader>
+   449→                <TableRow>
+   450→                  <TableHead className="w-10">
+   451→                    <Checkbox
+   452→                      checked={selectedIds.length === products.length && products.length > 0}
+   453→                      onCheckedChange={(checked) => {
+   454→                        if (checked) {
+   455→                          setSelectedIds(products.map((p) => p.id))
+   456→                        } else {
+   457→                          setSelectedIds([])
+   458→                        }
+   459→                      }}
+   460→                    />
+   461→                  </TableHead>
+   462→                  <TableHead>Product</TableHead>
+   463→                  <TableHead>Category</TableHead>
+   464→                  <TableHead>Price</TableHead>
+   465→                  <TableHead>Stock</TableHead>
+   466→                  <TableHead>Status</TableHead>
+   467→                  <TableHead>Flags</TableHead>
+   468→                  <TableHead className="w-10" />
+   469→                </TableRow>
+   470→              </TableHeader>
+   471→              <TableBody>
+   472→                {products.length === 0 ? (
+   473→                  <TableRow>
+   474→                    <TableCell colSpan={8} className="text-center py-12">
+   475→                      <Package className="mx-auto size-10 text-muted-foreground mb-2" />
+   476→                      <p className="text-muted-foreground">No products found</p>
+   477→                      <Button variant="outline" size="sm" className="mt-2" onClick={openCreate}>
+   478→                        Add your first product
+   479→                      </Button>
+   480→                    </TableCell>
+   481→                  </TableRow>
+   482→                ) : (
+   483→                  products.map((product) => (
+   484→                    <TableRow key={product.id}>
+   485→                      <TableCell>
+   486→                        <Checkbox
+   487→                          checked={selectedIds.includes(product.id)}
+   488→                          onCheckedChange={() => toggleSelect(product.id)}
+   489→                        />
+   490→                      </TableCell>
+   491→                      <TableCell>
+   492→                        <div className="flex items-center gap-3">
+   493→                          {product.images?.[0]?.url ? (
+   494→                            <img
+   495→                              src={product.images[0].url}
+   496→                              alt={product.name}
+   497→                              className="size-10 rounded-md object-cover"
+   498→                            />
+   499→                          ) : (
+   500→                            <div className="size-10 rounded-md bg-muted flex items-center justify-center">
+   501→                              <Package className="size-4 text-muted-foreground" />
+   502→                            </div>
+   503→                          )}
+   504→                          <div>
+   505→                            <p className="font-medium text-sm">{product.name}</p>
+   506→                            <p className="text-xs text-muted-foreground">{product.slug}</p>
+   507→                          </div>
+   508→                        </div>
+   509→                      </TableCell>
+   510→                      <TableCell className="text-sm">
+   511→                        {product.category?.name ?? '-'}
+   512→                      </TableCell>
+   513→                      <TableCell>
+   514→                        <div className="text-sm">
+   515→                          <span className="font-medium">৳{product.price}</span>
+   516→                          {product.discountPrice && (
+   517→                            <span className="ml-1 text-xs text-muted-foreground line-through">
+   518→                              ৳{product.discountPrice}
+   519→                            </span>
+   520→                          )}
+   521→                        </div>
+   522→                      </TableCell>
+   523→                      <TableCell>
+   524→                        <Badge
+   525→                          variant={product.stock <= 5 ? 'destructive' : 'secondary'}
+   526→                          className="text-xs"
+   527→                        >
+   528→                          {product.stock} {product.unit}
+   529→                        </Badge>
+   530→                      </TableCell>
+   531→                      <TableCell>
+   532→                        <Badge
+   533→                          variant="secondary"
+   534→                          className={
+   535→                            product.status === 'active'
+   536→                              ? 'bg-green-100 text-green-800'
+   537→                              : product.status === 'inactive'
+   538→                              ? 'bg-gray-100 text-gray-800'
+   539→                              : 'bg-yellow-100 text-yellow-800'
+   540→                          }
+   541→                        >
+   542→                          {product.status}
+   543→                        </Badge>
+   544→                      </TableCell>
+   545→                      <TableCell>
+   546→                        <div className="flex gap-1">
+   547→                          {product.isFeatured && (
+   548→                            <Badge variant="secondary" className="text-xs bg-blue-50 text-blue-700">
+   549→                              Featured
+   550→                            </Badge>
+   551→                          )}
+   552→                          {product.isBestSeller && (
+   553→                            <Badge variant="secondary" className="text-xs bg-orange-50 text-orange-700">
+   554→                              Best
+   555→                            </Badge>
+   556→                          )}
+   557→                          {product.isNewArrival && (
+   558→                            <Badge variant="secondary" className="text-xs bg-purple-50 text-purple-700">
+   559→                              New
+   560→                            </Badge>
+   561→                          )}
+   562→                        </div>
+   563→                      </TableCell>
+   564→                      <TableCell>
+   565→                        <DropdownMenu>
+   566→                          <DropdownMenuTrigger asChild>
+   567→                            <Button variant="ghost" size="icon" className="size-8">
+   568→                              <MoreHorizontal className="size-4" />
+   569→                            </Button>
+   570→                          </DropdownMenuTrigger>
+   571→                          <DropdownMenuContent align="end">
+   572→                            <DropdownMenuItem onClick={() => openEdit(product)}>
+   573→                              <Pencil className="mr-2 size-4" /> Edit
+   574→                            </DropdownMenuItem>
+   575→                            <DropdownMenuItem
+   576→                              className="text-destructive"
+   577→                              onClick={() => setDeleteId(product.id)}
+   578→                            >
+   579→                              <Trash2 className="mr-2 size-4" /> Delete
+   580→                            </DropdownMenuItem>
+   581→                          </DropdownMenuContent>
+   582→                        </DropdownMenu>
+   583→                      </TableCell>
+   584→                    </TableRow>
+   585→                  ))
+   586→                )}
+   587→              </TableBody>
+   588→            </Table>
+   589→          )}
+   590→        </CardContent>
+   591→      </Card>
+   592→
+   593→      {/* Add/Edit Dialog */}
+   594→      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+   595→        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+   596→          <DialogHeader>
+   597→            <DialogTitle>
+   598→              {editingProduct?.id ? 'Edit Product' : 'Add New Product'}
+   599→            </DialogTitle>
+   600→          </DialogHeader>
+   601→
+   602→          <Tabs value={activeTab} onValueChange={setActiveTab}>
+   603→            <TabsList className="w-full flex-wrap">
+   604→              <TabsTrigger value="basic">Basic Info</TabsTrigger>
+   605→              <TabsTrigger value="pricing">Pricing & Stock</TabsTrigger>
+   606→              <TabsTrigger value="details">Details</TabsTrigger>
+   607→              <TabsTrigger value="images">Images</TabsTrigger>
+   608→              <TabsTrigger value="seo">SEO</TabsTrigger>
+   609→            </TabsList>
+   610→
+   611→            <TabsContent value="basic" className="space-y-4 mt-4">
+   612→              <div className="grid gap-4 sm:grid-cols-2">
+   613→                <div className="space-y-2">
+   614→                  <Label>Product Name *</Label>
+   615→                  <Input
+   616→                    value={editingProduct?.name ?? ''}
+   617→                    onChange={(e) => {
+   618→                      const name = e.target.value
+   619→                      setEditingProduct((prev) => ({
+   620→                        ...prev,
+   621→                        name,
+   622→                        slug: prev?.id ? prev.slug : generateSlug(name),
+   623→                      }) as Partial<Product>)
+   624→                    }}
+   625→                    placeholder="Enter product name"
+   626→                  />
+   627→                </div>
+   628→                <div className="space-y-2">
+   629→                  <Label>Slug</Label>
+   630→                  <Input
+   631→                    value={editingProduct?.slug ?? ''}
+   632→                    onChange={(e) =>
+   633→                      setEditingProduct((prev) => ({
+   634→                        ...prev,
+   635→                        slug: e.target.value,
+   636→                      }) as Partial<Product>)
+   637→                    }
+   638→                    placeholder="product-slug"
+   639→                  />
+   640→                </div>
+   641→              </div>
+   642→              <div className="space-y-2">
+   643→                <Label>Short Description</Label>
+   644→                <Textarea
+   645→                  value={editingProduct?.shortDescription ?? ''}
+   646→                  onChange={(e) =>
+   647→                    setEditingProduct((prev) => ({
+   648→                      ...prev,
+   649→                      shortDescription: e.target.value,
+   650→                    }) as Partial<Product>)
+   651→                  }
+   652→                  placeholder="Brief product description"
+   653→                  rows={2}
+   654→                />
+   655→              </div>
+   656→              <div className="space-y-2">
+   657→                <Label>Full Description</Label>
+   658→                <Textarea
+   659→                  value={editingProduct?.description ?? ''}
+   660→                  onChange={(e) =>
+   661→                    setEditingProduct((prev) => ({
+   662→                      ...prev,
+   663→                      description: e.target.value,
+   664→                    }) as Partial<Product>)
+   665→                  }
+   666→                  placeholder="Detailed product description"
+   667→                  rows={5}
+   668→                />
+   669→              </div>
+   670→              <div className="grid gap-4 sm:grid-cols-2">
+   671→                <div className="space-y-2">
+   672→                  <Label>Category *</Label>
+   673→                  <Select
+   674→                    value={editingProduct?.categoryId ?? ''}
+   675→                    onValueChange={(value) =>
+   676→                      setEditingProduct((prev) => ({
+   677→                        ...prev,
+   678→                        categoryId: value,
+   679→                        subcategoryId: '',
+   680→                      }) as Partial<Product>)
+   681→                    }
+   682→                  >
+   683→                    <SelectTrigger>
+   684→                      <SelectValue placeholder="Select category" />
+   685→                    </SelectTrigger>
+   686→                    <SelectContent>
+   687→                      {categories.filter((cat) => cat.id).map((cat) => (
+   688→                        <SelectItem key={cat.id} value={cat.id}>
+   689→                          {cat.name}
+   690→                        </SelectItem>
+   691→                      ))}
+   692→                    </SelectContent>
+   693→                  </Select>
+   694→                </div>
+   695→                <div className="space-y-2">
+   696→                  <Label>Subcategory</Label>
+   697→                  <Select
+   698→                    value={editingProduct?.subcategoryId ?? ''}
+   699→                    onValueChange={(value) =>
+   700→                      setEditingProduct((prev) => ({
+   701→                        ...prev,
+   702→                        subcategoryId: value,
+   703→                      }) as Partial<Product>)
+   704→                    }
+   705→                  >
+   706→                    <SelectTrigger>
+   707→                      <SelectValue placeholder="Select subcategory" />
+   708→                    </SelectTrigger>
+   709→                    <SelectContent>
+   710→                      {(selectedCategory?.subcategories ?? []).filter((sub) => sub.id).map((sub) => (
+   711→                        <SelectItem key={sub.id} value={sub.id}>
+   712→                          {sub.name}
+   713→                        </SelectItem>
+   714→                      ))}
+   715→                    </SelectContent>
+   716→                  </Select>
+   717→                </div>
+   718→              </div>
+   719→              <div className="space-y-2">
+   720→                <Label>Status</Label>
+   721→                <Select
+   722→                  value={editingProduct?.status ?? 'active'}
+   723→                  onValueChange={(value) =>
+   724→                    setEditingProduct((prev) => ({
+   725→                      ...prev,
+   726→                      status: value,
+   727→                    }) as Partial<Product>)
+   728→                  }
+   729→                >
+   730→                  <SelectTrigger className="w-48">
+   731→                    <SelectValue />
+   732→                  </SelectTrigger>
+   733→                  <SelectContent>
+   734→                    <SelectItem value="active">Active</SelectItem>
+   735→                    <SelectItem value="inactive">Inactive</SelectItem>
+   736→                    <SelectItem value="archived">Archived</SelectItem>
+   737→                  </SelectContent>
+   738→                </Select>
+   739→              </div>
+   740→            </TabsContent>
+   741→
+   742→            <TabsContent value="pricing" className="space-y-4 mt-4">
+   743→              <div className="grid gap-4 sm:grid-cols-3">
+   744→                <div className="space-y-2">
+   745→                  <Label>Price (৳) *</Label>
+   746→                  <Input
+   747→                    type="number"
+   748→                    value={editingProduct?.price ?? 0}
+   749→                    onChange={(e) =>
+   750→                      setEditingProduct((prev) => ({
+   751→                        ...prev,
+   752→                        price: Number(e.target.value),
+   753→                      }) as Partial<Product>)
+   754→                    }
+   755→                  />
+   756→                </div>
+   757→                <div className="space-y-2">
+   758→                  <Label>Discount Price (৳)</Label>
+   759→                  <Input
+   760→                    type="number"
+   761→                    value={editingProduct?.discountPrice ?? ''}
+   762→                    onChange={(e) =>
+   763→                      setEditingProduct((prev) => ({
+   764→                        ...prev,
+   765→                        discountPrice: e.target.value ? Number(e.target.value) : null,
+   766→                      }) as Partial<Product>)
+   767→                    }
+   768→                  />
+   769→                </div>
+   770→                <div className="space-y-2">
+   771→                  <Label>Unit</Label>
+   772→                  <Select
+   773→                    value={editingProduct?.unit ?? 'kg'}
+   774→                    onValueChange={(value) =>
+   775→                      setEditingProduct((prev) => ({
+   776→                        ...prev,
+   777→                        unit: value,
+   778→                      }) as Partial<Product>)
+   779→                    }
+   780→                  >
+   781→                    <SelectTrigger>
+   782→                      <SelectValue />
+   783→                    </SelectTrigger>
+   784→                    <SelectContent>
+   785→                      <SelectItem value="kg">Kg</SelectItem>
+   786→                      <SelectItem value="g">Gram</SelectItem>
+   787→                      <SelectItem value="piece">Piece</SelectItem>
+   788→                      <SelectItem value="pack">Pack</SelectItem>
+   789→                      <SelectItem value="bottle">Bottle</SelectItem>
+   790→                      <SelectItem value="liter">Liter</SelectItem>
+   791→                    </SelectContent>
+   792→                  </Select>
+   793→                </div>
+   794→              </div>
+   795→              <div className="space-y-2">
+   796→                <Label>Stock Quantity</Label>
+   797→                <Input
+   798→                  type="number"
+   799→                  value={editingProduct?.stock ?? 0}
+   800→                  onChange={(e) =>
+   801→                    setEditingProduct((prev) => ({
+   802→                      ...prev,
+   803→                      stock: Number(e.target.value),
+   804→                    }) as Partial<Product>)
+   805→                  }
+   806→                />
+   807→              </div>
+   808→              <div className="grid gap-4 sm:grid-cols-3">
+   809→                <div className="flex items-center gap-2">
+   810→                  <Switch
+   811→                    checked={editingProduct?.isFeatured ?? false}
+   812→                    onCheckedChange={(checked) =>
+   813→                      setEditingProduct((prev) => ({
+   814→                        ...prev,
+   815→                        isFeatured: checked,
+   816→                      }) as Partial<Product>)
+   817→                    }
+   818→                  />
+   819→                  <Label>Featured</Label>
+   820→                </div>
+   821→                <div className="flex items-center gap-2">
+   822→                  <Switch
+   823→                    checked={editingProduct?.isBestSeller ?? false}
+   824→                    onCheckedChange={(checked) =>
+   825→                      setEditingProduct((prev) => ({
+   826→                        ...prev,
+   827→                        isBestSeller: checked,
+   828→                      }) as Partial<Product>)
+   829→                    }
+   830→                  />
+   831→                  <Label>Best Seller</Label>
+   832→                </div>
+   833→                <div className="flex items-center gap-2">
+   834→                  <Switch
+   835→                    checked={editingProduct?.isNewArrival ?? false}
+   836→                    onCheckedChange={(checked) =>
+   837→                      setEditingProduct((prev) => ({
+   838→                        ...prev,
+   839→                        isNewArrival: checked,
+   840→                      }) as Partial<Product>)
+   841→                    }
+   842→                  />
+   843→                  <Label>New Arrival</Label>
+   844→                </div>
+   845→              </div>
+   846→              {/* Tags */}
+   847→              <div className="space-y-2">
+   848→                <Label>Tags</Label>
+   849→                <div className="flex gap-2">
+   850→                  <Input
+   851→                    value={tagInput}
+   852→                    onChange={(e) => setTagInput(e.target.value)}
+   853→                    placeholder="Add tag"
+   854→                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
+   855→                  />
+   856→                  <Button type="button" variant="outline" onClick={addTag}>
+   857→                    Add
+   858→                  </Button>
+   859→                </div>
+   860→                <div className="flex flex-wrap gap-1 mt-2">
+   861→                  {(Array.isArray(editingProduct?.tags) ? editingProduct.tags : []).map((tag, i) => (
+   862→                    <Badge key={i} variant="secondary" className="gap-1">
+   863→                      {tag}
+   864→                      <X className="size-3 cursor-pointer" onClick={() => removeTag(i)} />
+   865→                    </Badge>
+   866→                  ))}
+   867→                </div>
+   868→              </div>
+   869→              {/* Specifications */}
+   870→              <div className="space-y-2">
+   871→                <Label>Specifications</Label>
+   872→                <div className="flex gap-2">
+   873→                  <Input
+   874→                    value={specKey}
+   875→                    onChange={(e) => setSpecKey(e.target.value)}
+   876→                    placeholder="Key"
+   877→                  />
+   878→                  <Input
+   879→                    value={specValue}
+   880→                    onChange={(e) => setSpecValue(e.target.value)}
+   881→                    placeholder="Value"
+   882→                  />
+   883→                  <Button type="button" variant="outline" onClick={addSpec}>
+   884→                    Add
+   885→                  </Button>
+   886→                </div>
+   887→                <div className="mt-2 space-y-1">
+   888→                  {Object.entries(
+   889→                    editingProduct?.specifications && typeof editingProduct.specifications !== 'string'
+   890→                      ? editingProduct.specifications
+   891→                      : {}
+   892→                  ).map(([key, value]) => (
+   893→                    <div key={key} className="flex items-center gap-2 text-sm">
+   894→                      <span className="font-medium">{key}:</span>
+   895→                      <span className="text-muted-foreground">{value}</span>
+   896→                      <X
+   897→                        className="size-3 cursor-pointer text-destructive"
+   898→                        onClick={() => removeSpec(key)}
+   899→                      />
+   900→                    </div>
+   901→                  ))}
+   902→                </div>
+   903→              </div>
+   904→            </TabsContent>
+   905→
+   906→            <TabsContent value="details" className="space-y-4 mt-4">
+   907→              <div className="grid gap-4 sm:grid-cols-2">
+   908→                <div className="space-y-2">
+   909→                  <Label>Origin</Label>
+   910→                  <Input
+   911→                    value={editingProduct?.origin ?? ''}
+   912→                    onChange={(e) =>
+   913→                      setEditingProduct((prev) => ({
+   914→                        ...prev,
+   915→                        origin: e.target.value,
+   916→                      }) as Partial<Product>)
+   917→                    }
+   918→                    placeholder="e.g., Sylhet, Bangladesh"
+   919→                  />
+   920→                </div>
+   921→                <div className="space-y-2">
+   922→                  <Label>Quality Note</Label>
+   923→                  <Input
+   924→                    value={editingProduct?.qualityNote ?? ''}
+   925→                    onChange={(e) =>
+   926→                      setEditingProduct((prev) => ({
+   927→                        ...prev,
+   928→                        qualityNote: e.target.value,
+   929→                      }) as Partial<Product>)
+   930→                    }
+   931→                    placeholder="Quality information"
+   932→                  />
+   933→                </div>
+   934→              </div>
+   935→              <div className="space-y-2">
+   936→                <Label>Ingredients</Label>
+   937→                <Textarea
+   938→                  value={editingProduct?.ingredients ?? ''}
+   939→                  onChange={(e) =>
+   940→                    setEditingProduct((prev) => ({
+   941→                      ...prev,
+   942→                      ingredients: e.target.value,
+   943→                    }) as Partial<Product>)
+   944→                  }
+   945→                  placeholder="List ingredients"
+   946→                  rows={3}
+   947→                />
+   948→              </div>
+   949→              <div className="space-y-2">
+   950→                <Label>Storage Instruction</Label>
+   951→                <Textarea
+   952→                  value={editingProduct?.storageInstruction ?? ''}
+   953→                  onChange={(e) =>
+   954→                    setEditingProduct((prev) => ({
+   955→                      ...prev,
+   956→                      storageInstruction: e.target.value,
+   957→                    }) as Partial<Product>)
+   958→                  }
+   959→                  placeholder="Storage instructions"
+   960→                  rows={2}
+   961→                />
+   962→              </div>
+   963→              <div className="space-y-2">
+   964→                <Label>Delivery Note</Label>
+   965→                <Textarea
+   966→                  value={editingProduct?.deliveryNote ?? ''}
+   967→                  onChange={(e) =>
+   968→                    setEditingProduct((prev) => ({
+   969→                      ...prev,
+   970→                      deliveryNote: e.target.value,
+   971→                    }) as Partial<Product>)
+   972→                  }
+   973→                  placeholder="Delivery information"
+   974→                  rows={2}
+   975→                />
+   976→              </div>
+   977→              <div className="space-y-2">
+   978→                <Label>Video URL</Label>
+   979→                <Input
+   980→                  value={editingProduct?.videoUrl ?? ''}
+   981→                  onChange={(e) =>
+   982→                    setEditingProduct((prev) => ({
+   983→                      ...prev,
+   984→                      videoUrl: e.target.value,
+   985→                    }) as Partial<Product>)
+   986→                  }
+   987→                  placeholder="https://youtube.com/..."
+   988→                />
+   989→              </div>
+   990→            </TabsContent>
+   991→
+   992→            <TabsContent value="images" className="space-y-4 mt-4">
+   993→              <div className="space-y-2">
+   994→                <Label>Product Images</Label>
+   995→                <div className="border-2 border-dashed rounded-lg p-6 text-center">
+   996→                  <Upload className="mx-auto size-8 text-muted-foreground mb-2" />
+   997→                  <p className="text-sm text-muted-foreground mb-2">
+   998→                    Drag images here or click to upload
+   999→                  </p>
+  1000→                  <Input
+  1001→                    type="file"
+  1002→                    multiple
+  1003→                    accept="image/*"
+  1004→                    onChange={handleImageUpload}
+  1005→                    className="max-w-xs mx-auto"
+  1006→                  />
+  1007→                </div>
+  1008→              </div>
+  1009→              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+  1010→                {editingProduct?.images?.map((img, index) => (
+  1011→                  <div key={img.id ?? index} className="relative group">
+  1012→                    <img
+  1013→                      src={img.url}
+  1014→                      alt={img.alt ?? ''}
+  1015→                      className="w-full h-24 object-cover rounded-md"
+  1016→                    />
+  1017→                    <Button
+  1018→                      variant="destructive"
+  1019→                      size="icon"
+  1020→                      className="absolute top-1 right-1 size-6 opacity-0 group-hover:opacity-100 transition-opacity"
+  1021→                      onClick={() => removeImage(index)}
+  1022→                    >
+  1023→                      <X className="size-3" />
+  1024→                    </Button>
+  1025→                  </div>
+  1026→                ))}
+  1027→              </div>
+  1028→            </TabsContent>
+  1029→
+  1030→            <TabsContent value="seo" className="space-y-4 mt-4">
+  1031→              <div className="space-y-2">
+  1032→                <Label>Meta Title</Label>
+  1033→                <Input
+  1034→                  value={editingProduct?.metaTitle ?? ''}
+  1035→                  onChange={(e) =>
+  1036→                    setEditingProduct((prev) => ({
+  1037→                      ...prev,
+  1038→                      metaTitle: e.target.value,
+  1039→                    }) as Partial<Product>)
+  1040→                  }
+  1041→                  placeholder="SEO title"
+  1042→                />
+  1043→              </div>
+  1044→              <div className="space-y-2">
+  1045→                <Label>Meta Description</Label>
+  1046→                <Textarea
+  1047→                  value={editingProduct?.metaDescription ?? ''}
+  1048→                  onChange={(e) =>
+  1049→                    setEditingProduct((prev) => ({
+  1050→                      ...prev,
+  1051→                      metaDescription: e.target.value,
+  1052→                    }) as Partial<Product>)
+  1053→                  }
+  1054→                  placeholder="SEO description"
+  1055→                  rows={3}
+  1056→                />
+  1057→              </div>
+  1058→              <div className="space-y-2">
+  1059→                <Label>Meta Keywords</Label>
+  1060→                <Input
+  1061→                  value={editingProduct?.metaKeywords ?? ''}
+  1062→                  onChange={(e) =>
+  1063→                    setEditingProduct((prev) => ({
+  1064→                      ...prev,
+  1065→                      metaKeywords: e.target.value,
+  1066→                    }) as Partial<Product>)
+  1067→                  }
+  1068→                  placeholder="keyword1, keyword2, keyword3"
+  1069→                />
+  1070→              </div>
+  1071→            </TabsContent>
+  1072→          </Tabs>
+  1073→
+  1074→          <DialogFooter>
+  1075→            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+  1076→              Cancel
+  1077→            </Button>
+  1078→            <Button onClick={handleSave} disabled={saving}>
+  1079→              {saving ? 'Saving...' : editingProduct?.id ? 'Update' : 'Create'}
+  1080→            </Button>
+  1081→          </DialogFooter>
+  1082→        </DialogContent>
+  1083→      </Dialog>
+  1084→
+  1085→      {/* Delete Confirmation */}
+  1086→      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+  1087→        <AlertDialogContent>
+  1088→          <AlertDialogHeader>
+  1089→            <AlertDialogTitle>Delete Product</AlertDialogTitle>
+  1090→            <AlertDialogDescription>
+  1091→              Are you sure you want to delete this product? This action cannot be undone.
+  1092→            </AlertDialogDescription>
+  1093→          </AlertDialogHeader>
+  1094→          <AlertDialogFooter>
+  1095→            <AlertDialogCancel>Cancel</AlertDialogCancel>
+  1096→            <AlertDialogAction
+  1097→              onClick={() => deleteId && handleDelete(deleteId)}
+  1098→              className="bg-destructive text-destructive-foreground"
+  1099→            >
+  1100→              Delete
+  1101→            </AlertDialogAction>
+  1102→          </AlertDialogFooter>
+  1103→        </AlertDialogContent>
+  1104→      </AlertDialog>
+  1105→    </div>
+  1106→  )
+  1107→}
+  1108→

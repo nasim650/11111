@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="title">
+  <title id="title">Dr. Kamal Hossain</title>
+  <circle cx="160" cy="160" r="160" fill="#e8f2fb"/>
+  <circle cx="160" cy="128" r="66" fill="#326b9b"/>
+  <path d="M55 300c12-82 55-120 105-120s93 38 105 120" fill="#b8860b"/>
+  <text x="160" y="148" text-anchor="middle" fill="#fff" font-family="Arial, sans-serif" font-size="52" font-weight="700">KH</text>
+</svg>

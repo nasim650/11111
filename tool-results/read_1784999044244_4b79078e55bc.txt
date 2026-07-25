@@ -1,0 +1,595 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useEffect, useReducer, useState } from 'react'
+     4→     4→import Image from 'next/image'
+     5→     5→import {
+     6→     6→  Minus, Plus, Trash2, ShoppingCart, Tag, ArrowRight, ArrowLeft,
+     7→     7→  ShieldCheck, Truck, Clock, ShoppingBag, Heart, X, AlertTriangle,
+     8→     8→  Package, Home, ChevronRight, Gift, BadgeCheck
+     9→     9→} from 'lucide-react'
+    10→    10→import { Button } from '@/components/ui/button'
+    11→    11→import { Input } from '@/components/ui/input'
+    12→    12→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    13→    13→import { Separator } from '@/components/ui/separator'
+    14→    14→import { Badge } from '@/components/ui/badge'
+    15→    15→import { Label } from '@/components/ui/label'
+    16→    16→import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from '@/components/ui/breadcrumb'
+    17→    17→import { useAppStore } from '@/lib/store'
+    18→    18→import { extractItems } from '@/lib/api'
+    19→    19→import { toast } from 'sonner'
+    20→    20→
+    21→    21→interface SuggestedProduct {
+    22→    22→  id: string
+    23→    23→  name: string
+    24→    24→  price: number
+    25→    25→  discountPrice?: number | null
+    26→    26→  images?: Array<{ url: string; alt?: string }>
+    27→    27→  unit: string
+    28→    28→}
+    29→    29→
+    30→    30→export default function CartPage() {
+    31→    31→  const {
+    32→    32→    cartItems,
+    33→    33→    removeFromCart,
+    34→    34→    updateQuantity,
+    35→    35→    subtotal,
+    36→    36→    totalItems,
+    37→    37→    navigate,
+    38→    38→    siteConfig,
+    39→    39→    clearCart,
+    40→    40→    addToCart,
+    41→    41→    addToWishlist,
+    42→    42→  } = useAppStore()
+    43→    43→
+    44→    44→  const [couponCode, setCouponCode] = useState('')
+    45→    45→  const [couponLoading, setCouponLoading] = useState(false)
+    46→    46→  const [discount, setDiscount] = useState(0)
+    47→    47→  const [appliedCoupon, setAppliedCoupon] = useState('')
+    48→    48→  const [removingId, setRemovingId] = useState<string | null>(null)
+    49→    49→  const [confirmClear, setConfirmClear] = useState(false)
+    50→    50→  const [suggestedProducts, setSuggestedProducts] = useReducer(
+    51→    51→    (_: SuggestedProduct[], next: SuggestedProduct[]) => next,
+    52→    52→    []
+    53→    53→  )
+    54→    54→
+    55→    55→  const sub = subtotal()
+    56→    56→  const shipping = sub >= (siteConfig?.freeShippingThreshold || 1500) ? 0 : (siteConfig?.shippingCharge || 60)
+    57→    57→  const total = sub + shipping - discount
+    58→    58→  const itemCount = totalItems()
+    59→    59→  const totalSavings = cartItems.reduce((sum, item) => {
+    60→    60→    if (item.discountPrice != null && item.discountPrice < item.price) {
+    61→    61→      return sum + ((item.price - item.discountPrice) * item.quantity)
+    62→    62→    }
+    63→    63→    return sum
+    64→    64→  }, 0)
+    65→    65→
+    66→    66→  const estimatedDelivery = (() => {
+    67→    67→    const date = new Date()
+    68→    68→    date.setDate(date.getDate() + 4)
+    69→    69→    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    70→    70→  })()
+    71→    71→
+    72→    72→  useEffect(() => {
+    73→    73→    fetch('/api/products?limit=6&status=active')
+    74→    74→      .then((r) => r.json())
+    75→    75→      .then((data) => {
+    76→    76→        setSuggestedProducts(extractItems<SuggestedProduct>(data))
+    77→    77→      })
+    78→    78→      .catch(() => {})
+    79→    79→  }, [])
+    80→    80→
+    81→    81→  const handleQuantityChange = async (cartItemId: string, newQty: number) => {
+    82→    82→    if (newQty < 1) return
+    83→    83→    await updateQuantity(cartItemId, newQty)
+    84→    84→  }
+    85→    85→
+    86→    86→  const handleRemove = async (cartItemId: string) => {
+    87→    87→    setRemovingId(cartItemId)
+    88→    88→    setTimeout(async () => {
+    89→    89→      await removeFromCart(cartItemId)
+    90→    90→      setRemovingId(null)
+    91→    91→      toast.success('Item removed from cart')
+    92→    92→    }, 300)
+    93→    93→  }
+    94→    94→
+    95→    95→  const handleApplyCoupon = async () => {
+    96→    96→    if (!couponCode.trim()) return
+    97→    97→    setCouponLoading(true)
+    98→    98→    try {
+    99→    99→      const res = await fetch('/api/coupons/validate', {
+   100→   100→        method: 'POST',
+   101→   101→        headers: { 'Content-Type': 'application/json' },
+   102→   102→        body: JSON.stringify({ code: couponCode, totalAmount: sub }),
+   103→   103→      })
+   104→   104→      const data = await res.json()
+   105→   105→      if (!res.ok) {
+   106→   106→        toast.error(data.error || 'Invalid coupon code')
+   107→   107→        return
+   108→   108→      }
+   109→   109→      const discountAmount = data.type === 'percentage'
+   110→   110→        ? Math.min(sub * (data.value / 100), data.maxDiscount || Infinity)
+   111→   111→        : data.value
+   112→   112→      setDiscount(discountAmount)
+   113→   113→      setAppliedCoupon(couponCode)
+   114→   114→      toast.success(`Coupon applied! You save ৳${discountAmount.toFixed(0)}`)
+   115→   115→    } catch {
+   116→   116→      toast.error('Failed to validate coupon')
+   117→   117→    } finally {
+   118→   118→      setCouponLoading(false)
+   119→   119→    }
+   120→   120→  }
+   121→   121→
+   122→   122→  const handleRemoveCoupon = () => {
+   123→   123→    setDiscount(0)
+   124→   124→    setAppliedCoupon('')
+   125→   125→    setCouponCode('')
+   126→   126→    toast.success('Coupon removed')
+   127→   127→  }
+   128→   128→
+   129→   129→  const handleClearCart = async () => {
+   130→   130→    if (!confirmClear) {
+   131→   131→      setConfirmClear(true)
+   132→   132→      return
+   133→   133→    }
+   134→   134→    await clearCart()
+   135→   135→    setConfirmClear(false)
+   136→   136→    toast.success('Cart cleared')
+   137→   137→  }
+   138→   138→
+   139→   139→  const handleAddSuggestedToCart = async (product: SuggestedProduct) => {
+   140→   140→    const effectivePrice = product.discountPrice ?? product.price
+   141→   141→    await addToCart({
+   142→   142→      productId: product.id,
+   143→   143→      productName: product.name,
+   144→   144→      price: product.price,
+   145→   145→      discountPrice: product.discountPrice,
+   146→   146→      quantity: 1,
+   147→   147→      unit: product.unit || 'kg',
+   148→   148→      image: product.images?.[0]?.url || '/placeholder.png',
+   149→   149→      stock: 100,
+   150→   150→    })
+   151→   151→  }
+   152→   152→
+   153→   153→  // Empty cart state
+   154→   154→  if (cartItems.length === 0) {
+   155→   155→    return (
+   156→   156→      <div className="min-h-screen flex flex-col">
+   157→   157→        {/* Breadcrumb */}
+   158→   158→        <div className="bg-muted/30 py-3 border-b">
+   159→   159→          <div className="container mx-auto px-4">
+   160→   160→            <Breadcrumb>
+   161→   161→              <BreadcrumbList>
+   162→   162→                <BreadcrumbItem>
+   163→   163→                  <BreadcrumbLink onClick={() => navigate('home')} className="cursor-pointer flex items-center gap-1">
+   164→   164→                    <Home className="h-3.5 w-3.5" />
+   165→   165→                    Home
+   166→   166→                  </BreadcrumbLink>
+   167→   167→                </BreadcrumbItem>
+   168→   168→                <BreadcrumbSeparator />
+   169→   169→                <BreadcrumbItem>
+   170→   170→                  <BreadcrumbLink className="text-foreground font-medium">Shopping Cart</BreadcrumbLink>
+   171→   171→                </BreadcrumbItem>
+   172→   172→              </BreadcrumbList>
+   173→   173→            </Breadcrumb>
+   174→   174→          </div>
+   175→   175→        </div>
+   176→   176→
+   177→   177→        <div className="flex-1 flex flex-col items-center justify-center py-20 px-4">
+   178→   178→          {/* Better empty state */}
+   179→   179→          <div className="relative mb-8">
+   180→   180→            <div className="w-36 h-36 rounded-full bg-gradient-to-br from-primary/5 to-primary/15 flex items-center justify-center">
+   181→   181→              <div className="w-28 h-28 rounded-full bg-gradient-to-br from-primary/10 to-primary/20 flex items-center justify-center">
+   182→   182→                <ShoppingCart className="h-14 w-14 text-primary/30" />
+   183→   183→              </div>
+   184→   184→            </div>
+   185→   185→            <div className="absolute -top-1 -right-1 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center border-2 border-background shadow-sm">
+   186→   186→              <span className="text-lg">0</span>
+   187→   187→            </div>
+   188→   188→          </div>
+   189→   189→          <h2 className="text-2xl font-bold mb-2">Your Cart is Empty</h2>
+   190→   190→          <p className="text-muted-foreground mb-8 text-center max-w-sm">
+   191→   191→            Looks like you haven&apos;t added anything to your cart yet. Start exploring our authentic Bangladeshi food products!
+   192→   192→          </p>
+   193→   193→          <div className="flex flex-col sm:flex-row gap-3">
+   194→   194→            <Button onClick={() => navigate('products')} size="lg" className="h-12 px-8 rounded-xl">
+   195→   195→              <ShoppingBag className="h-5 w-5 mr-2" /> Start Shopping
+   196→   196→            </Button>
+   197→   197→            <Button variant="outline" onClick={() => navigate('products')} size="lg" className="h-12 px-8 rounded-xl">
+   198→   198→              <Tag className="h-5 w-5 mr-2" /> Check Offers
+   199→   199→            </Button>
+   200→   200→          </div>
+   201→   201→        </div>
+   202→   202→
+   203→   203→        {suggestedProducts.length > 0 && (
+   204→   204→          <div className="border-t bg-muted/30 py-8 px-4">
+   205→   205→            <div className="container mx-auto max-w-4xl">
+   206→   206→              <h3 className="text-lg font-semibold mb-4">You Might Also Like</h3>
+   207→   207→              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+   208→   208→                {suggestedProducts.slice(0, 6).map((product) => (
+   209→   209→                  <div key={product.id} className="text-center group cursor-pointer" onClick={() => navigate('product-detail', { id: product.id })}>
+   210→   210→                    <div className="w-full aspect-square rounded-lg bg-muted/50 overflow-hidden mb-2">
+   211→   211→                      <img src={product.images?.[0]?.url || '/placeholder.png'} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+   212→   212→                    </div>
+   213→   213→                    <p className="text-xs font-medium line-clamp-2">{product.name}</p>
+   214→   214→                    <p className="text-xs text-primary font-semibold mt-0.5">৳{(product.discountPrice ?? product.price).toLocaleString()}</p>
+   215→   215→                  </div>
+   216→   216→                ))}
+   217→   217→              </div>
+   218→   218→            </div>
+   219→   219→          </div>
+   220→   220→        )}
+   221→   221→      </div>
+   222→   222→    )
+   223→   223→  }
+   224→   224→
+   225→   225→  return (
+   226→   226→    <div className="min-h-screen">
+   227→   227→      {/* Breadcrumb */}
+   228→   228→      <div className="bg-muted/30 py-3 border-b">
+   229→   229→        <div className="container mx-auto px-4">
+   230→   230→          <Breadcrumb>
+   231→   231→            <BreadcrumbList>
+   232→   232→              <BreadcrumbItem>
+   233→   233→                <BreadcrumbLink onClick={() => navigate('home')} className="cursor-pointer flex items-center gap-1">
+   234→   234→                  <Home className="h-3.5 w-3.5" />
+   235→   235→                  Home
+   236→   236→                </BreadcrumbLink>
+   237→   237→              </BreadcrumbItem>
+   238→   238→              <BreadcrumbSeparator />
+   239→   239→              <BreadcrumbItem>
+   240→   240→                <BreadcrumbLink className="text-foreground font-medium">Shopping Cart</BreadcrumbLink>
+   241→   241→              </BreadcrumbItem>
+   242→   242→            </BreadcrumbList>
+   243→   243→          </Breadcrumb>
+   244→   244→        </div>
+   245→   245→      </div>
+   246→   246→
+   247→   247→      {/* Header */}
+   248→   248→      <div className="bg-background border-b">
+   249→   249→        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+   250→   250→          <div>
+   251→   251→            <h1 className="text-2xl font-bold">Shopping Cart</h1>
+   252→   252→            <p className="text-sm text-muted-foreground">{itemCount} item{itemCount !== 1 ? 's' : ''} in your cart</p>
+   253→   253→          </div>
+   254→   254→          <Button
+   255→   255→            variant="ghost"
+   256→   256→            size="sm"
+   257→   257→            className="text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
+   258→   258→            onClick={handleClearCart}
+   259→   259→          >
+   260→   260→            {confirmClear ? (
+   261→   261→              <>
+   262→   262→                <AlertTriangle className="h-4 w-4 mr-1" /> Confirm Clear?
+   263→   263→              </>
+   264→   264→            ) : (
+   265→   265→              <>
+   266→   266→                <Trash2 className="h-4 w-4 mr-1" /> Clear Cart
+   267→   267→              </>
+   268→   268→            )}
+   269→   269→          </Button>
+   270→   270→        </div>
+   271→   271→      </div>
+   272→   272→
+   273→   273→      <div className="container mx-auto px-4 py-6">
+   274→   274→        <div className="grid lg:grid-cols-3 gap-6">
+   275→   275→          {/* Cart Items */}
+   276→   276→          <div className="lg:col-span-2 space-y-4">
+   277→   277→            {cartItems.map((item) => {
+   278→   278→              const price = item.discountPrice != null ? item.discountPrice : item.price
+   279→   279→              const hasDiscount = item.discountPrice != null && item.discountPrice < item.price
+   280→   280→              const isRemoving = removingId === item.id
+   281→   281→              return (
+   282→   282→                <Card
+   283→   283→                  key={item.id}
+   284→   284→                  className={`overflow-hidden transition-all duration-300 border shadow-sm hover:shadow-md ${
+   285→   285→                    isRemoving ? 'opacity-0 scale-95 translate-x-4' : 'opacity-100 scale-100'
+   286→   286→                  }`}
+   287→   287→                >
+   288→   288→                  <CardContent className="p-4 sm:p-5">
+   289→   289→                    <div className="flex gap-4 sm:gap-5">
+   290→   290→                      {/* Product Image - More prominent */}
+   291→   291→                      <div
+   292→   292→                        className="relative h-28 w-28 sm:h-36 sm:w-36 rounded-xl overflow-hidden bg-muted/30 flex-shrink-0 cursor-pointer group shadow-sm"
+   293→   293→                        onClick={() => navigate('product-detail', { id: item.productId })}
+   294→   294→                      >
+   295→   295→                        <Image
+   296→   296→                          src={item.image}
+   297→   297→                          alt={item.productName}
+   298→   298→                          fill
+   299→   299→                          className="object-cover group-hover:scale-110 transition-transform duration-500"
+   300→   300→                          sizes="144px"
+   301→   301→                        />
+   302→   302→                        {hasDiscount && (
+   303→   303→                          <div className="absolute top-1.5 left-1.5 bg-red-500 text-white text-xs px-2 py-0.5 rounded-md font-bold shadow-sm">
+   304→   304→                            -{Math.round(((item.price - (item.discountPrice ?? item.price)) / item.price) * 100)}%
+   305→   305→                          </div>
+   306→   306→                        )}
+   307→   307→                      </div>
+   308→   308→
+   309→   309→                      {/* Item Details */}
+   310→   310→                      <div className="flex-1 min-w-0">
+   311→   311→                        <div className="flex items-start justify-between gap-2">
+   312→   312→                          <div>
+   313→   313→                            <h3
+   314→   314→                              className="font-semibold line-clamp-2 cursor-pointer hover:text-primary transition-colors text-base"
+   315→   315→                              onClick={() => navigate('product-detail', { id: item.productId })}
+   316→   316→                            >
+   317→   317→                              {item.productName}
+   318→   318→                            </h3>
+   319→   319→                            <p className="text-xs text-muted-foreground mt-0.5">per {item.unit}</p>
+   320→   320→                          </div>
+   321→   321→                          <Button
+   322→   322→                            variant="ghost"
+   323→   323→                            size="icon"
+   324→   324→                            className="h-8 w-8 text-muted-foreground hover:text-red-500 hover:bg-red-50 flex-shrink-0 rounded-lg"
+   325→   325→                            onClick={() => handleRemove(item.id)}
+   326→   326→                          >
+   327→   327→                            <X className="h-4 w-4" />
+   328→   328→                          </Button>
+   329→   329→                        </div>
+   330→   330→
+   331→   331→                        <div className="flex items-baseline gap-2 mt-1.5">
+   332→   332→                          <span className="font-bold text-primary text-lg">৳{price.toLocaleString()}</span>
+   333→   333→                          {hasDiscount && (
+   334→   334→                            <span className="text-sm text-muted-foreground line-through">৳{item.price.toLocaleString()}</span>
+   335→   335→                          )}
+   336→   336→                        </div>
+   337→   337→
+   338→   338→                        <div className="flex items-center justify-between mt-3">
+   339→   339→                          {/* Quantity Stepper */}
+   340→   340→                          <div className="flex items-center border rounded-lg overflow-hidden shadow-sm">
+   341→   341→                            <button
+   342→   342→                              className="h-9 w-9 flex items-center justify-center hover:bg-primary/10 transition-colors active:scale-90"
+   343→   343→                              onClick={() => handleQuantityChange(item.id, item.quantity - 1)}
+   344→   344→                              disabled={item.quantity <= 1}
+   345→   345→                            >
+   346→   346→                              <Minus className="h-3.5 w-3.5" />
+   347→   347→                            </button>
+   348→   348→                            <span className="h-9 w-12 flex items-center justify-center text-sm font-semibold border-x bg-muted/30">{item.quantity}</span>
+   349→   349→                            <button
+   350→   350→                              className="h-9 w-9 flex items-center justify-center hover:bg-primary/10 transition-colors active:scale-90"
+   351→   351→                              onClick={() => handleQuantityChange(item.id, item.quantity + 1)}
+   352→   352→                              disabled={item.quantity >= item.stock}
+   353→   353→                            >
+   354→   354→                              <Plus className="h-3.5 w-3.5" />
+   355→   355→                            </button>
+   356→   356→                          </div>
+   357→   357→
+   358→   358→                          <div className="flex items-center gap-3">
+   359→   359→                            <span className="font-bold text-base">৳{(price * item.quantity).toLocaleString()}</span>
+   360→   360→                            <Button
+   361→   361→                              variant="ghost"
+   362→   362→                              size="icon"
+   363→   363→                              className="h-8 w-8 text-muted-foreground hover:text-red-500 hover:bg-red-50 rounded-lg"
+   364→   364→                              onClick={() => handleRemove(item.id)}
+   365→   365→                            >
+   366→   366→                              <Trash2 className="h-4 w-4" />
+   367→   367→                            </Button>
+   368→   368→                          </div>
+   369→   369→                        </div>
+   370→   370→
+   371→   371→                        <button
+   372→   372→                          className="text-xs text-muted-foreground hover:text-primary mt-2 flex items-center gap-1 transition-colors"
+   373→   373→                          onClick={async () => {
+   374→   374→                            await addToWishlist({
+   375→   375→                              productId: item.productId,
+   376→   376→                              productName: item.productName,
+   377→   377→                              price: item.price,
+   378→   378→                              discountPrice: item.discountPrice,
+   379→   379→                              image: item.image,
+   380→   380→                            })
+   381→   381→                            toast.success('Moved to wishlist')
+   382→   382→                          }}
+   383→   383→                        >
+   384→   384→                          <Heart className="h-3 w-3" /> Move to Wishlist
+   385→   385→                        </button>
+   386→   386→                      </div>
+   387→   387→                    </div>
+   388→   388→                  </CardContent>
+   389→   389→                </Card>
+   390→   390→              )
+   391→   391→            })}
+   392→   392→
+   393→   393→            {/* Continue Shopping */}
+   394→   394→            <button
+   395→   395→              className="text-sm text-primary hover:underline font-medium flex items-center gap-1 mt-2 py-2"
+   396→   396→              onClick={() => navigate('products')}
+   397→   397→            >
+   398→   398→              <ArrowLeft className="h-4 w-4" /> Continue Shopping
+   399→   399→            </button>
+   400→   400→          </div>
+   401→   401→
+   402→   402→          {/* Order Summary */}
+   403→   403→          <div>
+   404→   404→            <Card className="sticky top-4 shadow-lg border">
+   405→   405→              <CardHeader className="pb-3 bg-gradient-to-r from-primary/5 to-transparent rounded-t-lg">
+   406→   406→                <CardTitle className="text-lg flex items-center gap-2">
+   407→   407→                  <Package className="h-5 w-5 text-primary" />
+   408→   408→                  Order Summary
+   409→   409→                </CardTitle>
+   410→   410→              </CardHeader>
+   411→   411→              <CardContent className="space-y-4">
+   412→   412→                <div className="space-y-2.5">
+   413→   413→                  <div className="flex justify-between text-sm">
+   414→   414→                    <span className="text-muted-foreground">Subtotal ({itemCount} items)</span>
+   415→   415→                    <span className="font-medium">৳{sub.toLocaleString()}</span>
+   416→   416→                  </div>
+   417→   417→                  <div className="flex justify-between text-sm">
+   418→   418→                    <span className="text-muted-foreground">Delivery Charge</span>
+   419→   419→                    <span className={`font-medium ${shipping === 0 ? 'text-emerald-600' : ''}`}>
+   420→   420→                      {shipping === 0 ? '✓ Free' : `৳${shipping}`}
+   421→   421→                    </span>
+   422→   422→                  </div>
+   423→   423→                  {discount > 0 && (
+   424→   424→                    <div className="flex justify-between text-sm">
+   425→   425→                      <span className="text-muted-foreground">
+   426→   426→                        Discount
+   427→   427→                        {appliedCoupon && <Badge variant="secondary" className="ml-2 text-xs">{appliedCoupon}</Badge>}
+   428→   428→                      </span>
+   429→   429→                      <span className="text-emerald-600 font-medium">-৳{discount.toLocaleString()}</span>
+   430→   430→                    </div>
+   431→   431→                  )}
+   432→   432→                  <Separator />
+   433→   433→                  <div className="flex justify-between font-bold text-lg">
+   434→   434→                    <span>Total</span>
+   435→   435→                    <span className="text-primary">৳{Math.max(0, total).toLocaleString()}</span>
+   436→   436→                  </div>
+   437→   437→                </div>
+   438→   438→
+   439→   439→                {/* You saved summary */}
+   440→   440→                {(totalSavings > 0 || discount > 0) && (
+   441→   441→                  <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center gap-2">
+   442→   442→                    <BadgeCheck className="h-5 w-5 text-emerald-600 flex-shrink-0" />
+   443→   443→                    <div>
+   444→   444→                      <p className="text-sm font-semibold text-emerald-700">
+   445→   445→                        You save ৳{((totalSavings || 0) + (discount || 0)).toLocaleString()}
+   446→   446→                      </p>
+   447→   447→                      <p className="text-[11px] text-emerald-600">
+   448→   448→                        {totalSavings > 0 && `Product discounts: ৳${totalSavings.toLocaleString()}`}
+   449→   449→                        {totalSavings > 0 && discount > 0 && ' · '}
+   450→   450→                        {discount > 0 && `Coupon: ৳${discount.toLocaleString()}`}
+   451→   451→                      </p>
+   452→   452→                    </div>
+   453→   453→                  </div>
+   454→   454→                )}
+   455→   455→
+   456→   456→                {/* Coupon Code - Better visual treatment */}
+   457→   457→                <div className="p-4 rounded-xl bg-gradient-to-r from-secondary/5 to-secondary/10 border border-secondary/15">
+   458→   458→                  <Label className="text-sm font-semibold mb-2.5 block flex items-center gap-1.5">
+   459→   459→                    <Gift className="h-4 w-4 text-secondary" />
+   460→   460→                    Coupon Code
+   461→   461→                  </Label>
+   462→   462→                  {appliedCoupon ? (
+   463→   463→                    <div className="flex items-center justify-between">
+   464→   464→                      <Badge className="text-sm bg-emerald-100 text-emerald-800 border-emerald-200">
+   465→   465→                        <Tag className="h-3 w-3 mr-1" />
+   466→   466→                        {appliedCoupon}
+   467→   467→                      </Badge>
+   468→   468→                      <Button variant="ghost" size="sm" onClick={handleRemoveCoupon} className="text-red-500 h-7 text-xs">
+   469→   469→                        Remove
+   470→   470→                      </Button>
+   471→   471→                    </div>
+   472→   472→                  ) : (
+   473→   473→                    <div className="flex gap-2">
+   474→   474→                      <Input
+   475→   475→                        placeholder="Enter coupon code"
+   476→   476→                        value={couponCode}
+   477→   477→                        onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+   478→   478→                        className="h-9 text-sm border-secondary/20 focus:border-secondary"
+   479→   479→                      />
+   480→   480→                      <Button
+   481→   481→                        variant="outline"
+   482→   482→                        size="sm"
+   483→   483→                        onClick={handleApplyCoupon}
+   484→   484→                        disabled={couponLoading || !couponCode.trim()}
+   485→   485→                        className="h-9 border-secondary/30 text-secondary hover:bg-secondary/10"
+   486→   486→                      >
+   487→   487→                        {couponLoading ? '...' : 'Apply'}
+   488→   488→                      </Button>
+   489→   489→                    </div>
+   490→   490→                  )}
+   491→   491→                </div>
+   492→   492→
+   493→   493→                {/* Free Shipping Progress */}
+   494→   494→                {shipping > 0 && (
+   495→   495→                  <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
+   496→   496→                    <p className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
+   497→   497→                      <Truck className="h-3.5 w-3.5 text-primary" />
+   498→   498→                      Add ৳{Math.max(0, (siteConfig?.freeShippingThreshold || 1500) - sub).toLocaleString()} more for free delivery
+   499→   499→                    </p>
+   500→   500→                    <div className="h-2 rounded-full bg-muted overflow-hidden">
+   501→   501→                      <div
+   502→   502→                        className="h-full rounded-full bg-primary transition-all duration-500"
+   503→   503→                        style={{ width: `${Math.min(100, (sub / (siteConfig?.freeShippingThreshold || 1500)) * 100)}%` }}
+   504→   504→                      />
+   505→   505→                    </div>
+   506→   506→                  </div>
+   507→   507→                )}
+   508→   508→
+   509→   509→                {/* Estimated Delivery */}
+   510→   510→                <div className="flex items-center gap-2 text-sm text-muted-foreground p-3 rounded-lg bg-muted/30">
+   511→   511→                  <Truck className="h-4 w-4 text-primary flex-shrink-0" />
+   512→   512→                  <span>Estimated delivery: <strong className="text-foreground">{estimatedDelivery}</strong></span>
+   513→   513→                </div>
+   514→   514→
+   515→   515→                {/* Checkout Button */}
+   516→   516→                <Button
+   517→   517→                  className="w-full h-12 text-base rounded-xl shadow-md shadow-primary/20 font-semibold"
+   518→   518→                  size="lg"
+   519→   519→                  onClick={() => navigate('checkout')}
+   520→   520→                >
+   521→   521→                  Proceed to Checkout <ArrowRight className="h-4 w-4 ml-2" />
+   522→   522→                </Button>
+   523→   523→
+   524→   524→                {/* Continue Shopping */}
+   525→   525→                <Button
+   526→   526→                  variant="outline"
+   527→   527→                  className="w-full h-10 rounded-xl"
+   528→   528→                  onClick={() => navigate('products')}
+   529→   529→                >
+   530→   530→                  <ArrowLeft className="h-4 w-4 mr-2" /> Continue Shopping
+   531→   531→                </Button>
+   532→   532→
+   533→   533→                {/* Secure Badge */}
+   534→   534→                <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+   535→   535→                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+   536→   536→                  Secure checkout with SSL encryption
+   537→   537→                </div>
+   538→   538→
+   539→   539→                {shipping > 0 && (
+   540→   540→                  <p className="text-xs text-muted-foreground text-center">
+   541→   541→                    Free delivery on orders over ৳{(siteConfig?.freeShippingThreshold || 1500).toLocaleString()}
+   542→   542→                  </p>
+   543→   543→                )}
+   544→   544→              </CardContent>
+   545→   545→            </Card>
+   546→   546→          </div>
+   547→   547→        </div>
+   548→   548→
+   549→   549→        {/* You Might Also Like Section */}
+   550→   550→        {suggestedProducts.length > 0 && (
+   551→   551→          <div className="mt-10 border-t pt-8">
+   552→   552→            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+   553→   553→              <ShoppingBag className="h-5 w-5 text-primary" />
+   554→   554→              You Might Also Like
+   555→   555→            </h3>
+   556→   556→            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+   557→   557→              {suggestedProducts.slice(0, 6).map((product) => {
+   558→   558→                const effectivePrice = product.discountPrice ?? product.price
+   559→   559→                return (
+   560→   560→                  <div key={product.id} className="border rounded-xl p-2 hover:shadow-md transition-all duration-200 group">
+   561→   561→                    <div
+   562→   562→                      className="aspect-square rounded-lg bg-muted/50 overflow-hidden mb-2 cursor-pointer"
+   563→   563→                      onClick={() => navigate('product-detail', { id: product.id })}
+   564→   564→                    >
+   565→   565→                      <img
+   566→   566→                        src={product.images?.[0]?.url || '/placeholder.png'}
+   567→   567→                        alt={product.name}
+   568→   568→                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+   569→   569→                      />
+   570→   570→                    </div>
+   571→   571→                    <p
+   572→   572→                      className="text-xs font-medium line-clamp-2 cursor-pointer hover:text-primary transition-colors"
+   573→   573→                      onClick={() => navigate('product-detail', { id: product.id })}
+   574→   574→                    >
+   575→   575→                      {product.name}
+   576→   576→                    </p>
+   577→   577→                    <p className="text-sm text-primary font-bold mt-1">৳{effectivePrice.toLocaleString()}</p>
+   578→   578→                    <Button
+   579→   579→                      size="sm"
+   580→   580→                      className="w-full h-7 text-xs mt-2 rounded-lg"
+   581→   581→                      onClick={() => handleAddSuggestedToCart(product)}
+   582→   582→                    >
+   583→   583→                      Add to Cart
+   584→   584→                    </Button>
+   585→   585→                  </div>
+   586→   586→                )
+   587→   587→              })}
+   588→   588→            </div>
+   589→   589→          </div>
+   590→   590→        )}
+   591→   591→      </div>
+   592→   592→    </div>
+   593→   593→  )
+   594→   594→}
+   595→   595→

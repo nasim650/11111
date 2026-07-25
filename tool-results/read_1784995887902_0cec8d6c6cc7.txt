@@ -1,0 +1,705 @@
+     1→'use client'
+     2→
+     3→import React, { useEffect, useState, useCallback } from 'react'
+     4→import { Card, CardContent } from '@/components/ui/card'
+     5→import { Button } from '@/components/ui/button'
+     6→import { Badge } from '@/components/ui/badge'
+     7→import { Checkbox } from '@/components/ui/checkbox'
+     8→import {
+     9→  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+    10→} from '@/components/ui/table'
+    11→import {
+    12→  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+    13→} from '@/components/ui/dialog'
+    14→import {
+    15→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    16→} from '@/components/ui/select'
+    17→import {
+    18→  DropdownMenu,
+    19→  DropdownMenuContent,
+    20→  DropdownMenuItem,
+    21→  DropdownMenuTrigger,
+    22→} from '@/components/ui/dropdown-menu'
+    23→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    24→import { Skeleton } from '@/components/ui/skeleton'
+    25→import { Separator } from '@/components/ui/separator'
+    26→import { toast } from 'sonner'
+    27→import { extractItems } from '@/lib/api'
+    28→import { useAppStore } from '@/lib/store'
+    29→import {
+    30→  ShoppingCart, Eye, Truck, Printer, Package,
+    31→  QrCode,
+    32→  X, Loader2, ArrowUpDown, CheckCircle2, ListChecks,
+    33→} from 'lucide-react'
+    34→import OrderPrintMenu from '@/components/shared/OrderPrintMenu'
+    35→import BulkPrintDialog from '@/components/shared/BulkPrintDialog'
+    36→import QRCodeDialog from '@/components/shared/QRCodeDialog'
+    37→import OrderTimeline from '@/components/shared/OrderTimeline'
+    38→import OrderPrintPanel from '@/components/shared/OrderPrintPanel'
+    39→import {
+    40→  ORDER_STATUS,
+    41→  PRODUCTION_FLOW,
+    42→  TERMINAL_STATUSES,
+    43→  ALL_STATUSES,
+    44→  getStatusMeta,
+    45→  getStatusLabel,
+    46→  getStatusBadgeClass,
+    47→  getNextStatus,
+    48→  isTerminal,
+    49→  getFlowProgress,
+    50→} from '@/lib/order-status'
+    51→
+    52→interface OrderItem {
+    53→  id: string
+    54→  productId: string
+    55→  productName: string
+    56→  quantity: number
+    57→  unit: string
+    58→  price: number
+    59→  total: number
+    60→  image?: string
+    61→}
+    62→
+    63→interface Order {
+    64→  id: string
+    65→  orderNumber: string
+    66→  userId: string
+    67→  customerName?: string
+    68→  customerEmail?: string
+    69→  customerPhone?: string
+    70→  items: OrderItem[]
+    71→  subtotal: number
+    72→  deliveryCharge: number
+    73→  discount: number
+    74→  total: number
+    75→  status: string
+    76→  paymentMethod: string
+    77→  paymentStatus: string
+    78→  shippingAddress?: string
+    79→  note?: string
+    80→  createdAt: string
+    81→  updatedAt: string
+    82→}
+    83→
+    84→// ─── Status config comes from the shared `@/lib/order-status` module ─────────
+    85→// (single source of truth — reused by AdminOrdersPage, OrderTimeline,
+    86→// OrderDetailPage, OrderTrackingPage). Local aliases keep call sites terse.
+    87→
+    88→const statusColors = (s: string) => getStatusBadgeClass(s)
+    89→const statusFlow = ALL_STATUSES.map((s) => s as string)
+    90→const statusLabels = (s: string) => getStatusLabel(s)
+    91→
+    92→export default function AdminOrdersPage() {
+    93→  const { navigate } = useAppStore()
+    94→  const [orders, setOrders] = useState<Order[]>([])
+    95→  const [loading, setLoading] = useState(true)
+    96→  const [statusFilter, setStatusFilter] = useState('all')
+    97→  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+    98→  const [detailOpen, setDetailOpen] = useState(false)
+    99→  const [updating, setUpdating] = useState(false)
+   100→
+   101→  // ─── Multi-select state ──────────────────────────────────────────────────
+   102→  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+   103→  const [bulkPrintOpen, setBulkPrintOpen] = useState(false)
+   104→  const [qrDialogOpen, setQrDialogOpen] = useState(false)
+   105→  const [qrOrderId, setQrOrderId] = useState<string>('')
+   106→  const [qrOrderNumber, setQrOrderNumber] = useState<string>('')
+   107→
+   108→  // ─── Detail dialog print state ───────────────────────────────────────────
+   109→  // (Print loading state now lives inside the shared <OrderPrintPanel />.)
+   110→
+   111→  const fetchOrders = useCallback(async () => {
+   112→    try {
+   113→      const params = new URLSearchParams()
+   114→      if (statusFilter !== 'all') params.set('status', statusFilter)
+   115→      params.set('limit', '50')
+   116→      const res = await fetch(`/api/orders?${params.toString()}`)
+   117→      if (res.ok) {
+   118→        const data = await res.json()
+   119→        setOrders(extractItems(data))
+   120→      }
+   121→    } catch {
+   122→      toast.error('Failed to fetch orders')
+   123→    } finally {
+   124→      setLoading(false)
+   125→    }
+   126→  }, [statusFilter])
+   127→
+   128→  useEffect(() => { fetchOrders() }, [fetchOrders])
+   129→
+   130→  // ─── Selection helpers ────────────────────────────────────────────────────
+   131→
+   132→  const allSelected = orders.length > 0 && selectedIds.size === orders.length
+   133→  const someSelected = selectedIds.size > 0 && !allSelected
+   134→
+   135→  function toggleSelectAll() {
+   136→    if (allSelected) {
+   137→      setSelectedIds(new Set())
+   138→    } else {
+   139→      setSelectedIds(new Set(orders.map((o) => o.id)))
+   140→    }
+   141→  }
+   142→
+   143→  function toggleSelect(orderId: string) {
+   144→    setSelectedIds((prev) => {
+   145→      const next = new Set(prev)
+   146→      if (next.has(orderId)) {
+   147→        next.delete(orderId)
+   148→      } else {
+   149→        next.add(orderId)
+   150→      }
+   151→      return next
+   152→    })
+   153→  }
+   154→
+   155→  function clearSelection() {
+   156→    setSelectedIds(new Set())
+   157→  }
+   158→
+   159→  // ─── Open detail ─────────────────────────────────────────────────────────
+   160→
+   161→  function openDetail(order: Order) {
+   162→    setSelectedOrder(order)
+   163→    setDetailOpen(true)
+   164→  }
+   165→
+   166→  // ─── Update status ───────────────────────────────────────────────────────
+   167→
+   168→  async function updateStatus(orderId: string, status: string) {
+   169→    setUpdating(true)
+   170→    try {
+   171→      const res = await fetch(`/api/orders/${orderId}/status-history`, {
+   172→        method: 'POST',
+   173→        headers: { 'Content-Type': 'application/json' },
+   174→        body: JSON.stringify({ status, note: `Status updated to ${status}` }),
+   175→      })
+   176→      if (!res.ok) {
+   177→        const data = await res.json()
+   178→        throw new Error(data.error || 'Failed to update status')
+   179→      }
+   180→      toast.success(`Order status updated to ${statusLabels(status) || status}`)
+   181→      fetchOrders()
+   182→      if (selectedOrder?.id === orderId) {
+   183→        setSelectedOrder((prev) => prev ? { ...prev, status } : null)
+   184→      }
+   185→    } catch (error) {
+   186→      toast.error(error instanceof Error ? error.message : 'Failed to update order status')
+   187→    } finally {
+   188→      setUpdating(false)
+   189→    }
+   190→  }
+   191→
+   192→  // ─── Bulk status update ──────────────────────────────────────────────────
+   193→
+   194→  async function bulkUpdateStatus(newStatus: string) {
+   195→    if (selectedIds.size === 0) return
+   196→    setUpdating(true)
+   197→    let successCount = 0
+   198→    for (const orderId of selectedIds) {
+   199→      try {
+   200→        const res = await fetch(`/api/orders/${orderId}/status-history`, {
+   201→          method: 'POST',
+   202→          headers: { 'Content-Type': 'application/json' },
+   203→          body: JSON.stringify({ status: newStatus, note: `Bulk status update to ${newStatus}` }),
+   204→        })
+   205→        if (res.ok) successCount++
+   206→      } catch {
+   207→        // continue
+   208→      }
+   209→    }
+   210→    toast.success(`${successCount} order${successCount !== 1 ? 's' : ''} updated to ${statusLabels(newStatus) || newStatus}`)
+   211→    clearSelection()
+   212→    fetchOrders()
+   213→    setUpdating(false)
+   214→  }
+   215→
+   216→  // ─── Detail dialog print helpers ─────────────────────────────────────────
+   217→  // (Print logic now lives in the shared <OrderPrintPanel /> component,
+   218→  //  which reuses the existing print API endpoints. No duplicate logic here.)
+   219→
+   220→  function openQRForOrder(orderId: string, orderNumber: string) {
+   221→    setQrOrderId(orderId)
+   222→    setQrOrderNumber(orderNumber)
+   223→    setQrDialogOpen(true)
+   224→  }
+   225→
+   226→  // ─── Status counts ───────────────────────────────────────────────────────
+   227→
+   228→  const countFor = (key: string) =>
+   229→    orders.filter((o) => o.status === key || o.status === key.toUpperCase()).length
+   230→
+   231→  const counts = {
+   232→    all: orders.length,
+   233→    [ORDER_STATUS.PENDING]: countFor(ORDER_STATUS.PENDING),
+   234→    [ORDER_STATUS.CONFIRMED]: countFor(ORDER_STATUS.CONFIRMED),
+   235→    [ORDER_STATUS.PROCESSING]: countFor(ORDER_STATUS.PROCESSING),
+   236→    [ORDER_STATUS.PACKED]: countFor(ORDER_STATUS.PACKED),
+   237→    [ORDER_STATUS.READY_TO_SHIP]: countFor(ORDER_STATUS.READY_TO_SHIP),
+   238→    [ORDER_STATUS.SHIPPED]: countFor(ORDER_STATUS.SHIPPED),
+   239→    [ORDER_STATUS.DELIVERED]: countFor(ORDER_STATUS.DELIVERED),
+   240→    [ORDER_STATUS.CANCELLED]: countFor(ORDER_STATUS.CANCELLED),
+   241→    [ORDER_STATUS.RETURNED]: countFor(ORDER_STATUS.RETURNED),
+   242→  }
+   243→
+   244→  return (
+   245→    <div className="space-y-4">
+   246→      {/* ─── Header with Print Queue Link ──────────────────────────────────── */}
+   247→      <div className="flex items-center justify-between">
+   248→        <div />
+   249→        <Button
+   250→          variant="outline"
+   251→          size="sm"
+   252→          className="gap-1.5 rounded-xl border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+   253→          onClick={() => navigate('admin-print-queue')}
+   254→        >
+   255→          <ListChecks className="size-3.5" />
+   256→          Print Queue Monitor
+   257→        </Button>
+   258→      </div>
+   259→
+   260→      {/* ─── Status Tabs ──────────────────────────────────────────────────── */}
+   261→      <Tabs value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setLoading(true) }}>
+   262→        <TabsList className="flex-wrap h-auto">
+   263→          <TabsTrigger value="all">All ({counts.all})</TabsTrigger>
+   264→          {PRODUCTION_FLOW.map((s) => (
+   265→            <TabsTrigger key={s} value={s}>
+   266→              {getStatusLabel(s)} ({counts[s]})
+   267→            </TabsTrigger>
+   268→          ))}
+   269→          {TERMINAL_STATUSES.map((s) => (
+   270→            <TabsTrigger key={s} value={s}>
+   271→              {getStatusLabel(s)} ({counts[s]})
+   272→            </TabsTrigger>
+   273→          ))}
+   274→        </TabsList>
+   275→      </Tabs>
+   276→
+   277→      {/* ─── Bulk Actions Bar ─────────────────────────────────────────────── */}
+   278→      {selectedIds.size > 0 && (
+   279→        <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-200 animate-in fade-in slide-in-from-top-2">
+   280→          <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-200 font-semibold">
+   281→            {selectedIds.size} order{selectedIds.size !== 1 ? 's' : ''} selected
+   282→          </Badge>
+   283→
+   284→          <Button
+   285→            size="sm"
+   286→            onClick={() => setBulkPrintOpen(true)}
+   287→            className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 rounded-xl"
+   288→          >
+   289→            <Printer className="size-3.5" />
+   290→            Bulk Print
+   291→          </Button>
+   292→
+   293→          <DropdownMenu>
+   294→            <DropdownMenuTrigger asChild>
+   295→              <Button variant="outline" size="sm" className="gap-1.5 rounded-xl border-amber-200 text-amber-700 hover:bg-amber-50">
+   296→                <ArrowUpDown className="size-3.5" />
+   297→                Update Status
+   298→              </Button>
+   299→            </DropdownMenuTrigger>
+   300→            <DropdownMenuContent>
+   301→              {statusFlow.map((s) => (
+   302→                <DropdownMenuItem
+   303→                  key={s}
+   304→                  onClick={() => bulkUpdateStatus(s)}
+   305→                  disabled={updating}
+   306→                  className="cursor-pointer"
+   307→                >
+   308→                  <Badge variant="secondary" className={`text-[10px] mr-2 ${statusColors(s)}`}>
+   309→                    {s}
+   310→                  </Badge>
+   311→                  Set to {s}
+   312→                </DropdownMenuItem>
+   313→              ))}
+   314→            </DropdownMenuContent>
+   315→          </DropdownMenu>
+   316→
+   317→          <div className="flex-1" />
+   318→
+   319→          <Button
+   320→            variant="ghost"
+   321→            size="sm"
+   322→            onClick={clearSelection}
+   323→            className="gap-1.5 text-gray-500 hover:text-gray-700 rounded-xl"
+   324→          >
+   325→            <X className="size-3.5" />
+   326→            Clear
+   327→          </Button>
+   328→        </div>
+   329→      )}
+   330→
+   331→      {/* ─── Orders Table ─────────────────────────────────────────────────── */}
+   332→      <Card>
+   333→        <CardContent className="p-0">
+   334→          {loading ? (
+   335→            <div className="p-6 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+   336→          ) : orders.length === 0 ? (
+   337→            <div className="text-center py-12">
+   338→              <ShoppingCart className="mx-auto size-10 text-muted-foreground mb-2" />
+   339→              <p className="text-muted-foreground">No orders found</p>
+   340→            </div>
+   341→          ) : (
+   342→            <Table>
+   343→              <TableHeader>
+   344→                <TableRow>
+   345→                  <TableHead className="w-10">
+   346→                    <Checkbox
+   347→                      checked={allSelected}
+   348→                      ref={(el) => {
+   349→                        if (el) {
+   350→                          (el as unknown as HTMLButtonElement).dataset.state = someSelected ? 'indeterminate' : allSelected ? 'checked' : 'unchecked'
+   351→                        }
+   352→                      }}
+   353→                      onCheckedChange={toggleSelectAll}
+   354→                      className="data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+   355→                    />
+   356→                  </TableHead>
+   357→                  <TableHead>Order #</TableHead>
+   358→                  <TableHead>Customer</TableHead>
+   359→                  <TableHead>Items</TableHead>
+   360→                  <TableHead>Total</TableHead>
+   361→                  <TableHead>Payment</TableHead>
+   362→                  <TableHead>Status</TableHead>
+   363→                  <TableHead>Date</TableHead>
+   364→                  <TableHead className="w-24 text-center">Actions</TableHead>
+   365→                </TableRow>
+   366→              </TableHeader>
+   367→              <TableBody>
+   368→                {orders.map((order) => (
+   369→                  <TableRow
+   370→                    key={order.id}
+   371→                    className={selectedIds.has(order.id) ? 'bg-emerald-50/50' : ''}
+   372→                  >
+   373→                    <TableCell>
+   374→                      <Checkbox
+   375→                        checked={selectedIds.has(order.id)}
+   376→                        onCheckedChange={() => toggleSelect(order.id)}
+   377→                        className="data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+   378→                      />
+   379→                    </TableCell>
+   380→                    <TableCell className="font-medium text-sm">{order.orderNumber}</TableCell>
+   381→                    <TableCell>
+   382→                      <div>
+   383→                        <p className="text-sm">{order.customerName ?? 'N/A'}</p>
+   384→                        <p className="text-xs text-muted-foreground">{order.customerPhone ?? ''}</p>
+   385→                      </div>
+   386→                    </TableCell>
+   387→                    <TableCell>
+   388→                      <Badge variant="secondary" className="text-xs">{order.items?.length ?? 0} items</Badge>
+   389→                    </TableCell>
+   390→                    <TableCell className="font-medium">৳{order.total.toLocaleString()}</TableCell>
+   391→                    <TableCell>
+   392→                      <div>
+   393→                        <Badge variant={order.paymentStatus === 'PAID' ? 'default' : 'secondary'} className="text-xs">
+   394→                          {order.paymentStatus}
+   395→                        </Badge>
+   396→                        <p className="text-xs text-muted-foreground mt-0.5">{order.paymentMethod}</p>
+   397→                      </div>
+   398→                    </TableCell>
+   399→                    <TableCell>
+   400→                      <div className="flex items-center gap-1.5">
+   401→                        <Badge variant="secondary" className={statusColors(order.status)}>
+   402→                          {statusLabels(order.status) || order.status}
+   403→                        </Badge>
+   404→                        <DropdownMenu>
+   405→                          <DropdownMenuTrigger asChild>
+   406→                            <Button
+   407→                              variant="ghost"
+   408→                              size="icon"
+   409→                              className="size-6 hover:bg-emerald-50 hover:text-emerald-700"
+   410→                              disabled={updating}
+   411→                            >
+   412→                              <ArrowUpDown className="size-3" />
+   413→                            </Button>
+   414→                          </DropdownMenuTrigger>
+   415→                          <DropdownMenuContent align="end">
+   416→                            {statusFlow.map((s) => (
+   417→                              <DropdownMenuItem
+   418→                                key={s}
+   419→                                onClick={() => updateStatus(order.id, s)}
+   420→                                disabled={updating || order.status === s}
+   421→                                className="cursor-pointer"
+   422→                              >
+   423→                                <Badge variant="secondary" className={`text-[10px] mr-2 ${statusColors(s)}`}>
+   424→                                  {statusLabels(s) || s}
+   425→                                </Badge>
+   426→                                Set to {statusLabels(s) || s}
+   427→                              </DropdownMenuItem>
+   428→                            ))}
+   429→                          </DropdownMenuContent>
+   430→                        </DropdownMenu>
+   431→                      </div>
+   432→                    </TableCell>
+   433→                    <TableCell className="text-xs text-muted-foreground">
+   434→                      {new Date(order.createdAt).toLocaleDateString()}
+   435→                    </TableCell>
+   436→                    <TableCell>
+   437→                      <div className="flex items-center justify-center gap-0.5">
+   438→                        <Button variant="ghost" size="icon" className="size-7" onClick={() => openDetail(order)}>
+   439→                          <Eye className="size-3" />
+   440→                        </Button>
+   441→                        <OrderPrintMenu
+   442→                          orderId={order.id}
+   443→                          orderNumber={order.orderNumber}
+   444→                          onQRCode={() => openQRForOrder(order.id, order.orderNumber)}
+   445→                        />
+   446→                        <Button
+   447→                          variant="ghost"
+   448→                          size="icon"
+   449→                          className="size-7 hover:bg-amber-50 hover:text-amber-700"
+   450→                          onClick={() => openQRForOrder(order.id, order.orderNumber)}
+   451→                        >
+   452→                          <QrCode className="size-3" />
+   453→                        </Button>
+   454→                      </div>
+   455→                    </TableCell>
+   456→                  </TableRow>
+   457→                ))}
+   458→              </TableBody>
+   459→            </Table>
+   460→          )}
+   461→        </CardContent>
+   462→      </Card>
+   463→
+   464→      {/* ─── Bulk Print Dialog ─────────────────────────────────────────────── */}
+   465→      <BulkPrintDialog
+   466→        selectedOrderIds={Array.from(selectedIds)}
+   467→        open={bulkPrintOpen}
+   468→        onOpenChange={setBulkPrintOpen}
+   469→        onComplete={() => {
+   470→          clearSelection()
+   471→          fetchOrders()
+   472→        }}
+   473→      />
+   474→
+   475→      {/* ─── QR Code Dialog ────────────────────────────────────────────────── */}
+   476→      <QRCodeDialog
+   477→        orderId={qrOrderId}
+   478→        orderNumber={qrOrderNumber}
+   479→        open={qrDialogOpen}
+   480→        onOpenChange={setQrDialogOpen}
+   481→      />
+   482→
+   483→      {/* ─── Order Detail Dialog ───────────────────────────────────────────── */}
+   484→      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+   485→        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+   486→          <DialogHeader>
+   487→            <DialogTitle className="flex items-center gap-2">
+   488→              <Package className="size-5" /> Order {selectedOrder?.orderNumber}
+   489→            </DialogTitle>
+   490→          </DialogHeader>
+   491→          {selectedOrder && (
+   492→            <div className="space-y-6">
+   493→              {/* ─── Status Summary + Flow ─────────────────────────────────── */}
+   494→              <div className="space-y-3">
+   495→                <div className="flex flex-wrap items-center gap-3">
+   496→                  <Badge variant="secondary" className={statusColors(selectedOrder.status)}>
+   497→                    {statusLabels(selectedOrder.status) || selectedOrder.status}
+   498→                  </Badge>
+   499→                  {isTerminal(selectedOrder.status) && (
+   500→                    <Badge variant="outline" className="text-xs text-muted-foreground border-gray-300">
+   501→                      Terminal state
+   502→                    </Badge>
+   503→                  )}
+   504→                  {updating && <Loader2 className="size-4 animate-spin text-emerald-600" />}
+   505→                </div>
+   506→
+   507→                {/* Production flow progress bar */}
+   508→                {!isTerminal(selectedOrder.status) && (
+   509→                  <div className="rounded-xl border bg-gray-50/50 p-3">
+   510→                    <div className="flex items-center justify-between mb-2">
+   511→                      <span className="text-xs font-semibold text-gray-600">Production Flow</span>
+   512→                      <span className="text-xs text-muted-foreground">
+   513→                        {getFlowProgress(selectedOrder.status)}% complete
+   514→                      </span>
+   515→                    </div>
+   516→                    <div className="flex items-center gap-1">
+   517→                      {PRODUCTION_FLOW.map((s, i) => {
+   518→                        const meta = getStatusMeta(s)
+   519→                        const Icon = meta.icon
+   520→                        const currentIdx = PRODUCTION_FLOW.indexOf(selectedOrder.status as never)
+   521→                        const isDone = i <= currentIdx
+   522→                        const isCurrent = s === selectedOrder.status
+   523→                        return (
+   524→                          <div key={s} className="flex items-center flex-1 last:flex-none">
+   525→                            <div
+   526→                              className={`flex flex-col items-center gap-1 ${isCurrent ? 'scale-110' : ''} transition-transform`}
+   527→                              title={meta.label}
+   528→                            >
+   529→                              <div
+   530→                                className={`h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-bold ${
+   531→                                  isDone
+   532→                                    ? `${meta.dotClass} text-white`
+   533→                                    : 'bg-gray-200 text-gray-400'
+   534→                                } ${isCurrent ? 'ring-2 ring-offset-1 ring-emerald-400' : ''}`}
+   535→                              >
+   536→                                <Icon className="size-3.5" />
+   537→                              </div>
+   538→                              <span className={`text-[9px] ${isDone ? 'text-gray-700 font-medium' : 'text-gray-400'}`}>
+   539→                                {meta.shortLabel}
+   540→                              </span>
+   541→                            </div>
+   542→                            {i < PRODUCTION_FLOW.length - 1 && (
+   543→                              <div className={`flex-1 h-0.5 mx-1 ${i < currentIdx ? 'bg-emerald-400' : 'bg-gray-200'}`} />
+   544→                            )}
+   545→                          </div>
+   546→                        )
+   547→                      })}
+   548→                    </div>
+   549→                  </div>
+   550→                )}
+   551→
+   552→                {/* Status actions: quick advance + full selector */}
+   553→                <div className="flex flex-wrap items-center gap-2">
+   554→                  {!isTerminal(selectedOrder.status) && getNextStatus(selectedOrder.status) && (
+   555→                    <Button
+   556→                      size="sm"
+   557→                      className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 rounded-xl"
+   558→                      disabled={updating}
+   559→                      onClick={() => updateStatus(selectedOrder.id, getNextStatus(selectedOrder.status)!)}
+   560→                    >
+   561→                      <CheckCircle2 className="size-3.5" />
+   562→                      Advance to {getStatusLabel(getNextStatus(selectedOrder.status)!)}
+   563→                    </Button>
+   564→                  )}
+   565→                  <Select
+   566→                    value={selectedOrder.status}
+   567→                    onValueChange={(v) => updateStatus(selectedOrder.id, v)}
+   568→                    disabled={updating}
+   569→                  >
+   570→                    <SelectTrigger className="w-48 h-9">
+   571→                      <SelectValue />
+   572→                    </SelectTrigger>
+   573→                    <SelectContent>
+   574→                      <span className="text-[10px] text-muted-foreground uppercase tracking-wide px-2 py-1 block">
+   575→                        Production Flow
+   576→                      </span>
+   577→                      {PRODUCTION_FLOW.map((s) => (
+   578→                        <SelectItem key={s} value={s}>{getStatusLabel(s)}</SelectItem>
+   579→                      ))}
+   580→                      <span className="text-[10px] text-muted-foreground uppercase tracking-wide px-2 py-1 block">
+   581→                        Terminal
+   582→                      </span>
+   583→                      {TERMINAL_STATUSES.map((s) => (
+   584→                        <SelectItem key={s} value={s}>{getStatusLabel(s)}</SelectItem>
+   585→                      ))}
+   586→                    </SelectContent>
+   587→                  </Select>
+   588→                </div>
+   589→              </div>
+   590→
+   591→              {/* ─── Status Visibility: Payment / Delivery / Print ─────────── */}
+   592→              <div className="grid grid-cols-3 gap-3">
+   593→                <div className="rounded-xl border p-3 text-center">
+   594→                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Payment</p>
+   595→                  <Badge
+   596→                    variant="secondary"
+   597→                    className={`text-[11px] ${
+   598→                      selectedOrder.paymentStatus === 'paid'
+   599→                        ? 'bg-emerald-100 text-emerald-800'
+   600→                        : selectedOrder.paymentStatus === 'pending'
+   601→                        ? 'bg-amber-100 text-amber-800'
+   602→                        : 'bg-gray-100 text-gray-800'
+   603→                    }`}
+   604→                  >
+   605→                    {selectedOrder.paymentStatus || '—'}
+   606→                  </Badge>
+   607→                  <p className="text-[10px] text-muted-foreground mt-1">{selectedOrder.paymentMethod || '—'}</p>
+   608→                </div>
+   609→                <div className="rounded-xl border p-3 text-center">
+   610→                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Delivery</p>
+   611→                  <Badge variant="secondary" className={`text-[11px] ${statusColors(selectedOrder.status)}`}>
+   612→                    {statusLabels(selectedOrder.status) || '—'}
+   613→                  </Badge>
+   614→                  <p className="text-[10px] text-muted-foreground mt-1">
+   615→                    {isTerminal(selectedOrder.status) ? 'Closed' : 'In progress'}
+   616→                  </p>
+   617→                </div>
+   618→                <div className="rounded-xl border p-3 text-center">
+   619→                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Print</p>
+   620→                  <Badge variant="secondary" className="text-[11px] bg-emerald-100 text-emerald-800">
+   621→                    Ready
+   622→                  </Badge>
+   623→                  <p className="text-[10px] text-muted-foreground mt-1">5 document types</p>
+   624→                </div>
+   625→              </div>
+   626→
+   627→              {/* ─── Print Panel (unified, reuses existing print APIs) ─────── */}
+   628→              <OrderPrintPanel orderId={selectedOrder.id} orderNumber={selectedOrder.orderNumber} />
+   629→
+   630→              {/* Customer Info */}
+   631→              <div className="grid gap-4 sm:grid-cols-2">
+   632→                <Card>
+   633→                  <CardContent className="p-4">
+   634→                    <h4 className="text-sm font-semibold mb-2">Customer Info</h4>
+   635→                    <p className="text-sm">{selectedOrder.customerName ?? 'N/A'}</p>
+   636→                    <p className="text-sm text-muted-foreground">{selectedOrder.customerEmail ?? ''}</p>
+   637→                    <p className="text-sm text-muted-foreground">{selectedOrder.customerPhone ?? ''}</p>
+   638→                  </CardContent>
+   639→                </Card>
+   640→                <Card>
+   641→                  <CardContent className="p-4">
+   642→                    <h4 className="text-sm font-semibold mb-2">Shipping Address</h4>
+   643→                    <p className="text-sm">{selectedOrder.shippingAddress ?? 'N/A'}</p>
+   644→                  </CardContent>
+   645→                </Card>
+   646→              </div>
+   647→
+   648→              {/* Items */}
+   649→              <div>
+   650→                <h4 className="text-sm font-semibold mb-2">Order Items</h4>
+   651→                <Table>
+   652→                  <TableHeader>
+   653→                    <TableRow>
+   654→                      <TableHead>Product</TableHead>
+   655→                      <TableHead>Price</TableHead>
+   656→                      <TableHead>Qty</TableHead>
+   657→                      <TableHead>Total</TableHead>
+   658→                    </TableRow>
+   659→                  </TableHeader>
+   660→                  <TableBody>
+   661→                    {(selectedOrder.items ?? []).map((item) => (
+   662→                      <TableRow key={item.id}>
+   663→                        <TableCell className="text-sm">{item.productName}</TableCell>
+   664→                        <TableCell className="text-sm">৳{item.price}</TableCell>
+   665→                        <TableCell className="text-sm">{item.quantity} {item.unit}</TableCell>
+   666→                        <TableCell className="text-sm font-medium">৳{item.total}</TableCell>
+   667→                      </TableRow>
+   668→                    ))}
+   669→                  </TableBody>
+   670→                </Table>
+   671→              </div>
+   672→
+   673→              {/* Totals */}
+   674→              <div className="border-t pt-4 space-y-1 text-sm">
+   675→                <div className="flex justify-between"><span>Subtotal</span><span>৳{selectedOrder.subtotal.toLocaleString()}</span></div>
+   676→                <div className="flex justify-between"><span>Delivery Charge</span><span>৳{selectedOrder.deliveryCharge.toLocaleString()}</span></div>
+   677→                {selectedOrder.discount > 0 && (
+   678→                  <div className="flex justify-between text-green-600"><span>Discount</span><span>-৳{selectedOrder.discount.toLocaleString()}</span></div>
+   679→                )}
+   680→                <div className="flex justify-between font-bold text-base pt-2 border-t"><span>Total</span><span>৳{selectedOrder.total.toLocaleString()}</span></div>
+   681→              </div>
+   682→
+   683→              {selectedOrder.note && (
+   684→                <div>
+   685→                  <h4 className="text-sm font-semibold mb-1">Order Note</h4>
+   686→                  <p className="text-sm text-muted-foreground">{selectedOrder.note}</p>
+   687→                </div>
+   688→              )}
+   689→
+   690→              {/* Status Timeline */}
+   691→              <OrderTimeline orderId={selectedOrder.id} />
+   692→
+   693→              <div className="text-xs text-muted-foreground">
+   694→                <p>Order Date: {new Date(selectedOrder.createdAt).toLocaleString()}</p>
+   695→                <p>Last Updated: {new Date(selectedOrder.updatedAt).toLocaleString()}</p>
+   696→                <p>Payment: {selectedOrder.paymentMethod} - {selectedOrder.paymentStatus}</p>
+   697→              </div>
+   698→            </div>
+   699→          )}
+   700→        </DialogContent>
+   701→      </Dialog>
+   702→    </div>
+   703→  )
+   704→}
+   705→
