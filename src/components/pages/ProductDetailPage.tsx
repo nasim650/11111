@@ -40,6 +40,8 @@ import {
   Flame,
   BoxSelect,
   CircleDot,
+  RotateCcw,
+  ImageOff,
 } from 'lucide-react'
 import { motion, AnimatePresence, useInView } from 'framer-motion'
 import { Button } from '@/components/ui/button'
@@ -54,6 +56,7 @@ import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from '@/components/ui/breadcrumb'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Table, TableBody, TableRow, TableCell } from '@/components/ui/table'
 import { useAppStore, type CartItem, type WishlistItem } from '@/lib/store'
 import { extractItems } from '@/lib/api'
 import ProductCard from '@/components/shared/ProductCard'
@@ -533,7 +536,7 @@ export default function ProductDetailPage() {
     : 0
   const savingsAmount = hasDiscount ? (product.price - product.discountPrice!) : 0
   const inStock = product.stock > 0
-  const lowStock = inStock && product.stock <= 5
+  const lowStock = inStock && product.stock <= 10
   const avgRating = reviews.length > 0
     ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
     : 0
@@ -743,156 +746,25 @@ export default function ProductDetailPage() {
               IMAGE GALLERY SECTION
           ══════════════════════════════════════════════════════════════════════ */}
           <AnimatedSection>
-            <div className="space-y-4 lg:sticky lg:top-24">
-              {/* Main Image with Zoom-on-Hover */}
-              <div
-                ref={imageContainerRef}
-                className="relative aspect-square rounded-2xl overflow-hidden bg-gradient-to-br from-muted/40 to-muted/20 cursor-zoom-in group"
-                onMouseEnter={() => setIsZooming(true)}
-                onMouseLeave={() => setIsZooming(false)}
-                onMouseMove={handleMouseMove}
-                onClick={() => setFullscreenOpen(true)}
-                onTouchStart={handleTouchStart}
-                onTouchEnd={(e) => handleTouchEnd(e, images.length)}
-              >
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={selectedImage}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="absolute inset-0"
-                  >
-                    <Image
-                      src={imageUrl}
-                      alt={product.name}
-                      fill
-                      className="object-cover transition-transform duration-300 ease-out"
-                      style={{
-                        transformOrigin: `${zoomPosition.x}% ${zoomPosition.y}%`,
-                        transform: isZooming ? 'scale(2)' : 'scale(1)',
-                      }}
-                      sizes="(max-width: 768px) 100vw, 50vw"
-                      priority
-                    />
-                  </motion.div>
-                </AnimatePresence>
-
-                {/* Zoom indicator */}
-                <div className="absolute top-3 right-3 flex items-center gap-2 z-10">
-                  <div className="h-9 w-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                    <ZoomIn className="h-4 w-4" />
-                  </div>
-                </div>
-
-                {/* Discount badge */}
-                {hasDiscount && (
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ type: 'spring', stiffness: 300, delay: 0.2 }}
-                    className="absolute top-3 left-3 z-10"
-                  >
-                    <Badge className="bg-gradient-to-r from-red-500 to-red-600 text-white text-sm px-3 py-1 shadow-lg shadow-red-500/30">
-                      <Flame className="h-3 w-3 mr-1" />
-                      -{discountPercent}%
-                    </Badge>
-                  </motion.div>
-                )}
-
-                {/* New/BestSeller badges */}
-                <div className="absolute top-3 left-3 flex flex-col gap-1 z-10" style={{ left: hasDiscount ? 'auto' : '12px', right: hasDiscount ? 'auto' : undefined, marginLeft: hasDiscount ? '90px' : 0 }}>
-                  {product.isNewArrival && (
-                    <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.3 }}>
-                      <Badge className="bg-emerald-500 text-white text-xs shadow-md shadow-emerald-500/30">
-                        <Sparkles className="h-3 w-3 mr-1" />NEW
-                      </Badge>
-                    </motion.div>
-                  )}
-                  {product.isBestSeller && (
-                    <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.4 }}>
-                      <Badge className="bg-amber-500 text-white text-xs shadow-md shadow-amber-500/30">
-                        <Star className="h-3 w-3 mr-1 fill-current" />BEST SELLER
-                      </Badge>
-                    </motion.div>
-                  )}
-                </div>
-
-                {/* Image counter */}
-                {images.length > 1 && (
-                  <div className="absolute bottom-3 right-3 bg-black/60 text-white text-xs px-2.5 py-1 rounded-full backdrop-blur-sm z-10">
-                    {selectedImage + 1} / {images.length}
-                  </div>
-                )}
-
-                {/* Mobile dot navigation */}
-                {images.length > 1 && (
-                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10 md:hidden">
-                    {images.map((_, i) => (
-                      <button
-                        key={i}
-                        onClick={(e) => { e.stopPropagation(); setSelectedImage(i); setShowVideo(false) }}
-                        className={`h-2 rounded-full transition-all duration-300 ${
-                          i === selectedImage ? 'w-6 bg-white' : 'w-2 bg-white/50'
-                        }`}
-                        aria-label={`Go to image ${i + 1}`}
-                      />
-                    ))}
-                  </div>
-                )}
-
-                {/* Video play overlay if video available */}
-                {videos.length > 0 && !showVideo && selectedImage === 0 && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setShowVideo(true); setSelectedImage(0) }}
-                    className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-black/70 text-white text-xs px-3 py-1.5 rounded-full backdrop-blur-sm hover:bg-black/80 transition-colors z-10 md:bottom-10"
-                  >
-                    <Play className="h-3.5 w-3.5 fill-current" /> Watch Video
-                  </button>
-                )}
-              </div>
-
-              {/* Video Player */}
-              {showVideo && videos.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="rounded-xl overflow-hidden bg-black"
-                >
-                  <video
-                    src={videos[0].url}
-                    controls
-                    autoPlay
-                    className="w-full aspect-video"
-                    poster={videos[0].thumbnail || undefined}
-                  />
-                  <button
-                    onClick={() => setShowVideo(false)}
-                    className="absolute top-2 right-2 h-8 w-8 rounded-full bg-black/50 text-white flex items-center justify-center"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </motion.div>
-              )}
-
-              {/* Thumbnail Strip */}
+            <div className="flex gap-4 lg:sticky lg:top-24">
+              {/* ── Vertical Thumbnail Strip (Desktop, left side) ── */}
               {images.length > 1 && (
-                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                <div className="hidden md:flex flex-col gap-3 flex-shrink-0 max-h-[600px] overflow-y-auto scrollbar-hide">
                   {images.map((img, idx) => (
                     <motion.button
                       key={img.id}
-                      className={`relative h-16 w-16 sm:h-20 sm:w-20 rounded-xl overflow-hidden flex-shrink-0 border-2 transition-all duration-200 ${
-                        idx === selectedImage
+                      className={`relative h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all duration-200 ${
+                        idx === selectedImage && !showVideo
                           ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-md'
-                          : 'border-border/50 hover:border-emerald-500/40'
+                          : 'border-transparent opacity-60 hover:opacity-100'
                       }`}
                       onClick={() => { setSelectedImage(idx); setShowVideo(false) }}
                       whileTap={{ scale: 0.95 }}
+                      aria-label={`View image ${idx + 1}`}
+                      aria-current={idx === selectedImage ? 'true' : undefined}
                     >
                       <Image src={img.url} alt={img.alt || product.name} fill className="object-cover" sizes="80px" />
-                      {idx === selectedImage && (
+                      {idx === selectedImage && !showVideo && (
                         <div className="absolute inset-0 bg-emerald-500/10" />
                       )}
                     </motion.button>
@@ -900,12 +772,13 @@ export default function ProductDetailPage() {
                   {/* Video thumbnail */}
                   {videos.length > 0 && (
                     <button
-                      className={`relative h-16 w-16 sm:h-20 sm:w-20 rounded-xl overflow-hidden flex-shrink-0 border-2 transition-all duration-200 flex items-center justify-center bg-muted ${
+                      className={`relative h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all duration-200 flex items-center justify-center bg-muted ${
                         showVideo
                           ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-md'
-                          : 'border-border/50 hover:border-emerald-500/40'
+                          : 'border-transparent opacity-60 hover:opacity-100'
                       }`}
                       onClick={() => { setShowVideo(true); setSelectedImage(0) }}
+                      aria-label="Watch product video"
                     >
                       <Play className="h-6 w-6 text-emerald-600" />
                       <span className="absolute bottom-0.5 text-[8px] font-medium text-muted-foreground">VIDEO</span>
@@ -913,6 +786,226 @@ export default function ProductDetailPage() {
                   )}
                 </div>
               )}
+
+              <div className="flex-1 space-y-4 min-w-0">
+                {/* ── Main Image with Zoom-on-Hover ── */}
+                <div
+                  ref={imageContainerRef}
+                  className="relative aspect-square rounded-2xl overflow-hidden bg-gradient-to-br from-muted/40 to-muted/20 cursor-zoom-in group shadow-lg border border-emerald-100/60 dark:border-emerald-900/30"
+                  onMouseEnter={() => setIsZooming(true)}
+                  onMouseLeave={() => setIsZooming(false)}
+                  onMouseMove={handleMouseMove}
+                  onClick={() => images.length > 0 && setFullscreenOpen(true)}
+                  onTouchStart={handleTouchStart}
+                  onTouchEnd={(e) => handleTouchEnd(e, images.length)}
+                >
+                  {images.length === 0 ? (
+                    /* Empty state placeholder */
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
+                      <div className="h-20 w-20 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-3">
+                        <ImageOff className="h-9 w-9 text-emerald-500" />
+                      </div>
+                      <p className="text-sm font-semibold text-muted-foreground line-clamp-2 max-w-[220px]">{product.name}</p>
+                      <p className="text-xs text-muted-foreground/70 mt-1">No image available</p>
+                    </div>
+                  ) : (
+                    <>
+                      <AnimatePresence mode="wait">
+                        <motion.div
+                          key={selectedImage}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.3 }}
+                          className="absolute inset-0"
+                        >
+                          <Image
+                            src={imageUrl}
+                            alt={product.name}
+                            fill
+                            className="object-cover transition-transform duration-300 ease-out"
+                            style={{
+                              transformOrigin: `${zoomPosition.x}% ${zoomPosition.y}%`,
+                              transform: isZooming ? 'scale(2)' : 'scale(1)',
+                            }}
+                            sizes="(max-width: 768px) 100vw, 50vw"
+                            priority
+                          />
+                        </motion.div>
+                      </AnimatePresence>
+
+                      {/* Zoom indicator */}
+                      <div className="absolute top-3 right-3 flex items-center gap-2 z-10">
+                        <div className="h-9 w-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                          <ZoomIn className="h-4 w-4" />
+                        </div>
+                      </div>
+
+                      {/* Discount badge */}
+                      {hasDiscount && (
+                        <motion.div
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ type: 'spring', stiffness: 300, delay: 0.2 }}
+                          className="absolute top-3 left-3 z-10"
+                        >
+                          <Badge className="bg-gradient-to-r from-red-500 to-red-600 text-white text-sm px-3 py-1 shadow-lg shadow-red-500/30">
+                            <Flame className="h-3 w-3 mr-1" />
+                            -{discountPercent}%
+                          </Badge>
+                        </motion.div>
+                      )}
+
+                      {/* New/BestSeller badges */}
+                      <div className="absolute top-3 left-3 flex flex-col gap-1 z-10" style={{ left: hasDiscount ? 'auto' : '12px', right: hasDiscount ? 'auto' : undefined, marginLeft: hasDiscount ? '90px' : 0 }}>
+                        {product.isNewArrival && (
+                          <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.3 }}>
+                            <Badge className="bg-emerald-500 text-white text-xs shadow-md shadow-emerald-500/30">
+                              <Sparkles className="h-3 w-3 mr-1" />NEW
+                            </Badge>
+                          </motion.div>
+                        )}
+                        {product.isBestSeller && (
+                          <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.4 }}>
+                            <Badge className="bg-amber-500 text-white text-xs shadow-md shadow-amber-500/30">
+                              <Star className="h-3 w-3 mr-1 fill-current" />BEST SELLER
+                            </Badge>
+                          </motion.div>
+                        )}
+                      </div>
+
+                      {/* Origin badge (top-right under zoom indicator) */}
+                      {product.origin && (
+                        <div className="absolute top-14 right-3 z-10">
+                          <Badge className="bg-white/90 dark:bg-black/50 text-emerald-700 dark:text-emerald-400 text-[10px] gap-1 backdrop-blur-sm shadow-sm">
+                            <BadgeCheck className="h-3 w-3" />
+                            {product.origin}
+                          </Badge>
+                        </div>
+                      )}
+
+                      {/* Image navigation arrows (hover overlay) */}
+                      {images.length > 1 && (
+                        <>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setSelectedImage((i) => Math.max(0, i - 1)); setShowVideo(false) }}
+                            disabled={selectedImage === 0}
+                            className="absolute left-2 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/60 transition-all opacity-0 group-hover:opacity-100 disabled:opacity-0 disabled:cursor-not-allowed"
+                            aria-label="Previous image"
+                          >
+                            <ChevronLeft className="h-5 w-5" />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setSelectedImage((i) => Math.min(images.length - 1, i + 1)); setShowVideo(false) }}
+                            disabled={selectedImage === images.length - 1}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/60 transition-all opacity-0 group-hover:opacity-100 disabled:opacity-0 disabled:cursor-not-allowed"
+                            aria-label="Next image"
+                          >
+                            <ChevronRight className="h-5 w-5" />
+                          </button>
+                        </>
+                      )}
+
+                      {/* Image counter */}
+                      {images.length > 1 && (
+                        <div className="absolute bottom-3 right-3 bg-black/60 text-white text-xs px-2.5 py-1 rounded-full backdrop-blur-sm z-10">
+                          {selectedImage + 1} / {images.length}
+                        </div>
+                      )}
+
+                      {/* Mobile dot navigation */}
+                      {images.length > 1 && (
+                        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10 md:hidden">
+                          {images.map((_, i) => (
+                            <button
+                              key={i}
+                              onClick={(e) => { e.stopPropagation(); setSelectedImage(i); setShowVideo(false) }}
+                              className={`h-2 rounded-full transition-all duration-300 ${
+                                i === selectedImage ? 'w-6 bg-white' : 'w-2 bg-white/50'
+                              }`}
+                              aria-label={`Go to image ${i + 1}`}
+                            />
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Video play overlay if video available */}
+                      {videos.length > 0 && !showVideo && selectedImage === 0 && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setShowVideo(true); setSelectedImage(0) }}
+                          className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-black/70 text-white text-xs px-3 py-1.5 rounded-full backdrop-blur-sm hover:bg-black/80 transition-colors z-10 md:bottom-10"
+                        >
+                          <Play className="h-3.5 w-3.5 fill-current" /> Watch Video
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Video Player */}
+                {showVideo && videos.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="rounded-xl overflow-hidden bg-black"
+                  >
+                    <video
+                      src={videos[0].url}
+                      controls
+                      autoPlay
+                      className="w-full aspect-video"
+                      poster={videos[0].thumbnail || undefined}
+                    />
+                    <button
+                      onClick={() => setShowVideo(false)}
+                      className="absolute top-2 right-2 h-8 w-8 rounded-full bg-black/50 text-white flex items-center justify-center"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </motion.div>
+                )}
+
+                {/* ── Horizontal Thumbnail Strip (Mobile, below main image) ── */}
+                {images.length > 1 && (
+                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide md:hidden">
+                    {images.map((img, idx) => (
+                      <motion.button
+                        key={img.id}
+                        className={`relative h-16 w-16 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all duration-200 ${
+                          idx === selectedImage && !showVideo
+                            ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-md'
+                            : 'border-transparent opacity-60 hover:opacity-100'
+                        }`}
+                        onClick={() => { setSelectedImage(idx); setShowVideo(false) }}
+                        whileTap={{ scale: 0.95 }}
+                        aria-label={`View image ${idx + 1}`}
+                        aria-current={idx === selectedImage ? 'true' : undefined}
+                      >
+                        <Image src={img.url} alt={img.alt || product.name} fill className="object-cover" sizes="80px" />
+                        {idx === selectedImage && !showVideo && (
+                          <div className="absolute inset-0 bg-emerald-500/10" />
+                        )}
+                      </motion.button>
+                    ))}
+                    {/* Video thumbnail */}
+                    {videos.length > 0 && (
+                      <button
+                        className={`relative h-16 w-16 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all duration-200 flex items-center justify-center bg-muted ${
+                          showVideo
+                            ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-md'
+                            : 'border-transparent opacity-60 hover:opacity-100'
+                        }`}
+                        onClick={() => { setShowVideo(true); setSelectedImage(0) }}
+                        aria-label="Watch product video"
+                      >
+                        <Play className="h-6 w-6 text-emerald-600" />
+                        <span className="absolute bottom-0.5 text-[8px] font-medium text-muted-foreground">VIDEO</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </AnimatedSection>
 
@@ -961,20 +1054,34 @@ export default function ProductDetailPage() {
 
             {/* Rating - Clickable to scroll to reviews */}
             <AnimatedSection delay={0.1}>
-              <button
-                onClick={scrollToReviews}
-                className="flex items-center gap-2 group"
-              >
-                <div className="flex gap-0.5">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Star key={i} className={`h-4 w-4 transition-colors ${i < Math.round(avgRating) ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'}`} />
-                  ))}
-                </div>
-                <span className="text-sm font-semibold">{avgRating.toFixed(1)}</span>
-                <span className="text-sm text-muted-foreground group-hover:text-emerald-600 transition-colors">
-                  ({reviews.length} review{reviews.length !== 1 ? 's' : ''}) ↓
-                </span>
-              </button>
+              {reviews.length > 0 ? (
+                <button
+                  onClick={scrollToReviews}
+                  className="flex items-center gap-2 group"
+                >
+                  <div className="flex gap-0.5">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Star key={i} className={`h-4 w-4 transition-colors ${i < Math.round(avgRating) ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'}`} />
+                    ))}
+                  </div>
+                  <span className="text-sm font-semibold">{avgRating.toFixed(1)}</span>
+                  <span className="text-sm text-muted-foreground group-hover:text-emerald-600 transition-colors">
+                    ({reviews.length} review{reviews.length !== 1 ? 's' : ''}) ↓
+                  </span>
+                </button>
+              ) : (
+                <button
+                  onClick={scrollToReviews}
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-emerald-600 transition-colors group"
+                >
+                  <div className="flex gap-0.5">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Star key={i} className="h-4 w-4 text-muted-foreground/30" />
+                    ))}
+                  </div>
+                  <span className="group-hover:underline">Be the first to review</span>
+                </button>
+              )}
             </AnimatedSection>
 
             {/* ── Enhanced Price Section ── */}
@@ -986,7 +1093,7 @@ export default function ProductDetailPage() {
                 <div className="relative">
                   <div className="flex items-baseline gap-3 flex-wrap">
                     <motion.span
-                      className="text-3xl md:text-4xl font-extrabold text-emerald-700 dark:text-emerald-400"
+                      className="text-2xl md:text-3xl font-bold text-emerald-600 dark:text-emerald-400"
                       initial={{ scale: 0.9 }}
                       animate={{ scale: 1 }}
                       transition={{ type: 'spring', stiffness: 200 }}
@@ -994,7 +1101,7 @@ export default function ProductDetailPage() {
                       ৳{(effectivePrice ?? 0).toLocaleString()}
                     </motion.span>
                     {hasDiscount && (
-                      <span className="text-xl text-muted-foreground line-through decoration-red-400/60">৳{(product.price ?? 0).toLocaleString()}</span>
+                      <span className="text-lg md:text-xl text-muted-foreground line-through decoration-red-400/60">৳{(product.price ?? 0).toLocaleString()}</span>
                     )}
                     <span className="text-muted-foreground text-sm">/ {product.unit}</span>
                   </div>
@@ -1103,8 +1210,8 @@ export default function ProductDetailPage() {
                 {inStock ? (
                   <div className="space-y-3">
                     {/* Quantity Selector */}
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center border-2 rounded-xl overflow-hidden shadow-sm border-emerald-200 dark:border-emerald-800 bg-background">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <div className="flex items-center border-2 rounded-full overflow-hidden shadow-sm border-emerald-200 dark:border-emerald-800 bg-background">
                         <button
                           className="h-12 w-12 flex items-center justify-center hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors active:scale-90"
                           onClick={() => setQuantity((q) => Math.max(1, q - 1))}
@@ -1132,16 +1239,18 @@ export default function ProductDetailPage() {
                           <Plus className="h-4 w-4" />
                         </button>
                       </div>
-                      <span className="text-sm text-muted-foreground">
+                      <span className="text-sm text-muted-foreground">per {product.unit}</span>
+                      <span className="text-sm text-muted-foreground ml-auto sm:ml-0">
                         Subtotal: <span className="font-bold text-foreground text-base">৳{(effectivePrice * quantity).toLocaleString()}</span>
                       </span>
                     </div>
 
                     {/* Add to Cart + Buy Now */}
-                    <div className="flex gap-3">
+                    <div className="flex flex-col sm:flex-row gap-3">
                       <motion.div className="flex-1" whileTap={{ scale: 0.97 }}>
                         <Button
-                          className="w-full h-12 rounded-xl text-base font-semibold bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 transition-all"
+                          variant="outline"
+                          className="w-full h-12 rounded-xl text-base font-semibold border-2 border-emerald-500 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30 transition-all"
                           size="lg"
                           disabled={adding}
                           onClick={handleAddToCart}
@@ -1159,6 +1268,26 @@ export default function ProductDetailPage() {
                           Buy Now <ArrowRight className="h-4 w-4 ml-2" />
                         </Button>
                       </motion.div>
+                    </div>
+
+                    {/* Compact Trust Badges — below Add to Cart + Buy Now */}
+                    <div className="grid grid-cols-3 gap-2 pt-1">
+                      {[
+                        { icon: ShieldCheck, label: '100% Authentic', color: 'emerald' },
+                        { icon: Truck, label: 'Fast Delivery', color: 'amber' },
+                        { icon: RotateCcw, label: 'Easy Returns', color: 'emerald' },
+                      ].map(({ icon: Icon, label, color }, idx) => (
+                        <motion.div
+                          key={label}
+                          className="flex flex-col items-center gap-1 p-2.5 rounded-lg bg-muted/40 border border-border/50 text-center hover:border-emerald-200 dark:hover:border-emerald-800 transition-colors"
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.3 + idx * 0.05 }}
+                        >
+                          <Icon className={`h-4 w-4 ${color === 'emerald' ? 'text-emerald-600' : 'text-amber-600'}`} />
+                          <span className="text-[10px] font-semibold leading-tight">{label}</span>
+                        </motion.div>
+                      ))}
                     </div>
                   </div>
                 ) : (
@@ -1469,7 +1598,7 @@ export default function ProductDetailPage() {
               </TabsList>
 
               <TabsContent value="description" className="mt-6">
-                <div className="prose max-w-none">
+                <div className="prose prose-sm max-w-none dark:prose-invert">
                   {product.description ? (
                     <div dangerouslySetInnerHTML={{ __html: product.description }} />
                   ) : (
@@ -1504,13 +1633,17 @@ export default function ProductDetailPage() {
 
               <TabsContent value="specifications" className="mt-6">
                 {allSpecs.length > 0 ? (
-                  <div className="max-w-2xl">
-                    {allSpecs.map((spec, idx) => (
-                      <div key={idx} className={`flex justify-between py-3 ${idx < allSpecs.length - 1 ? 'border-b' : ''}`}>
-                        <span className="text-muted-foreground font-medium">{spec.key}</span>
-                        <span className="font-medium">{spec.value}</span>
-                      </div>
-                    ))}
+                  <div className="max-w-2xl rounded-lg overflow-hidden border border-border">
+                    <Table>
+                      <TableBody>
+                        {allSpecs.map((spec, idx) => (
+                          <TableRow key={idx} className={idx % 2 === 0 ? 'bg-muted/30 hover:bg-muted/40' : 'hover:bg-muted/40'}>
+                            <TableCell className="font-semibold text-muted-foreground w-1/3">{spec.key}</TableCell>
+                            <TableCell className="font-medium">{spec.value}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </div>
                 ) : (
                   <p className="text-muted-foreground">No specifications available.</p>
@@ -1573,6 +1706,32 @@ export default function ProductDetailPage() {
 
                   {/* Reviews List */}
                   <div className="lg:col-span-2 space-y-6">
+                    {/* Prominent "Write a Review" button at top */}
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-lg font-semibold">
+                        {reviews.length > 0 ? `Customer Reviews (${reviews.length})` : 'Customer Reviews'}
+                      </h3>
+                      {isAuthenticated ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-full border-emerald-200 dark:border-emerald-800 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                          onClick={() => document.getElementById('review-form')?.scrollIntoView({ behavior: 'smooth' })}
+                        >
+                          <MessageSquare className="h-4 w-4 mr-1.5" />
+                          Write a Review
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-full"
+                          onClick={() => navigate('login')}
+                        >
+                          Login to Review
+                        </Button>
+                      )}
+                    </div>
                     {isAuthenticated && (
                       <Card id="review-form" className="shadow-sm border-emerald-100 dark:border-emerald-900/30">
                         <CardContent className="p-4">
