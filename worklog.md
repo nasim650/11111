@@ -1095,3 +1095,110 @@ File: `src/components/pages/ProductsPage.tsx`
 4. **Add a search results page** with enhanced filter UI
 5. **Add product comparison** (compare 2-3 products side by side)
 6. **Add a "Deal of the Day" section** with countdown timer on homepage
+
+---
+Task ID: 14
+Agent: general-purpose
+Task: Replace print queue/loyalty with Recent Orders + Low Stock Alert on admin dashboard
+
+Work Log:
+- Removed dead "Print Queue Summary" card (referenced deleted /api/print-queue, print-utils.ts). Always showed 0/zeros and "No items in print queue".
+- Removed dead "Loyalty Points Summary" card (referenced removed checkout loyalty UI). Always showed 0/zeros.
+- Removed supporting dead code in src/components/pages/admin/DashboardHome.tsx:
+  * Imports: useRef (React), motion + AnimatePresence (framer-motion), and lucide icons only used by removed sections — Printer, Star, Clock, Loader2, CheckCircle was KEPT (reused in new empty state), XCircle, FileText, Tag, Receipt, Truck.
+  * Type defs: PrintQueueRecentItem interface and the printQueue / loyaltyPoints fields on DashboardStats.
+  * Constants: PRINT_QUEUE_STATUS_CONFIG, DOC_TYPE_ICONS, DOC_TYPE_LABELS.
+  * Helper: useAnimatedCounter function (only used for loyalty counters).
+  * Locals in component: animatedIssued, animatedBalance, printQueue, loyaltyPts.
+- Added new imports: authFetch, extractItems from @/lib/api.
+- Added new state: recentOrders (any[]) and lowStockProducts (any[]).
+- Added useEffect that fetches /api/orders?limit=5 (recent orders) and /api/products?status=active&limit=50 (filtered client-side for stock ≤ 10, sliced to 5). Both use authFetch + extractItems with .catch(() => {}) for graceful failures.
+- Added new "Recent Orders" card replacing Print Queue:
+  * Title with ShoppingCart icon (emerald-600).
+  * Compact list rows: order number + colored orderStatus badge (reuses statusColors map), customer name (falls back user.name → guestName → 'Guest') · date, totalAmount in emerald-700 ৳.
+  * Empty state: "No recent orders".
+  * "View All Orders" button → navigate('admin-orders').
+- Added new "Low Stock Alert" card replacing Loyalty Points:
+  * Title with AlertTriangle icon (amber-500), amber border + subtle gradient bg.
+  * Compact list rows: 8x8 product image thumbnail (images[0].url) with Package fallback, name + price, stock count colored red (≤5) or amber (6–10).
+  * Empty state: CheckCircle (emerald-400) + "All products well stocked".
+  * "View All Products" button → navigate('admin-products').
+- Field-name handling per task hint: orders API returns orderStatus (not status), totalAmount (not total), guestName (not customerName), and includes user.name — all handled with null-safe fallbacks.
+- Preserved all stat cards, the Revenue Overview chart, the existing Revenue Chart + Low Stock row, the existing bottom Recent Orders table, and Quick Actions. Only the Print Queue + Loyalty grid row was replaced.
+
+Stage Summary:
+- Single file changed: src/components/pages/admin/DashboardHome.tsx (now 564 lines, down from 672).
+- TypeScript verification: `bunx tsc --noEmit 2>&1 | grep "DashboardHome"` → empty (no errors). Full `bunx tsc --noEmit` → clean (no output, zero project-wide TS errors).
+- Theme preserved: emerald accents for Recent Orders, amber accents for Low Stock Alert, matches existing Khati Khadyo design system.
+- All API calls use authFetch (admin JWT attached automatically). Data shape robust to null/undefined via optional chaining + Number() coercion.
+- Dev server NOT started per instructions.
+
+---
+Task ID: CRON-R9
+Agent: main-orchestrator (webDevReview cycle 9)
+Task: QA admin dashboard, replace dead print queue/loyalty sections with Recent Orders + Low Stock
+
+## Current Project Status Assessment
+QA via agent-browser confirmed the project is stable:
+- ✅ Admin dashboard loads with 7 stat cards (Revenue, Orders, Pending, Customers, Products, Categories, Completed)
+- ✅ Revenue Overview chart renders
+- ✅ All customer flows work (login, cart, checkout, orders, wishlist, reviews)
+- ✅ Category banner + chips on products page
+- ✅ Frequently Bought Together on product detail
+- ✅ All APIs return 200, 0 HTTP errors
+
+Bug found: Admin dashboard had dead "Print Queue Summary" and "Loyalty Points Summary" sections referencing removed features (always showing 0/zeros, wasting space).
+
+## Completed Modifications
+
+### 1. Replaced dead dashboard sections (Task 14 subagent)
+File: `src/components/pages/admin/DashboardHome.tsx` (672 → 564 lines)
+
+**Removed (dead code):**
+- "Print Queue Summary" card (print system removed — always showed 0)
+- "Loyalty Points Summary" card (loyalty UI removed — always showed 0)
+- Dead imports: useRef, motion, AnimatePresence, Printer, Star, Clock, Loader2, XCircle, FileText, Tag, Receipt, Truck
+- Dead types/constants: PrintQueueRecentItem, printQueue/loyaltyPoints fields, PRINT_QUEUE_STATUS_CONFIG, DOC_TYPE_ICONS, DOC_TYPE_LABELS
+- Dead helpers: useAnimatedCounter, animatedIssued, animatedBalance
+
+**Added "Recent Orders" card (replaces Print Queue):**
+- Shows 5 most recent orders fetched via `authFetch('/api/orders?limit=5')`
+- Each row: order number, colored status badge, customer name (user.name → guestName → Guest), date, total (৳ emerald)
+- "View All Orders" button → admin-orders
+- ShoppingCart icon, emerald accent
+
+**Added "Low Stock Alert" card (replaces Loyalty):**
+- Shows products with stock ≤ 10 (fetched via `authFetch('/api/products?status=active&limit=50')`, client-side filtered)
+- Each row: product image (h-8 w-8, Package fallback), name, price, stock count (red ≤5, amber 6-10)
+- "All products well stocked" empty state with CheckCircle icon
+- "View All Products" button → admin-products
+- AlertTriangle icon, amber accent
+
+**Fixed:** Unused eslint-disable directive warning
+
+**Verified:**
+- Dashboard now shows "Recent Orders" with KK-20260725-08190 (pending, Test Customer, ৳950) and KK-20260725-29356 (pending, Test Customer, ৳505)
+- "Low Stock Alert" shows "All products well stocked" (all products have stock > 10)
+- VLM confirms: "Print Queue and Loyalty sections gone", "Recent Orders section with order details", "high and modern quality"
+
+## Verification Results
+- ✅ ESLint: 0 errors, 0 warnings
+- ✅ TypeScript: 0 src errors
+- ✅ Admin dashboard: 7 stat cards + Recent Orders + Low Stock Alert + Revenue Overview chart
+- ✅ Dead print queue/loyalty sections removed
+- ✅ VLM confirms: "high and modern", "old sections gone", "Recent Orders with order details"
+- ✅ 0 HTTP 404/500 errors in dev.log
+- ✅ DB state: 8 products, 13 images, 8 reviews, 2 orders
+
+## Unresolved Issues / Risks
+1. **Dev server memory**: Can die under rapid edit cycles. Stable when left running.
+2. **Dormant Prisma models**: LoyaltyPoint, PrintQueue, etc. remain in schema (harmless empty tables).
+3. **Dashboard revenue shows ৳0**: Orders are pending (not delivered), so no revenue counted. This is correct behavior — revenue should only count for delivered/paid orders.
+
+## Priority Recommendations for Next Phase
+1. **Add a "Deal of the Day" section** with countdown timer on homepage
+2. **Add admin customer detail view** (view customer's orders, addresses, profile)
+3. **Add "You May Also Like" cross-category recommendations** on product detail
+4. **Improve checkout Step 2→3→4 flow** (test payment selection and order placement in browser)
+5. **Add product comparison** (compare 2-3 products side by side)
+6. **Add a search results page** with enhanced filter UI
