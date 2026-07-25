@@ -1,0 +1,724 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useCallback, useRef } from 'react'
+     4→import Image from 'next/image'
+     5→import { X, Minus, Plus, ShoppingBag, Trash2, Truck, Gift, Sparkles, Tag, BadgeCheck, ChevronRight, RotateCcw, ArrowRight, Package } from 'lucide-react'
+     6→import { motion, AnimatePresence } from 'framer-motion'
+     7→import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet'
+     8→import { Button } from '@/components/ui/button'
+     9→import { Separator } from '@/components/ui/separator'
+    10→import { ScrollArea } from '@/components/ui/scroll-area'
+    11→import { Progress } from '@/components/ui/progress'
+    12→import { Input } from '@/components/ui/input'
+    13→import { Badge } from '@/components/ui/badge'
+    14→import { useAppStore } from '@/lib/store'
+    15→import { toast } from 'sonner'
+    16→
+    17→// ── Types ──
+    18→interface SuggestedProduct {
+    19→  id: string
+    20→  name: string
+    21→  price: number
+    22→  discountPrice?: number | null
+    23→  unit: string
+    24→  stock: number
+    25→  image?: string
+    26→  category?: { name: string }
+    27→}
+    28→
+    29→interface CouponData {
+    30→  code: string
+    31→  type: string
+    32→  value: number
+    33→  discount: number
+    34→  minOrder: number | null
+    35→  maxDiscount: number | null
+    36→}
+    37→
+    38→export default function CartSidebar() {
+    39→  const {
+    40→    isCartOpen,
+    41→    setCartOpen,
+    42→    cartItems,
+    43→    removeFromCart,
+    44→    updateQuantity,
+    45→    clearCart,
+    46→    subtotal,
+    47→    totalItems,
+    48→    siteConfig,
+    49→    navigate,
+    50→    addToCart,
+    51→    openQuickView,
+    52→  } = useAppStore()
+    53→
+    54→  const [updatingId, setUpdatingId] = useState<string | null>(null)
+    55→  const [removingId, setRemovingId] = useState<string | null>(null)
+    56→  const [prevTotal, setPrevTotal] = useState(0)
+    57→  const [totalAnimating, setTotalAnimating] = useState(false)
+    58→
+    59→  // Coupon state
+    60→  const [couponCode, setCouponCode] = useState('')
+    61→  const [couponLoading, setCouponLoading] = useState(false)
+    62→  const [appliedCoupon, setAppliedCoupon] = useState<CouponData | null>(null)
+    63→  const [couponError, setCouponError] = useState('')
+    64→  const [couponExpanded, setCouponExpanded] = useState(false)
+    65→
+    66→  // Frequently bought together suggestions
+    67→  const [suggestedProducts, setSuggestedProducts] = useState<SuggestedProduct[]>([])
+    68→  const [suggestedLoading, setSuggestedLoading] = useState(false)
+    69→
+    70→  const freeShippingThreshold = siteConfig?.freeShippingThreshold || 1500
+    71→  const shippingCharge = siteConfig?.shippingCharge || 60
+    72→  const currentSubtotal = subtotal()
+    73→  const itemCount = totalItems()
+    74→  const shippingProgress = Math.min((currentSubtotal / freeShippingThreshold) * 100, 100)
+    75→  const isFreeShipping = currentSubtotal >= freeShippingThreshold
+    76→  const estimatedShipping = isFreeShipping ? 0 : shippingCharge
+    77→
+    78→  // Calculate total savings from discounts
+    79→  const discountSavings = cartItems.reduce((sum, item) => {
+    80→    if (item.discountPrice != null && item.discountPrice < item.price) {
+    81→      return sum + (item.price - item.discountPrice) * (Number(item.quantity) || 0)
+    82→    }
+    83→    return sum
+    84→  }, 0)
+    85→
+    86→  const couponDiscount = appliedCoupon?.discount || 0
+    87→  const totalSavings = discountSavings + couponDiscount
+    88→  const estimatedTotal = currentSubtotal + estimatedShipping - couponDiscount
+    89→  const amountToFreeShipping = Math.max(freeShippingThreshold - currentSubtotal, 0)
+    90→
+    91→  // Animate total changes
+    92→  useEffect(() => {
+    93→    if (prevTotal !== 0 && prevTotal !== estimatedTotal) {
+    94→      setTotalAnimating(true)
+    95→      const t = setTimeout(() => setTotalAnimating(false), 600)
+    96→      return () => clearTimeout(t)
+    97→    }
+    98→    setPrevTotal(estimatedTotal)
+    99→  }, [estimatedTotal, prevTotal])
+   100→
+   101→  // ── Fetch frequently bought together suggestions ──
+   102→  useEffect(() => {
+   103→    if (!isCartOpen || cartItems.length === 0) return
+   104→
+   105→    const cartProductIds = cartItems.map((item) => item.productId)
+   106→    const referenceProductId = cartItems[0]?.productId
+   107→    if (!referenceProductId) return
+   108→
+   109→    setSuggestedLoading(true)
+   110→    fetch(`/api/recommendations?productId=${referenceProductId}&limit=4`)
+   111→      .then((r) => r.json())
+   112→      .then((data) => {
+   113→        const products = (data?.data || []).filter(
+   114→          (p: SuggestedProduct) => !cartProductIds.includes(p.id)
+   115→        )
+   116→        setSuggestedProducts(products.slice(0, 3))
+   117→      })
+   118→      .catch(() => setSuggestedProducts([]))
+   119→      .finally(() => setSuggestedLoading(false))
+   120→  }, [isCartOpen, cartItems.length])
+   121→
+   122→  // ── Reset coupon when cart changes significantly ──
+   123→  useEffect(() => {
+   124→    if (appliedCoupon && currentSubtotal < (appliedCoupon.minOrder || 0)) {
+   125→      setAppliedCoupon(null)
+   126→      toast.info('Coupon removed — order amount below minimum')
+   127→    }
+   128→  }, [currentSubtotal, appliedCoupon])
+   129→
+   130→  const handleQuantityChange = async (cartItemId: string, newQty: number) => {
+   131→    if (newQty < 1) return
+   132→    setUpdatingId(cartItemId)
+   133→    try {
+   134→      await updateQuantity(cartItemId, newQty)
+   135→    } finally {
+   136→      setUpdatingId(null)
+   137→    }
+   138→  }
+   139→
+   140→  const handleRemove = async (cartItemId: string) => {
+   141→    setRemovingId(cartItemId)
+   142→    try {
+   143→      await removeFromCart(cartItemId)
+   144→    } finally {
+   145→      setRemovingId(null)
+   146→    }
+   147→  }
+   148→
+   149→  const handleCheckout = () => {
+   150→    setCartOpen(false)
+   151→    navigate('checkout')
+   152→  }
+   153→
+   154→  // ── Coupon Apply ──
+   155→  const handleApplyCoupon = async () => {
+   156→    if (!couponCode.trim()) return
+   157→    setCouponLoading(true)
+   158→    setCouponError('')
+   159→
+   160→    try {
+   161→      const res = await fetch('/api/coupons/validate', {
+   162→        method: 'POST',
+   163→        headers: { 'Content-Type': 'application/json' },
+   164→        body: JSON.stringify({ code: couponCode, orderAmount: currentSubtotal }),
+   165→      })
+   166→      const data = await res.json()
+   167→
+   168→      if (!res.ok || !data.success) {
+   169→        setCouponError(data.error || 'Invalid coupon')
+   170→        setAppliedCoupon(null)
+   171→        return
+   172→      }
+   173→
+   174→      setAppliedCoupon(data.data)
+   175→      toast.success(`Coupon applied! You save ৳${data.data.discount.toLocaleString()}`)
+   176→    } catch {
+   177→      setCouponError('Failed to validate coupon')
+   178→      setAppliedCoupon(null)
+   179→    } finally {
+   180→      setCouponLoading(false)
+   181→    }
+   182→  }
+   183→
+   184→  const handleRemoveCoupon = () => {
+   185→    setAppliedCoupon(null)
+   186→    setCouponCode('')
+   187→    setCouponError('')
+   188→    toast.info('Coupon removed')
+   189→  }
+   190→
+   191→  // ── Add suggested product to cart ──
+   192→  const handleAddSuggestion = async (product: SuggestedProduct) => {
+   193→    try {
+   194→      await addToCart({
+   195→        productId: product.id,
+   196→        productName: product.name,
+   197→        price: product.price,
+   198→        discountPrice: product.discountPrice,
+   199→        quantity: 1,
+   200→        unit: product.unit,
+   201→        image: product.image || '/placeholder.png',
+   202→        stock: product.stock,
+   203→      })
+   204→      toast.success(`${product.name} added to cart`)
+   205→      setSuggestedProducts((prev) => prev.filter((p) => p.id !== product.id))
+   206→    } catch {
+   207→      toast.error('Failed to add to cart')
+   208→    }
+   209→  }
+   210→
+   211→  // ── Clear cart handler ──
+   212→  const handleClearCart = async () => {
+   213→    try {
+   214→      await clearCart()
+   215→      setAppliedCoupon(null)
+   216→      setCouponCode('')
+   217→      toast.success('Cart cleared')
+   218→    } catch {
+   219→      toast.error('Failed to clear cart')
+   220→    }
+   221→  }
+   222→
+   223→  return (
+   224→    <Sheet open={isCartOpen} onOpenChange={setCartOpen}>
+   225→      <SheetContent className="flex flex-col w-full sm:max-w-md p-0">
+   226→        {/* Header */}
+   227→        <SheetHeader className="px-6 pt-6 pb-4 border-b">
+   228→          <SheetTitle className="flex items-center gap-2">
+   229→            <ShoppingBag className="h-5 w-5 text-primary" />
+   230→            Shopping Cart
+   231→            {itemCount > 0 && (
+   232→              <motion.span
+   233→                key={itemCount}
+   234→                initial={{ scale: 0.5, opacity: 0 }}
+   235→                animate={{ scale: 1, opacity: 1 }}
+   236→                className="inline-flex items-center justify-center min-w-[22px] h-[22px] rounded-full bg-primary text-primary-foreground text-xs font-bold px-1.5"
+   237→              >
+   238→                {itemCount}
+   239→              </motion.span>
+   240→            )}
+   241→          </SheetTitle>
+   242→          <SheetDescription className="sr-only">Your shopping cart items</SheetDescription>
+   243→        </SheetHeader>
+   244→
+   245→        {cartItems.length === 0 ? (
+   246→          /* ── Empty Cart State ── */
+   247→          <div className="flex-1 flex flex-col items-center justify-center gap-6 p-8">
+   248→            {/* Friendly illustration */}
+   249→            <motion.div
+   250→              initial={{ scale: 0.8, opacity: 0 }}
+   251→              animate={{ scale: 1, opacity: 1 }}
+   252→              transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+   253→              className="relative"
+   254→            >
+   255→              <div className="h-32 w-32 rounded-full bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center">
+   256→                <ShoppingBag className="h-14 w-14 text-primary/25" strokeWidth={1.5} />
+   257→              </div>
+   258→              {/* Floating sparkles */}
+   259→              <motion.div
+   260→                className="absolute -top-2 -right-2 h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center"
+   261→                animate={{ y: [0, -5, 0], rotate: [0, 10, 0] }}
+   262→                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+   263→              >
+   264→                <Sparkles className="h-4 w-4 text-amber-500" />
+   265→              </motion.div>
+   266→              <motion.div
+   267→                className="absolute -bottom-1 -left-1 h-7 w-7 rounded-full bg-emerald-100 flex items-center justify-center"
+   268→                animate={{ y: [0, 5, 0], rotate: [0, -10, 0] }}
+   269→                transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+   270→              >
+   271→                <Package className="h-3.5 w-3.5 text-emerald-500" />
+   272→              </motion.div>
+   273→            </motion.div>
+   274→
+   275→            <div className="text-center space-y-2">
+   276→              <h3 className="font-semibold text-lg">Your cart is empty</h3>
+   277→              <p className="text-muted-foreground text-sm max-w-[240px]">
+   278→                Looks like you haven&apos;t added any authentic Bangladeshi products yet!
+   279→              </p>
+   280→            </div>
+   281→            <Button
+   282→              className="gap-2 min-w-[200px] shadow-lg shadow-primary/20"
+   283→              onClick={() => {
+   284→                setCartOpen(false)
+   285→                navigate('products')
+   286→              }}
+   287→            >
+   288→              <ShoppingBag className="h-4 w-4" />
+   289→              Start Shopping
+   290→              <ArrowRight className="h-4 w-4 ml-1" />
+   291→            </Button>
+   292→            <Button
+   293→              variant="ghost"
+   294→              size="sm"
+   295→              className="text-primary gap-1"
+   296→              onClick={() => {
+   297→                setCartOpen(false)
+   298→                navigate('products')
+   299→              }}
+   300→            >
+   301→              <Gift className="h-4 w-4" />
+   302→              Check out our offers
+   303→            </Button>
+   304→          </div>
+   305→        ) : (
+   306→          <>
+   307→            {/* ── Free Shipping Progress Bar ── */}
+   308→            <div className="px-6 py-3 bg-gradient-to-r from-primary/5 to-primary/[0.02] border-b">
+   309→              {isFreeShipping ? (
+   310→                <motion.div
+   311→                  initial={{ opacity: 0, y: -5 }}
+   312→                  animate={{ opacity: 1, y: 0 }}
+   313→                  className="flex items-center gap-2 text-primary text-sm font-medium"
+   314→                >
+   315→                  <Truck className="h-4 w-4 shrink-0" />
+   316→                  <span>You qualify for FREE shipping!</span>
+   317→                  <motion.span
+   318→                    animate={{ scale: [1, 1.3, 1] }}
+   319→                    transition={{ duration: 0.5 }}
+   320→                    className="text-lg"
+   321→                  >
+   322→                    🎉
+   323→                  </motion.span>
+   324→                </motion.div>
+   325→              ) : (
+   326→                <div className="space-y-1.5">
+   327→                  <div className="flex items-center justify-between text-sm">
+   328→                    <div className="flex items-center gap-2">
+   329→                      <Truck className="h-4 w-4 shrink-0 text-muted-foreground" />
+   330→                      <span className="text-muted-foreground">
+   331→                        Only <span className="font-bold text-primary">৳{amountToFreeShipping.toLocaleString()}</span> more for free shipping!
+   332→                      </span>
+   333→                    </div>
+   334→                    <span className="text-xs text-muted-foreground">৳{currentSubtotal.toLocaleString()} / ৳{freeShippingThreshold.toLocaleString()}</span>
+   335→                  </div>
+   336→                  <div className="relative h-2.5 rounded-full bg-muted overflow-hidden">
+   337→                    <motion.div
+   338→                      className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500"
+   339→                      initial={{ width: 0 }}
+   340→                      animate={{ width: `${Math.min(shippingProgress, 100)}%` }}
+   341→                      transition={{ duration: 0.6, ease: 'easeOut' }}
+   342→                    />
+   343→                    {/* Truck icon moving along the progress */}
+   344→                    <motion.div
+   345→                      className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10"
+   346→                      animate={{ left: `${Math.min(shippingProgress, 95)}%` }}
+   347→                      transition={{ duration: 0.6, ease: 'easeOut' }}
+   348→                    >
+   349→                      <div className="h-4 w-4 rounded-full bg-emerald-500 flex items-center justify-center shadow-sm ring-2 ring-white">
+   350→                        <Truck className="h-2.5 w-2.5 text-white" />
+   351→                      </div>
+   352→                    </motion.div>
+   353→                  </div>
+   354→                </div>
+   355→              )}
+   356→            </div>
+   357→
+   358→            {/* ── Savings Banner ── */}
+   359→            <AnimatePresence>
+   360→              {totalSavings > 0 && (
+   361→                <motion.div
+   362→                  initial={{ opacity: 0, height: 0 }}
+   363→                  animate={{ opacity: 1, height: 'auto' }}
+   364→                  exit={{ opacity: 0, height: 0 }}
+   365→                  className="px-6 py-2.5 bg-emerald-50 border-b border-emerald-100"
+   366→                >
+   367→                  <div className="flex items-center gap-2 text-emerald-700 text-sm font-medium">
+   368→                    <BadgeCheck className="h-4 w-4 shrink-0" />
+   369→                    <span>You save <span className="font-bold">৳{totalSavings.toLocaleString()}</span></span>
+   370→                    {discountSavings > 0 && couponDiscount > 0 && (
+   371→                      <span className="text-xs text-emerald-600/70">
+   372→                        (৳{discountSavings.toLocaleString()} discounts + ৳{couponDiscount.toLocaleString()} coupon)
+   373→                      </span>
+   374→                    )}
+   375→                  </div>
+   376→                </motion.div>
+   377→              )}
+   378→            </AnimatePresence>
+   379→
+   380→            {/* ── Cart Items ── */}
+   381→            <ScrollArea className="flex-1">
+   382→              <div className="space-y-1 p-4">
+   383→                <AnimatePresence mode="popLayout">
+   384→                  {cartItems.map((item, index) => {
+   385→                    const price = item.discountPrice != null ? item.discountPrice : item.price
+   386→                    const hasDiscount = item.discountPrice != null && item.discountPrice < item.price
+   387→                    const qty = Number(item.quantity) || 1
+   388→                    const itemPrice = Number(price) || 0
+   389→                    const originalPrice = Number(item.price) || 0
+   390→                    const itemSavings = hasDiscount ? (originalPrice - itemPrice) * qty : 0
+   391→                    return (
+   392→                      <motion.div
+   393→                        key={`cart-${item.id}-${index}`}
+   394→                        layout
+   395→                        initial={{ opacity: 0, x: 20 }}
+   396→                        animate={{ opacity: 1, x: 0 }}
+   397→                        exit={{ opacity: 0, x: -40, scale: 0.95 }}
+   398→                        transition={{ duration: 0.25, type: 'spring', stiffness: 300, damping: 25 }}
+   399→                        className={`flex gap-3 p-3 rounded-xl border border-transparent hover:border-border/40 hover:bg-muted/30 transition-all duration-200 group/item ${
+   400→                          removingId === item.id ? 'opacity-0 scale-95 translate-x-4' : 'opacity-100'
+   401→                        }`}
+   402→                      >
+   403→                        {/* Product Image with quantity badge */}
+   404→                        <div className="relative h-20 w-20 rounded-lg overflow-hidden bg-muted/30 flex-shrink-0 ring-1 ring-border/50">
+   405→                          <Image
+   406→                            src={item.image}
+   407→                            alt={item.productName}
+   408→                            fill
+   409→                            className="object-cover"
+   410→                            sizes="80px"
+   411→                          />
+   412→                          {/* Quantity badge on image */}
+   413→                          <AnimatePresence>
+   414→                            {qty > 1 && (
+   415→                              <motion.div
+   416→                                initial={{ scale: 0 }}
+   417→                                animate={{ scale: 1 }}
+   418→                                exit={{ scale: 0 }}
+   419→                                className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center shadow-sm ring-2 ring-background"
+   420→                              >
+   421→                                {qty}x
+   422→                              </motion.div>
+   423→                            )}
+   424→                          </AnimatePresence>
+   425→                        </div>
+   426→
+   427→                        {/* Product Details */}
+   428→                        <div className="flex-1 min-w-0">
+   429→                          <div className="flex items-start justify-between gap-1">
+   430→                            <h4 className="text-sm font-medium line-clamp-2 leading-tight">{item.productName}</h4>
+   431→                            <button
+   432→                              className="h-6 w-6 flex items-center justify-center rounded-md text-muted-foreground/50 hover:text-red-500 hover:bg-red-50 transition-all duration-150 opacity-0 group-hover/item:opacity-100 shrink-0"
+   433→                              onClick={() => handleRemove(item.id)}
+   434→                              aria-label="Remove item"
+   435→                            >
+   436→                              <X className="h-3.5 w-3.5" />
+   437→                            </button>
+   438→                          </div>
+   439→                          <p className="text-xs text-muted-foreground mt-0.5">/{item.unit}</p>
+   440→
+   441→                          {/* Price with strikethrough for discount */}
+   442→                          <div className="flex items-baseline gap-1.5 mt-1">
+   443→                            <motion.span
+   444→                              key={`price-${itemPrice * qty}`}
+   445→                              initial={{ scale: 1.1, color: '#059669' }}
+   446→                              animate={{ scale: 1, color: undefined }}
+   447→                              transition={{ duration: 0.3 }}
+   448→                              className="text-sm font-bold text-primary"
+   449→                            >
+   450→                              ৳{(itemPrice * qty).toLocaleString()}
+   451→                            </motion.span>
+   452→                            {hasDiscount && (
+   453→                              <span className="text-xs text-muted-foreground line-through">
+   454→                                ৳{(originalPrice * qty).toLocaleString()}
+   455→                              </span>
+   456→                            )}
+   457→                          </div>
+   458→
+   459→                          {/* Item savings */}
+   460→                          {itemSavings > 0 && (
+   461→                            <p className="text-[10px] text-emerald-600 font-medium mt-0.5">
+   462→                              Save ৳{itemSavings.toLocaleString()}
+   463→                            </p>
+   464→                          )}
+   465→
+   466→                          {/* Quantity Controls */}
+   467→                          <div className="flex items-center justify-between mt-2">
+   468→                            <div className="flex items-center rounded-lg border bg-background overflow-hidden">
+   469→                              <button
+   470→                                className="h-7 w-7 flex items-center justify-center hover:bg-primary/10 text-primary transition-all duration-150 active:scale-90"
+   471→                                onClick={() => handleQuantityChange(item.id, item.quantity - 1)}
+   472→                                disabled={updatingId === item.id}
+   473→                                aria-label="Decrease quantity"
+   474→                              >
+   475→                                <Minus className="h-3 w-3" />
+   476→                              </button>
+   477→                              <motion.span
+   478→                                key={qty}
+   479→                                initial={{ scale: 1.3 }}
+   480→                                animate={{ scale: 1 }}
+   481→                                transition={{ type: 'spring', stiffness: 500, damping: 20 }}
+   482→                                className="h-7 w-8 flex items-center justify-center text-sm font-semibold border-x"
+   483→                              >
+   484→                                {qty}
+   485→                              </motion.span>
+   486→                              <button
+   487→                                className="h-7 w-7 flex items-center justify-center hover:bg-primary/10 text-primary transition-all duration-150 active:scale-90 disabled:opacity-40 disabled:cursor-not-allowed"
+   488→                                onClick={() => handleQuantityChange(item.id, item.quantity + 1)}
+   489→                                disabled={updatingId === item.id || item.quantity >= item.stock}
+   490→                                aria-label="Increase quantity"
+   491→                              >
+   492→                                <Plus className="h-3 w-3" />
+   493→                              </button>
+   494→                            </div>
+   495→
+   496→                            {/* Delete button (always visible on mobile) */}
+   497→                            <button
+   498→                              className="h-7 w-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-all duration-150 active:scale-90 sm:opacity-0 sm:group-hover/item:opacity-100"
+   499→                              onClick={() => handleRemove(item.id)}
+   500→                              aria-label="Remove item"
+   501→                            >
+   502→                              <Trash2 className="h-3.5 w-3.5" />
+   503→                            </button>
+   504→                          </div>
+   505→                        </div>
+   506→                      </motion.div>
+   507→                    )
+   508→                  })}
+   509→                </AnimatePresence>
+   510→              </div>
+   511→            </ScrollArea>
+   512→
+   513→            {/* ── Expandable Coupon Code Section ── */}
+   514→            <div className="px-6 py-3 border-t bg-muted/10">
+   515→              <button
+   516→                type="button"
+   517→                className="flex items-center justify-between w-full text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+   518→                onClick={() => setCouponExpanded(!couponExpanded)}
+   519→              >
+   520→                <div className="flex items-center gap-2">
+   521→                  <Tag className="h-3.5 w-3.5 text-secondary" />
+   522→                  {appliedCoupon ? 'Coupon Applied' : 'Apply Coupon Code'}
+   523→                </div>
+   524→                <motion.div
+   525→                  animate={{ rotate: couponExpanded ? 180 : 0 }}
+   526→                  transition={{ duration: 0.2 }}
+   527→                >
+   528→                  <ChevronRight className="h-4 w-4" />
+   529→                </motion.div>
+   530→              </button>
+   531→
+   532→              <AnimatePresence>
+   533→                {couponExpanded && (
+   534→                  <motion.div
+   535→                    initial={{ height: 0, opacity: 0 }}
+   536→                    animate={{ height: 'auto', opacity: 1 }}
+   537→                    exit={{ height: 0, opacity: 0 }}
+   538→                    transition={{ duration: 0.2 }}
+   539→                    className="overflow-hidden"
+   540→                  >
+   541→                    <div className="pt-2">
+   542→                      {appliedCoupon ? (
+   543→                        <motion.div
+   544→                          initial={{ scale: 0.95, opacity: 0 }}
+   545→                          animate={{ scale: 1, opacity: 1 }}
+   546→                          className="flex items-center justify-between p-2.5 rounded-lg border border-emerald-200 bg-emerald-50/50"
+   547→                        >
+   548→                          <div className="flex items-center gap-2">
+   549→                            <Badge className="bg-emerald-600 text-white text-xs">{appliedCoupon.code}</Badge>
+   550→                            <span className="text-xs text-emerald-700 font-medium">
+   551→                              -৳{appliedCoupon.discount.toLocaleString()}
+   552→                              {appliedCoupon.type === 'percentage' && ` (${appliedCoupon.value}%)`}
+   553→                            </span>
+   554→                          </div>
+   555→                          <button
+   556→                            onClick={handleRemoveCoupon}
+   557→                            className="text-xs text-muted-foreground hover:text-red-500 transition-colors"
+   558→                          >
+   559→                            Remove
+   560→                          </button>
+   561→                        </motion.div>
+   562→                      ) : (
+   563→                        <div className="flex gap-2">
+   564→                          <Input
+   565→                            placeholder="Enter coupon code"
+   566→                            value={couponCode}
+   567→                            onChange={(e) => {
+   568→                              setCouponCode(e.target.value.toUpperCase())
+   569→                              setCouponError('')
+   570→                            }}
+   571→                            onKeyDown={(e) => e.key === 'Enter' && handleApplyCoupon()}
+   572→                            className="h-9 text-sm flex-1"
+   573→                            autoFocus
+   574→                          />
+   575→                          <Button
+   576→                            variant="outline"
+   577→                            size="sm"
+   578→                            className="h-9 px-3 shrink-0"
+   579→                            onClick={handleApplyCoupon}
+   580→                            disabled={couponLoading || !couponCode.trim()}
+   581→                          >
+   582→                            {couponLoading ? (
+   583→                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+   584→                            ) : (
+   585→                              'Apply'
+   586→                            )}
+   587→                          </Button>
+   588→                        </div>
+   589→                      )}
+   590→                      {couponError && (
+   591→                        <motion.p
+   592→                          initial={{ opacity: 0, y: -5 }}
+   593→                          animate={{ opacity: 1, y: 0 }}
+   594→                          className="text-xs text-red-500 mt-1.5 flex items-center gap-1"
+   595→                        >
+   596→                          <X className="h-3 w-3" />
+   597→                          {couponError}
+   598→                        </motion.p>
+   599→                      )}
+   600→                    </div>
+   601→                  </motion.div>
+   602→                )}
+   603→              </AnimatePresence>
+   604→            </div>
+   605→
+   606→            {/* ── Frequently Bought Together ── */}
+   607→            {suggestedProducts.length > 0 && (
+   608→              <div className="px-6 py-3 border-t bg-muted/10">
+   609→                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
+   610→                  <Sparkles className="h-3.5 w-3.5 text-secondary" />
+   611→                  Customers also bought
+   612→                </div>
+   613→                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+   614→                  {suggestedProducts.map((product) => {
+   615→                    const effectivePrice = product.discountPrice ?? product.price
+   616→                    return (
+   617→                      <motion.button
+   618→                        key={product.id}
+   619→                        className="flex items-center gap-2 p-2 rounded-lg border border-border/50 bg-background hover:shadow-sm hover:border-primary/30 transition-all shrink-0 group/sug"
+   620→                        onClick={() => handleAddSuggestion(product)}
+   621→                        whileTap={{ scale: 0.97 }}
+   622→                      >
+   623→                        <div className="h-10 w-10 rounded-md bg-muted/30 overflow-hidden relative shrink-0">
+   624→                          <Image
+   625→                            src={product.image || '/placeholder.png'}
+   626→                            alt={product.name}
+   627→                            fill
+   628→                            className="object-cover"
+   629→                            sizes="40px"
+   630→                          />
+   631→                        </div>
+   632→                        <div className="text-left min-w-0 max-w-[120px]">
+   633→                          <p className="text-xs font-medium line-clamp-1">{product.name}</p>
+   634→                          <p className="text-xs font-bold text-primary">৳{effectivePrice.toLocaleString()}</p>
+   635→                        </div>
+   636→                        <Plus className="h-3.5 w-3.5 text-muted-foreground group-hover/sug:text-primary transition-colors shrink-0" />
+   637→                      </motion.button>
+   638→                    )
+   639→                  })}
+   640→                </div>
+   641→              </div>
+   642→            )}
+   643→
+   644→            {/* ── Cart Summary & Actions ── */}
+   645→            <div className="border-t px-6 py-4 space-y-3 bg-background">
+   646→              <div className="space-y-2">
+   647→                <div className="flex items-center justify-between text-sm">
+   648→                  <span className="text-muted-foreground">Subtotal ({itemCount} items)</span>
+   649→                  <span className="font-medium">৳{currentSubtotal.toLocaleString()}</span>
+   650→                </div>
+   651→
+   652→                {appliedCoupon && (
+   653→                  <div className="flex items-center justify-between text-sm">
+   654→                    <span className="text-emerald-600 flex items-center gap-1">
+   655→                      <Tag className="h-3 w-3" />
+   656→                      Coupon ({appliedCoupon.code})
+   657→                    </span>
+   658→                    <span className="font-medium text-emerald-600">-৳{couponDiscount.toLocaleString()}</span>
+   659→                  </div>
+   660→                )}
+   661→
+   662→                <div className="flex items-center justify-between text-sm">
+   663→                  <span className="text-muted-foreground">Shipping</span>
+   664→                  {isFreeShipping ? (
+   665→                    <span className="font-medium text-primary">FREE</span>
+   666→                  ) : (
+   667→                    <span className="font-medium">৳{estimatedShipping.toLocaleString()}</span>
+   668→                  )}
+   669→                </div>
+   670→                <Separator />
+   671→                <div className="flex items-center justify-between">
+   672→                  <span className="font-semibold">Estimated Total</span>
+   673→                  <motion.span
+   674→                    key={estimatedTotal}
+   675→                    initial={totalAnimating ? { scale: 1.15, color: '#059669' } : { scale: 1 }}
+   676→                    animate={{ scale: 1 }}
+   677→                    transition={{ duration: 0.4, ease: 'easeOut' }}
+   678→                    className="text-lg font-bold text-primary"
+   679→                  >
+   680→                    ৳{estimatedTotal.toLocaleString()}
+   681→                  </motion.span>
+   682→                </div>
+   683→                {!isFreeShipping && (
+   684→                  <p className="text-xs text-muted-foreground">
+   685→                    Free shipping on orders ৳{freeShippingThreshold.toLocaleString()}+
+   686→                  </p>
+   687→                )}
+   688→              </div>
+   689→
+   690→              <SheetFooter className="gap-2 sm:gap-2 p-0">
+   691→                <Button
+   692→                  variant="outline"
+   693→                  className="flex-1"
+   694→                  onClick={() => {
+   695→                    setCartOpen(false)
+   696→                    navigate('cart')
+   697→                  }}
+   698→                >
+   699→                  View Cart
+   700→                </Button>
+   701→                <Button className="flex-1 gap-2 shadow-lg shadow-primary/20" onClick={handleCheckout}>
+   702→                  Checkout
+   703→                  <span className="text-xs opacity-80">৳{estimatedTotal.toLocaleString()}</span>
+   704→                </Button>
+   705→              </SheetFooter>
+   706→
+   707→              {/* Clear Cart Button */}
+   708→              <Button
+   709→                variant="ghost"
+   710→                size="sm"
+   711→                className="w-full text-xs text-muted-foreground hover:text-red-500 gap-1.5"
+   712→                onClick={handleClearCart}
+   713→              >
+   714→                <RotateCcw className="h-3 w-3" />
+   715→                Clear Cart
+   716→              </Button>
+   717→            </div>
+   718→          </>
+   719→        )}
+   720→      </SheetContent>
+   721→    </Sheet>
+   722→  )
+   723→}
+   724→

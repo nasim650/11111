@@ -37,6 +37,7 @@ import Footer from '@/components/layout/Footer'
 
 // Shared
 import CartSidebar from '@/components/shared/CartSidebar'
+import MobileCartBar from '@/components/shared/MobileCartBar'
 import QuickViewModal from '@/components/shared/QuickViewModal'
 import OrderTrackingModal from '@/components/shared/OrderTrackingModal'
 
@@ -195,6 +196,7 @@ export default function Home() {
 
       {/* Global overlays */}
       <CartSidebar />
+      <MobileCartBar />
       <QuickViewModal />
       <OrderTrackingModal />
     </div>

@@ -1,0 +1,1250 @@
+     1→'use client'
+     2→
+     3→import { useEffect, useState, useCallback, useRef } from 'react'
+     4→import Image from 'next/image'
+     5→import {
+     6→  ChevronLeft,
+     7→  ChevronRight,
+     8→  Search,
+     9→  ShieldCheck,
+    10→  Truck,
+    11→  RefreshCw,
+    12→  Leaf,
+    13→  Star,
+    14→  ArrowRight,
+    15→  Sparkles,
+    16→  Clock,
+    17→  Zap,
+    18→  X,
+    19→  Smartphone,
+    20→  Flame,
+    21→  Gift,
+    22→  GripHorizontal,
+    23→} from 'lucide-react'
+    24→import { motion, AnimatePresence, useInView } from 'framer-motion'
+    25→import { Button } from '@/components/ui/button'
+    26→import { Input } from '@/components/ui/input'
+    27→import { Badge } from '@/components/ui/badge'
+    28→import { Skeleton } from '@/components/ui/skeleton'
+    29→import { useAppStore, type PageName } from '@/lib/store'
+    30→import { extractItems } from '@/lib/api'
+    31→import ProductCard from '@/components/shared/ProductCard'
+    32→
+    33→// ── Types ──
+    34→interface Banner {
+    35→  id: string
+    36→  title: string
+    37→  subtitle?: string
+    38→  desktopImage?: string
+    39→  mobileImage?: string
+    40→  ctaText?: string
+    41→  ctaLink?: string
+    42→  link?: string
+    43→  bgColor?: string
+    44→  location?: string
+    45→}
+    46→
+    47→interface Category {
+    48→  id: string
+    49→  name: string
+    50→  slug: string
+    51→  image?: string
+    52→  icon?: string
+    53→  description?: string
+    54→  showInHome?: boolean
+    55→  bengaliName?: string
+    56→}
+    57→
+    58→interface Product {
+    59→  id: string
+    60→  name: string
+    61→  slug: string
+    62→  price: number
+    63→  discountPrice?: number | null
+    64→  unit: string
+    65→  stock: number
+    66→  images?: Array<{ url: string; alt?: string }>
+    67→  category?: { name: string; slug: string }
+    68→  status?: string
+    69→  isNewArrival?: boolean
+    70→  isBestSeller?: boolean
+    71→  shortDescription?: string
+    72→}
+    73→
+    74→// Bengali category names mapping
+    75→const bengaliCategoryNames: Record<string, string> = {
+    76→  'Honey & Jaggery': 'মধু ও গুড়',
+    77→  'Ghee & Oils': 'ঘি ও তেল',
+    78→  'Rice & Grains': 'চাল ও শস্য',
+    79→  'Spices & Masala': 'মশলা',
+    80→  'Sweets & Snacks': 'মিষ্টি ও স্ন্যাকস',
+    81→  'Tea & Beverages': 'চা ও পানীয়',
+    82→  'Pickles & Chutney': 'আচার ও চাটনি',
+    83→  'Dry Fruits & Nuts': 'শুকনো ফল ও বাদাম',
+    84→  'Deshi Gur': 'দেশি গুড়',
+    85→  'Organic Products': 'জৈব পণ্য',
+    86→  'Special Combos': 'স্পেশাল কম্বো',
+    87→}
+    88→
+    89→// ── Animated Section Wrapper ──
+    90→function AnimatedSection({ children, className, delay = 0, style }: {
+    91→  children: React.ReactNode
+    92→  className?: string
+    93→  delay?: number
+    94→  style?: React.CSSProperties
+    95→}) {
+    96→  const ref = useRef<HTMLDivElement>(null)
+    97→  const isInView = useInView(ref, { once: true, margin: '-50px' })
+    98→
+    99→  return (
+   100→    <motion.div
+   101→      ref={ref}
+   102→      initial={{ opacity: 0, y: 40 }}
+   103→      animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 40 }}
+   104→      transition={{ duration: 0.6, delay, ease: 'easeOut' }}
+   105→      className={className}
+   106→      style={style}
+   107→    >
+   108→      {children}
+   109→    </motion.div>
+   110→  )
+   111→}
+   112→
+   113→// ── Flip Digit Component ──
+   114→function FlipDigit({ value, label }: { value: string; label: string }) {
+   115→  return (
+   116→    <div className="flex flex-col items-center">
+   117→      <div className="relative overflow-hidden rounded-lg">
+   118→        <div className="bg-white text-red-600 px-2.5 py-1.5 min-w-[40px] text-center font-bold text-xl tabular-nums shadow-md">
+   119→          {value}
+   120→        </div>
+   121→        {/* Flip effect overlay */}
+   122→        <motion.div
+   123→          key={value}
+   124→          initial={{ rotateX: -90, opacity: 0.5 }}
+   125→          animate={{ rotateX: 0, opacity: 0 }}
+   126→          transition={{ duration: 0.3, ease: 'easeOut' }}
+   127→          className="absolute inset-0 bg-white/60 origin-top"
+   128→        />
+   129→      </div>
+   130→      <span className="text-[9px] text-white/70 mt-0.5 font-medium">{label}</span>
+   131→    </div>
+   132→  )
+   133→}
+   134→
+   135→// ── Flash Sale Countdown ──
+   136→function FlashSaleCountdown() {
+   137→  const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 })
+   138→
+   139→  useEffect(() => {
+   140→    const getTargetTime = () => {
+   141→      const now = new Date()
+   142→      const end = new Date(now)
+   143→      end.setHours(23, 59, 59, 999)
+   144→      return end.getTime()
+   145→    }
+   146→
+   147→    const updateCountdown = () => {
+   148→      const target = getTargetTime()
+   149→      const now = Date.now()
+   150→      const diff = Math.max(target - now, 0)
+   151→
+   152→      setTimeLeft({
+   153→        hours: Math.floor(diff / (1000 * 60 * 60)),
+   154→        minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
+   155→        seconds: Math.floor((diff % (1000 * 60)) / 1000),
+   156→      })
+   157→    }
+   158→
+   159→    updateCountdown()
+   160→    const timer = setInterval(updateCountdown, 1000)
+   161→    return () => clearInterval(timer)
+   162→  }, [])
+   163→
+   164→  const pad = (n: number) => n.toString().padStart(2, '0')
+   165→  const isEndingSoon = timeLeft.hours === 0 && timeLeft.minutes < 60
+   166→
+   167→  return (
+   168→    <div className="flex items-center gap-2">
+   169→      {isEndingSoon && (
+   170→        <span
+   171→          className="text-[10px] font-medium bg-white/15 text-white px-2 py-0.5 rounded-full mr-1"
+   172→        >
+   173→          Ending soon
+   174→        </span>
+   175→      )}
+   176→      <div className="flex items-center gap-1">
+   177→        <FlipDigit value={pad(timeLeft.hours)} label="ঘণ্টা" />
+   178→        <span className="text-white font-bold text-xl mx-0.5 animate-pulse">:</span>
+   179→        <FlipDigit value={pad(timeLeft.minutes)} label="মিনিট" />
+   180→        <span className="text-white font-bold text-xl mx-0.5 animate-pulse">:</span>
+   181→        <FlipDigit value={pad(timeLeft.seconds)} label="সেকেন্ড" />
+   182→      </div>
+   183→    </div>
+   184→  )
+   185→}
+   186→
+   187→// ── Announcement Bar ──
+   188→function AnnouncementBar({ siteConfig }: { siteConfig: import('@/lib/store').SiteConfig | null }) {
+   189→  const [isVisible, setIsVisible] = useState(true)
+   190→
+   191→  // Round 3E: admin-controlled enable/disable
+   192→  if (!isVisible) return null
+   193→  if (siteConfig && siteConfig.announcementEnabled === false) return null
+   194→
+   195→  // Round 3E: admin-controlled text (with safe fallbacks to existing copy)
+   196→  const announcementText = siteConfig?.announcementText || 'Selected items at special prices'
+   197→  const freeDeliveryEnabled = siteConfig ? siteConfig.freeDeliveryEnabled !== false : true
+   198→  const freeDeliveryMessage = siteConfig?.freeDeliveryMessage || 'Free Delivery on Orders Above ৳1,500'
+   199→  const promoText = siteConfig?.homepagePromoText || '100% Authentic Bangladeshi Products'
+   200→
+   201→  return (
+   202→    <div className="relative bg-gradient-to-r from-emerald-700 via-teal-600 to-emerald-700 text-white overflow-hidden">
+   203→      {/* Decorative pattern overlay */}
+   204→      <div className="absolute inset-0 opacity-10">
+   205→        <div
+   206→          className="absolute inset-0"
+   207→          style={{
+   208→            backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.1) 10px, rgba(255,255,255,0.1) 20px)`,
+   209→          }}
+   210→        />
+   211→      </div>
+   212→      <div className="relative flex items-center">
+   213→        {/* Marquee container */}
+   214→        <div className="flex-1 overflow-hidden py-2">
+   215→          <div className="flex animate-marquee whitespace-nowrap">
+   216→            {[1, 2].map((set) => (
+   217→              <div key={set} className="flex items-center gap-8 mr-8">
+   218→                <span className="flex items-center gap-2 text-sm font-medium">
+   219→                  <Zap className="h-3.5 w-3.5 text-amber-300" />
+   220→                  {announcementText}
+   221→                </span>
+   222→                <span className="text-amber-300 font-bold text-sm">|</span>
+   223→                <span className="flex items-center gap-2 text-sm font-medium">
+   224→                  <Gift className="h-3.5 w-3.5 text-amber-300" />
+   225→                  Use code <span className="bg-white/20 px-2 py-0.5 rounded font-medium text-amber-300">KHATI20</span> for 20% off
+   226→                </span>
+   227→                <span className="text-amber-300 font-bold text-sm">|</span>
+   228→                {freeDeliveryEnabled && (
+   229→                  <span className="flex items-center gap-2 text-sm font-medium">
+   230→                    <Truck className="h-3.5 w-3.5 text-amber-300" />
+   231→                    {freeDeliveryMessage}
+   232→                  </span>
+   233→                )}
+   234→                {freeDeliveryEnabled && <span className="text-amber-300 font-bold text-sm">|</span>}
+   235→                <span className="flex items-center gap-2 text-sm font-medium">
+   236→                  <Leaf className="h-3.5 w-3.5 text-amber-300" />
+   237→                  {promoText}
+   238→                </span>
+   239→                <span className="text-amber-300 font-bold text-sm">|</span>
+   240→                <span className="flex items-center gap-2 text-sm font-medium">
+   241→                  <Sparkles className="h-3.5 w-3.5 text-amber-300" />
+   242→                  সতেজ ও খাঁটি পণ্য — সরাসরি কৃষক থেকে
+   243→                </span>
+   244→              </div>
+   245→            ))}
+   246→          </div>
+   247→        </div>
+   248→        {/* Close button */}
+   249→        <button
+   250→          onClick={() => setIsVisible(false)}
+   251→          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-white/20 rounded-full transition-colors z-10"
+   252→          aria-label="Close announcement"
+   253→        >
+   254→          <X className="h-3.5 w-3.5" />
+   255→        </button>
+   256→      </div>
+   257→    </div>
+   258→  )
+   259→}
+   260→
+   261→// ── Hero Banner Carousel ──
+   262→function HeroBannerCarousel({ banners, navigate }: {
+   263→  banners: Banner[]
+   264→  navigate: (page: PageName, params?: Record<string, unknown>) => void
+   265→}) {
+   266→  const [currentBanner, setCurrentBanner] = useState(0)
+   267→  const [isPaused, setIsPaused] = useState(false)
+   268→  const [progress, setProgress] = useState(0)
+   269→  const [scrollY, setScrollY] = useState(0)
+   270→  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+   271→
+   272→  // Parallax scroll tracking
+   273→  useEffect(() => {
+   274→    const handleScroll = () => {
+   275→      setScrollY(window.scrollY)
+   276→    }
+   277→    window.addEventListener('scroll', handleScroll, { passive: true })
+   278→    return () => window.removeEventListener('scroll', handleScroll)
+   279→  }, [])
+   280→
+   281→  // Auto-play with progress
+   282→  useEffect(() => {
+   283→    if (banners.length <= 1 || isPaused) return
+   284→
+   285→    const SLIDE_DURATION = 5000
+   286→    const TICK = 50
+   287→    let elapsed = 0
+   288→
+   289→    intervalRef.current = setInterval(() => {
+   290→      elapsed += TICK
+   291→      setProgress((elapsed / SLIDE_DURATION) * 100)
+   292→
+   293→      if (elapsed >= SLIDE_DURATION) {
+   294→        elapsed = 0
+   295→        setCurrentBanner((prev) => (prev + 1) % banners.length)
+   296→        setProgress(0)
+   297→      }
+   298→    }, TICK)
+   299→
+   300→    return () => {
+   301→      if (intervalRef.current) clearInterval(intervalRef.current)
+   302→    }
+   303→  }, [banners.length, isPaused, currentBanner])
+   304→
+   305→  const handlePrev = () => {
+   306→    setCurrentBanner((prev) => (prev - 1 + banners.length) % banners.length)
+   307→    setProgress(0)
+   308→  }
+   309→
+   310→  const handleNext = () => {
+   311→    setCurrentBanner((prev) => (prev + 1) % banners.length)
+   312→    setProgress(0)
+   313→  }
+   314→
+   315→  const handleDotClick = (idx: number) => {
+   316→    setCurrentBanner(idx)
+   317→    setProgress(0)
+   318→  }
+   319→
+   320→  if (banners.length === 0) return null
+   321→
+   322→  // Parallax offset - capped at 60px
+   323→  const parallaxOffset = Math.min(scrollY * 0.3, 60)
+   324→
+   325→  return (
+   326→    <div
+   327→      className="relative h-64 sm:h-80 md:h-[440px] lg:h-[520px] overflow-hidden bg-muted"
+   328→      onMouseEnter={() => setIsPaused(true)}
+   329→      onMouseLeave={() => setIsPaused(false)}
+   330→    >
+   331→      <AnimatePresence mode="wait">
+   332→        <motion.div
+   333→          key={currentBanner}
+   334→          initial={{ opacity: 0, x: 60 }}
+   335→          animate={{ opacity: 1, x: 0 }}
+   336→          exit={{ opacity: 0, x: -60 }}
+   337→          transition={{ duration: 0.5, ease: 'easeInOut' }}
+   338→          className="absolute inset-0"
+   339→        >
+   340→          {banners[currentBanner].desktopImage ? (
+   341→            <>
+   342→              {/* Parallax image container */}
+   343→              <div
+   344→                className="absolute inset-0 w-full h-full"
+   345→                style={{ transform: `translateY(${parallaxOffset}px) scale(1.1)` }}
+   346→              >
+   347→                <Image
+   348→                  src={banners[currentBanner].desktopImage}
+   349→                  alt={banners[currentBanner].title}
+   350→                  fill
+   351→                  className="object-cover"
+   352→                  priority={currentBanner === 0}
+   353→                  sizes="100vw"
+   354→                />
+   355→              </div>
+   356→              {/* Gradient overlays - enhanced for text readability */}
+   357→              <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-black/20" />
+   358→              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30" />
+   359→              {/* Subtle emerald tint */}
+   360→              <div className="absolute inset-0 bg-emerald-900/10" />
+   361→              {/* Content */}
+   362→              <div className="absolute inset-0 flex items-center">
+   363→                <div className="p-6 md:p-12 lg:p-16 max-w-2xl">
+   364→                  <motion.div
+   365→                    initial={{ opacity: 0, y: 20 }}
+   366→                    animate={{ opacity: 1, y: 0 }}
+   367→                    transition={{ delay: 0.2, duration: 0.5 }}
+   368→                  >
+   369→                    <h1 className="text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-extrabold text-white mb-3 leading-tight drop-shadow-lg">
+   370→                      {banners[currentBanner].title}
+   371→                    </h1>
+   372→                  </motion.div>
+   373→                  {banners[currentBanner].subtitle && (
+   374→                    <motion.p
+   375→                      initial={{ opacity: 0, y: 15 }}
+   376→                      animate={{ opacity: 1, y: 0 }}
+   377→                      transition={{ delay: 0.35, duration: 0.5 }}
+   378→                      className="text-sm sm:text-lg md:text-xl text-white/90 mb-6 drop-shadow max-w-lg"
+   379→                    >
+   380→                      {banners[currentBanner].subtitle}
+   381→                    </motion.p>
+   382→                  )}
+   383→                  {banners[currentBanner].ctaText && (
+   384→                    <motion.div
+   385→                      initial={{ opacity: 0, y: 10 }}
+   386→                      animate={{ opacity: 1, y: 0 }}
+   387→                      transition={{ delay: 0.5, duration: 0.5 }}
+   388→                    >
+   389→                      <Button
+   390→                        size="lg"
+   391→                        className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold px-8 h-12 text-base shadow-lg hover:shadow-xl transition-all hover:scale-105 rounded-full"
+   392→                        onClick={() => {
+   393→                          const banner = banners[currentBanner]
+   394→                          if (banner.ctaLink) {
+   395→                            if (banner.ctaLink.startsWith('/')) {
+   396→                              navigate('products')
+   397→                            } else {
+   398→                              window.open(banner.ctaLink, '_blank')
+   399→                            }
+   400→                          } else {
+   401→                            navigate('products')
+   402→                          }
+   403→                        }}
+   404→                      >
+   405→                        {banners[currentBanner].ctaText}
+   406→                        <ArrowRight className="h-5 w-5 ml-2 group-hover:translate-x-1 transition-transform" />
+   407→                      </Button>
+   408→                    </motion.div>
+   409→                  )}
+   410→                </div>
+   411→              </div>
+   412→            </>
+   413→          ) : (
+   414→            <div
+   415→              className="w-full h-full flex items-center justify-center"
+   416→              style={{ backgroundColor: banners[currentBanner].bgColor || '#1B4332' }}
+   417→            >
+   418→              <div className="text-center text-white px-6">
+   419→                <h1 className="text-2xl sm:text-3xl md:text-5xl font-bold mb-3">
+   420→                  {banners[currentBanner].title}
+   421→                </h1>
+   422→                {banners[currentBanner].subtitle && (
+   423→                  <p className="text-base sm:text-xl opacity-90 mb-4">
+   424→                    {banners[currentBanner].subtitle}
+   425→                  </p>
+   426→                )}
+   427→                {banners[currentBanner].ctaText && (
+   428→                  <Button
+   429→                    size="lg"
+   430→                    className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold mt-2 rounded-full"
+   431→                    onClick={() => {
+   432→                      const banner = banners[currentBanner]
+   433→                      if (banner.ctaLink) {
+   434→                        if (banner.ctaLink.startsWith('/')) {
+   435→                          navigate('products')
+   436→                        } else {
+   437→                          window.open(banner.ctaLink, '_blank')
+   438→                        }
+   439→                      }
+   440→                    }}
+   441→                  >
+   442→                    {banners[currentBanner].ctaText}
+   443→                    <ArrowRight className="h-5 w-5 ml-2" />
+   444→                  </Button>
+   445→                )}
+   446→              </div>
+   447→            </div>
+   448→          )}
+   449→        </motion.div>
+   450→      </AnimatePresence>
+   451→
+   452→      {/* Carousel Controls */}
+   453→      {banners.length > 1 && (
+   454→        <>
+   455→          <button
+   456→            className="absolute left-3 md:left-6 top-1/2 -translate-y-1/2 bg-black/20 backdrop-blur-sm hover:bg-black/40 rounded-full p-2 md:p-3 shadow-lg transition-all hover:scale-110 z-20"
+   457→            onClick={handlePrev}
+   458→            aria-label="Previous banner"
+   459→          >
+   460→            <ChevronLeft className="h-5 w-5 md:h-6 md:w-6 text-white" />
+   461→          </button>
+   462→          <button
+   463→            className="absolute right-3 md:right-6 top-1/2 -translate-y-1/2 bg-black/20 backdrop-blur-sm hover:bg-black/40 rounded-full p-2 md:p-3 shadow-lg transition-all hover:scale-110 z-20"
+   464→            onClick={handleNext}
+   465→            aria-label="Next banner"
+   466→          >
+   467→            <ChevronRight className="h-5 w-5 md:h-6 md:w-6 text-white" />
+   468→          </button>
+   469→          {/* Dot indicators with progress */}
+   470→          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+   471→            {banners.map((_, idx) => (
+   472→              <button
+   473→                key={idx}
+   474→                className="relative h-2.5 rounded-full transition-all duration-300 overflow-hidden"
+   475→                style={{
+   476→                  width: idx === currentBanner ? '32px' : '10px',
+   477→                }}
+   478→                onClick={() => handleDotClick(idx)}
+   479→                aria-label={`Go to slide ${idx + 1}`}
+   480→              >
+   481→                <div className={`absolute inset-0 rounded-full ${idx === currentBanner ? 'bg-white/40' : 'bg-white/40'}`} />
+   482→                {idx === currentBanner && (
+   483→                  <motion.div
+   484→                    className="absolute inset-0 bg-white rounded-full"
+   485→                    initial={{ width: '0%' }}
+   486→                    animate={{ width: `${progress}%` }}
+   487→                    transition={{ duration: 0.05 }}
+   488→                  />
+   489→                )}
+   490→              </button>
+   491→            ))}
+   492→          </div>
+   493→
+   494→          {/* Mobile Swipe Indicator */}
+   495→          <motion.div
+   496→            initial={{ opacity: 0 }}
+   497→            animate={{ opacity: 1 }}
+   498→            transition={{ delay: 2 }}
+   499→            className="sm:hidden absolute bottom-12 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-black/30 backdrop-blur-sm rounded-full px-3 py-1"
+   500→          >
+   501→            <GripHorizontal className="h-3 w-3 text-white/70" />
+   502→            <span className="text-[10px] text-white/70 font-medium">Swipe</span>
+   503→          </motion.div>
+   504→        </>
+   505→      )}
+   506→    </div>
+   507→  )
+   508→}
+   509→
+   510→// ── Category Section ──
+   511→function CategorySection({ categories, navigate }: {
+   512→  categories: Category[]
+   513→  navigate: (page: PageName, params?: Record<string, unknown>) => void
+   514→}) {
+   515→  const scrollRef = useRef<HTMLDivElement>(null)
+   516→  const [canScrollLeft, setCanScrollLeft] = useState(false)
+   517→  const [canScrollRight, setCanScrollRight] = useState(true)
+   518→
+   519→  const checkScroll = useCallback(() => {
+   520→    if (!scrollRef.current) return
+   521→    const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current
+   522→    setCanScrollLeft(scrollLeft > 5)
+   523→    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 5)
+   524→  }, [])
+   525→
+   526→  useEffect(() => {
+   527→    checkScroll()
+   528→    const el = scrollRef.current
+   529→    if (el) el.addEventListener('scroll', checkScroll, { passive: true })
+   530→    return () => { if (el) el.removeEventListener('scroll', checkScroll) }
+   531→  }, [checkScroll])
+   532→
+   533→  const handleScroll = (direction: 'left' | 'right') => {
+   534→    if (!scrollRef.current) return
+   535→    scrollRef.current.scrollBy({
+   536→      left: direction === 'left' ? -300 : 300,
+   537→      behavior: 'smooth',
+   538→    })
+   539→  }
+   540→
+   541→  if (categories.length === 0) return null
+   542→
+   543→  // Grid layout when ≤6 categories, horizontal scroll otherwise
+   544→  const useGridLayout = categories.length <= 6
+   545→  const visibleCategories = useGridLayout ? categories : categories.slice(0, 12)
+   546→
+   547→  // Shared card renderer — large card in grid mode, compact in scroll mode
+   548→  const renderCard = (cat: Category, idx: number) =>
+   549→    useGridLayout ? (
+   550→      <motion.button
+   551→        key={cat.id}
+   552→        initial={{ opacity: 0, y: 20 }}
+   553→        animate={{ opacity: 1, y: 0 }}
+   554→        transition={{ delay: idx * 0.05, duration: 0.4 }}
+   555→        className="group flex flex-col items-center text-center p-3 rounded-2xl hover:bg-emerald-50/80 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 w-full"
+   556→        onClick={() => navigate('products', { category: cat.slug })}
+   557→      >
+   558→        <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-100 to-teal-50 shadow-md group-hover:shadow-xl group-hover:shadow-emerald-500/20 transition-all duration-500 ring-2 ring-transparent group-hover:ring-emerald-400/60">
+   559→          {cat.image ? (
+   560→            <Image
+   561→              src={cat.image}
+   562→              alt={cat.name}
+   563→              fill
+   564→              className="object-cover transition-transform duration-500 group-hover:scale-125"
+   565→              sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
+   566→            />
+   567→          ) : (
+   568→            <div className="flex items-center justify-center h-full text-3xl">
+   569→              🍽️
+   570→            </div>
+   571→          )}
+   572→          {/* Emerald glow overlay on hover */}
+   573→          <div className="absolute inset-0 bg-emerald-500/0 group-hover:bg-emerald-500/10 transition-all duration-500 rounded-2xl" />
+   574→        </div>
+   575→        <h3 className="font-semibold text-sm mt-3 text-center line-clamp-1 group-hover:text-emerald-700 transition-colors duration-300">
+   576→          {cat.name}
+   577→        </h3>
+   578→        {(bengaliCategoryNames[cat.name] || cat.bengaliName) && (
+   579→          <p className="text-[11px] text-emerald-600/60 text-center -mt-0.5 font-medium">
+   580→            {bengaliCategoryNames[cat.name] || cat.bengaliName}
+   581→          </p>
+   582→        )}
+   583→        <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700/80 group-hover:text-emerald-700 transition-colors">
+   584→          Shop Now
+   585→          <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
+   586→        </span>
+   587→      </motion.button>
+   588→    ) : (
+   589→      <motion.button
+   590→        key={cat.id}
+   591→        initial={{ opacity: 0, y: 20 }}
+   592→        animate={{ opacity: 1, y: 0 }}
+   593→        transition={{ delay: idx * 0.05, duration: 0.4 }}
+   594→        className="group flex flex-col items-center gap-2.5 p-3 rounded-2xl hover:bg-emerald-50/80 transition-all duration-300 snap-start shrink-0 w-[100px] md:w-[120px]"
+   595→        onClick={() => navigate('products', { category: cat.slug })}
+   596→      >
+   597→        <div className="relative h-20 w-20 md:h-24 md:w-24 rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-100 to-teal-50 shadow-md group-hover:shadow-xl group-hover:shadow-emerald-500/20 transition-all duration-500 ring-2 ring-transparent group-hover:ring-emerald-400/60 group-hover:scale-110">
+   598→          {cat.image ? (
+   599→            <Image
+   600→              src={cat.image}
+   601→              alt={cat.name}
+   602→              fill
+   603→              className="object-cover transition-transform duration-500 group-hover:scale-125"
+   604→              sizes="96px"
+   605→            />
+   606→          ) : (
+   607→            <div className="flex items-center justify-center h-full text-3xl">
+   608→              🍽️
+   609→            </div>
+   610→          )}
+   611→          {/* Emerald glow overlay on hover */}
+   612→          <div className="absolute inset-0 bg-emerald-500/0 group-hover:bg-emerald-500/10 transition-all duration-500 rounded-2xl" />
+   613→        </div>
+   614→        <h3 className="font-semibold text-xs md:text-sm text-center line-clamp-1 group-hover:text-emerald-700 transition-colors duration-300 tracking-tight">
+   615→          {cat.name}
+   616→        </h3>
+   617→        {(bengaliCategoryNames[cat.name] || cat.bengaliName) && (
+   618→          <p className="text-[10px] text-emerald-600/50 text-center -mt-1 font-medium">
+   619→            {bengaliCategoryNames[cat.name] || cat.bengaliName}
+   620→          </p>
+   621→        )}
+   622→      </motion.button>
+   623→    )
+   624→
+   625→  return (
+   626→    <section className="py-14 bg-gradient-to-b from-emerald-50/60 via-white to-white relative">
+   627→      {/* Decorative top border */}
+   628→      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-600 via-teal-500 to-emerald-600" />
+   629→
+   630→      <div className="container mx-auto px-4">
+   631→        {/* Section Header */}
+   632→        <AnimatedSection>
+   633→          <div className="text-center mb-10">
+   634→            <div className="inline-flex items-center gap-2 text-amber-600 mb-2">
+   635→              <Sparkles className="h-5 w-5" />
+   636→              <span className="text-sm font-semibold uppercase tracking-wider">Explore</span>
+   637→              <div className="h-[2px] w-8 bg-amber-600/30" />
+   638→            </div>
+   639→            <h2 className="text-2xl md:text-3xl font-bold">Shop by Category</h2>
+   640→            <p className="text-sm text-emerald-700/60 font-medium mt-1">ক্যাটাগরি অনুযায়ী কিনুন</p>
+   641→            <p className="text-muted-foreground mt-2 max-w-md mx-auto text-sm">
+   642→              Discover our authentic Bangladeshi food categories, sourced directly from trusted producers
+   643→            </p>
+   644→          </div>
+   645→        </AnimatedSection>
+   646→
+   647→        {useGridLayout ? (
+   648→          // Grid layout for ≤6 categories — larger, more visually appealing cards
+   649→          <AnimatedSection delay={0.1}>
+   650→            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+   651→              {visibleCategories.map((cat, idx) => renderCard(cat, idx))}
+   652→            </div>
+   653→          </AnimatedSection>
+   654→        ) : (
+   655→          // Scrollable Category Row (>6 categories)
+   656→          <div className="relative">
+   657→            {/* Mobile scroll indicators */}
+   658→            {canScrollLeft && (
+   659→              <button
+   660→                onClick={() => handleScroll('left')}
+   661→                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 shadow-lg rounded-full p-2 hover:bg-white transition-all -translate-x-1 hidden sm:block"
+   662→                aria-label="Scroll left"
+   663→              >
+   664→                <ChevronLeft className="h-5 w-5 text-emerald-700" />
+   665→              </button>
+   666→            )}
+   667→            {canScrollRight && (
+   668→              <button
+   669→                onClick={() => handleScroll('right')}
+   670→                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 shadow-lg rounded-full p-2 hover:bg-white transition-all translate-x-1 hidden sm:block"
+   671→                aria-label="Scroll right"
+   672→              >
+   673→                <ChevronRight className="h-5 w-5 text-emerald-700" />
+   674→              </button>
+   675→            )}
+   676→
+   677→            <div
+   678→              ref={scrollRef}
+   679→              className="flex gap-5 md:gap-6 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory px-2"
+   680→              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+   681→            >
+   682→              {visibleCategories.map((cat, idx) => renderCard(cat, idx))}
+   683→            </div>
+   684→          </div>
+   685→        )}
+   686→
+   687→        {/* View All Button */}
+   688→        <div className="text-center mt-8">
+   689→          <Button
+   690→            variant="outline"
+   691→            onClick={() => navigate('products')}
+   692→            className="gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 rounded-full px-6"
+   693→          >
+   694→            View All Categories
+   695→            <ArrowRight className="h-4 w-4" />
+   696→          </Button>
+   697→        </div>
+   698→      </div>
+   699→    </section>
+   700→  )
+   701→}
+   702→
+   703→// ── Flash Sale Section ──
+   704→function FlashSaleSection({ products, navigate, siteConfig }: {
+   705→  products: Product[]
+   706→  navigate: (page: PageName, params?: Record<string, unknown>) => void
+   707→  siteConfig: import('@/lib/store').SiteConfig | null
+   708→}) {
+   709→  const scrollRef = useRef<HTMLDivElement>(null)
+   710→
+   711→  // Round 3E: admin-controlled enable/disable + title/subtitle (with safe fallbacks)
+   712→  if (siteConfig && siteConfig.flashSaleEnabled === false) return null
+   713→  if (products.length === 0) return null
+   714→
+   715→  const flashSaleTitle = siteConfig?.flashSaleTitle || 'Flash Sale'
+   716→  const flashSaleSubtitle = siteConfig?.flashSaleSubtitle || 'Today'
+   717→
+   718→  return (
+   719→    <section className="py-6 bg-gradient-to-r from-red-600 via-red-500 to-rose-500 text-white relative overflow-hidden">
+   720→      {/* Decorative elements */}
+   721→      <div className="absolute inset-0 opacity-10">
+   722→        <div className="absolute top-0 left-0 w-40 h-40 bg-white rounded-full -translate-x-1/2 -translate-y-1/2" />
+   723→        <div className="absolute bottom-0 right-0 w-56 h-56 bg-white rounded-full translate-x-1/3 translate-y-1/3" />
+   724→        <div className="absolute top-1/2 right-1/4 w-20 h-20 bg-white rounded-full" />
+   725→      </div>
+   726→      {/* Zigzag pattern */}
+   727→      <div className="absolute top-0 left-0 right-0 h-3 overflow-hidden">
+   728→        <svg viewBox="0 0 1200 12" className="w-full h-full" preserveAspectRatio="none">
+   729→          <path d="M0 12 L30 0 L60 12 L90 0 L120 12 L150 0 L180 12 L210 0 L240 12 L270 0 L300 12 L330 0 L360 12 L390 0 L420 12 L450 0 L480 12 L510 0 L540 12 L570 0 L600 12 L630 0 L660 12 L690 0 L720 12 L750 0 L780 12 L810 0 L840 12 L870 0 L900 12 L930 0 L960 12 L990 0 L1020 12 L1050 0 L1080 12 L1110 0 L1140 12 L1170 0 L1200 12" fill="white" opacity="0.15" />
+   730→        </svg>
+   731→      </div>
+   732→
+   733→      <div className="container mx-auto px-4 relative z-10">
+   734→        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
+   735→          <div className="flex items-center gap-3">
+   736→            <div className="relative">
+   737→              <Flame className="h-6 w-6 text-amber-300" />
+   738→            </div>
+   739→            <h2 className="text-lg md:text-xl font-semibold">{flashSaleTitle}</h2>
+   740→            <Badge className="bg-amber-400 text-red-700 font-semibold text-xs px-2 py-0.5">
+   741→              {flashSaleSubtitle}
+   742→            </Badge>
+   743→          </div>
+   744→          <div className="flex items-center gap-3">
+   745→            <Clock className="h-4 w-4 text-white/80" />
+   746→            <span className="text-sm text-white/80">Ends in:</span>
+   747→            <FlashSaleCountdown />
+   748→          </div>
+   749→          <Button
+   750→            variant="secondary"
+   751→            size="sm"
+   752→            className="bg-white text-red-600 hover:bg-white/90 font-semibold rounded-full shadow-md"
+   753→            onClick={() => navigate('products')}
+   754→          >
+   755→            View All Deals <ArrowRight className="h-4 w-4 ml-1" />
+   756→          </Button>
+   757→        </div>
+   758→
+   759→        {/* Product cards with deal styling */}
+   760→        <div
+   761→          ref={scrollRef}
+   762→          className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory"
+   763→          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+   764→        >
+   765→          {products.slice(0, 8).map((product, idx) => {
+   766→            const hasDiscount = product.discountPrice != null && product.discountPrice < product.price
+   767→            const discountPercent = hasDiscount
+   768→              ? Math.round(((product.price - product.discountPrice!) / product.price) * 100)
+   769→              : 0
+   770→            const soldCount = Math.floor(Math.random() * 70 + 30) // Simulated sold percentage
+   771→            return (
+   772→              <motion.div
+   773→                key={product.id}
+   774→                initial={{ opacity: 0, scale: 0.9 }}
+   775→                animate={{ opacity: 1, scale: 1 }}
+   776→                transition={{ delay: idx * 0.08, duration: 0.4 }}
+   777→                className="min-w-[200px] sm:min-w-[220px] snap-start"
+   778→              >
+   779→                <div className="relative bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow group">
+   780→                  {/* Discount Badge */}
+   781→                  {discountPercent > 20 && (
+   782→                    <div className="absolute top-2 left-2 z-20">
+   783→                      <div className="bg-amber-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
+   784→                        {discountPercent}% off
+   785→                      </div>
+   786→                    </div>
+   787→                  )}
+   788→                  <div className="min-w-[200px] sm:min-w-[220px]">
+   789→                    <ProductCard product={product} />
+   790→                  </div>
+   791→                  {/* Progress bar showing items sold */}
+   792→                  <div className="px-3 pb-3">
+   793→                    <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+   794→                      <span>Sold: {soldCount}%</span>
+   795→                      <span className="text-muted-foreground">In demand</span>
+   796→                    </div>
+   797→                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+   798→                      <motion.div
+   799→                        initial={{ width: 0 }}
+   800→                        animate={{ width: `${soldCount}%` }}
+   801→                        transition={{ delay: 0.5 + idx * 0.1, duration: 0.8 }}
+   802→                        className="h-full bg-gradient-to-r from-amber-400 to-red-500 rounded-full"
+   803→                      />
+   804→                    </div>
+   805→                  </div>
+   806→                </div>
+   807→              </motion.div>
+   808→            )
+   809→          })}
+   810→        </div>
+   811→      </div>
+   812→    </section>
+   813→  )
+   814→}
+   815→
+   816→// ── New Arrivals Section ──
+   817→function NewArrivalsSection({ products, navigate }: {
+   818→  products: Product[]
+   819→  navigate: (page: PageName, params?: Record<string, unknown>) => void
+   820→}) {
+   821→  if (products.length === 0) return null
+   822→
+   823→  return (
+   824→    <AnimatedSection className="py-10 md:py-14 bg-muted/30">
+   825→      <div className="container mx-auto px-4">
+   826→        <div className="flex items-end justify-between mb-6 md:mb-8">
+   827→          <div>
+   828→            <div className="inline-flex items-center gap-2 text-amber-600 mb-1.5">
+   829→              <Sparkles className="h-4 w-4" />
+   830→              <span className="text-xs font-semibold uppercase tracking-wider">Just Arrived</span>
+   831→            </div>
+   832→            <h2 className="text-2xl md:text-3xl font-bold">New Arrivals</h2>
+   833→            <p className="text-sm text-muted-foreground mt-1">Latest additions to our authentic collection</p>
+   834→            {/* Decorative accent line */}
+   835→            <div className="mt-2 h-1 w-16 rounded-full bg-gradient-to-r from-amber-500 to-amber-400" />
+   836→          </div>
+   837→          <Button
+   838→            variant="ghost"
+   839→            className="hidden sm:flex items-center gap-1 text-amber-700 hover:text-amber-800 hover:bg-amber-50 rounded-full"
+   840→            onClick={() => navigate('products')}
+   841→          >
+   842→            View All <ArrowRight className="h-4 w-4" />
+   843→          </Button>
+   844→        </div>
+   845→        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5">
+   846→          {products.map((p) => (
+   847→            <ProductCard key={p.id} product={p} />
+   848→          ))}
+   849→        </div>
+   850→        {/* Mobile View All */}
+   851→        <div className="mt-6 text-center sm:hidden">
+   852→          <Button
+   853→            variant="outline"
+   854→            className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800 rounded-full px-6"
+   855→            onClick={() => navigate('products')}
+   856→          >
+   857→            View All New Arrivals <ArrowRight className="h-4 w-4" />
+   858→          </Button>
+   859→        </div>
+   860→      </div>
+   861→    </AnimatedSection>
+   862→  )
+   863→}
+   864→
+   865→// ── Trust & Guarantees Section ──
+   866→function TrustSection() {
+   867→  const guarantees = [
+   868→    {
+   869→      icon: ShieldCheck,
+   870→      title: '100% Authentic',
+   871→      bengaliTitle: '১০০% খাঁটি',
+   872→      description: 'Every product is verified for authenticity. We source directly from trusted Bangladeshi producers.',
+   873→      color: 'emerald',
+   874→    },
+   875→    {
+   876→      icon: Truck,
+   877→      title: 'Fast Delivery',
+   878→      bengaliTitle: 'দ্রুত ডেলিভারি',
+   879→      description: 'Same-day delivery in Dhaka. Nationwide delivery within 2-3 business days.',
+   880→      color: 'teal',
+   881→    },
+   882→    {
+   883→      icon: RefreshCw,
+   884→      title: 'Easy Returns',
+   885→      bengaliTitle: 'সহজ রিটার্ন',
+   886→      description: '7-day hassle-free return policy. If you\'re not satisfied, we\'ll make it right.',
+   887→      color: 'amber',
+   888→    },
+   889→    {
+   890→      icon: Leaf,
+   891→      title: 'Organic & Natural',
+   892→      bengaliTitle: 'জৈব ও প্রাকৃতিক',
+   893→      description: 'Carefully selected organic products. No artificial preservatives or additives.',
+   894→      color: 'green',
+   895→    },
+   896→  ]
+   897→
+   898→  const colorMap: Record<string, { bg: string; icon: string; ring: string }> = {
+   899→    emerald: { bg: 'from-emerald-100 to-emerald-50', icon: 'text-emerald-600', ring: 'ring-emerald-200' },
+   900→    teal: { bg: 'from-teal-100 to-teal-50', icon: 'text-teal-600', ring: 'ring-teal-200' },
+   901→    amber: { bg: 'from-amber-100 to-amber-50', icon: 'text-amber-600', ring: 'ring-amber-200' },
+   902→    green: { bg: 'from-green-100 to-green-50', icon: 'text-green-600', ring: 'ring-green-200' },
+   903→  }
+   904→
+   905→  return (
+   906→    <section className="py-14 bg-white relative">
+   907→      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-200 to-transparent" />
+   908→      <div className="container mx-auto px-4">
+   909→        <AnimatedSection>
+   910→          <div className="text-center mb-10">
+   911→            <div className="inline-flex items-center gap-2 text-emerald-600 mb-2">
+   912→              <ShieldCheck className="h-5 w-5" />
+   913→              <span className="text-sm font-semibold uppercase tracking-wider">Our Promise</span>
+   914→              <div className="h-[2px] w-8 bg-emerald-600/30" />
+   915→            </div>
+   916→            <h2 className="text-2xl md:text-3xl font-bold">Why Choose Khati Khadyo?</h2>
+   917→            <p className="text-sm text-emerald-700/60 font-medium mt-1">কেন খাঁটি খাদ্য বেছে নেবেন?</p>
+   918→          </div>
+   919→        </AnimatedSection>
+   920→
+   921→        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+   922→          {guarantees.map((item, idx) => {
+   923→            const Icon = item.icon
+   924→            const colors = colorMap[item.color]
+   925→            return (
+   926→              <AnimatedSection key={item.title} delay={idx * 0.1}>
+   927→                <div className="group text-center p-5 md:p-6 rounded-2xl border border-border/30 hover:border-emerald-200 hover:shadow-xl transition-all duration-300 bg-white hover:-translate-y-1">
+   928→                  <div className={`h-16 w-16 rounded-2xl bg-gradient-to-br ${colors.bg} flex items-center justify-center mx-auto mb-4 ring-2 ${colors.ring} group-hover:scale-110 transition-transform duration-300 relative`}>
+   929→                    <Icon className={`h-8 w-8 ${colors.icon}`} />
+   930→                    {/* Subtle pulse ring on hover */}
+   931→                    <motion.div
+   932→                      className="absolute inset-0 rounded-2xl ring-2 ring-current opacity-0 group-hover:opacity-20"
+   933→                      animate={{ scale: [1, 1.2, 1] }}
+   934→                      transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+   935→                    />
+   936→                  </div>
+   937→                  <h3 className="font-bold text-sm md:text-base mb-0.5">{item.title}</h3>
+   938→                  <p className="text-[11px] text-emerald-600/60 font-medium mb-2">{item.bengaliTitle}</p>
+   939→                  <p className="text-xs md:text-sm text-muted-foreground leading-relaxed">{item.description}</p>
+   940→                </div>
+   941→              </AnimatedSection>
+   942→            )
+   943→          })}
+   944→        </div>
+   945→      </div>
+   946→    </section>
+   947→  )
+   948→}
+   949→
+   950→// ── Mobile App CTA ──
+   951→function MobileAppCTA({ navigate }: {
+   952→  navigate: (page: PageName, params?: Record<string, unknown>) => void
+   953→}) {
+   954→  return (
+   955→    <section className="py-14 bg-gradient-to-br from-emerald-800 via-emerald-700 to-teal-700 text-white relative overflow-hidden">
+   956→      {/* Decorative elements */}
+   957→      <div className="absolute inset-0 opacity-10">
+   958→        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-400 rounded-full translate-x-1/3 -translate-y-1/3" />
+   959→        <div className="absolute bottom-0 left-0 w-48 h-48 bg-teal-300 rounded-full -translate-x-1/4 translate-y-1/4" />
+   960→      </div>
+   961→      <div className="absolute inset-0 opacity-5">
+   962→        <div
+   963→          className="absolute inset-0"
+   964→          style={{
+   965→            backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
+   966→            backgroundSize: '32px 32px',
+   967→          }}
+   968→        />
+   969→      </div>
+   970→
+   971→      <div className="container mx-auto px-4 relative z-10">
+   972→        <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12">
+   973→          <div className="flex-1 text-center md:text-left">
+   974→            <div className="inline-flex items-center gap-2 text-amber-400 mb-3">
+   975→              <Smartphone className="h-5 w-5" />
+   976→              <span className="text-sm font-semibold uppercase tracking-wider">Mobile App</span>
+   977→            </div>
+   978→            <h2 className="text-2xl md:text-4xl font-bold mb-3">
+   979→              Get the Khati Khadyo App
+   980→            </h2>
+   981→            <p className="text-white/80 mb-2 max-w-lg text-sm md:text-base">
+   982→              Shop on the go! Get exclusive app-only deals, faster checkout, and real-time order tracking.
+   983→            </p>
+   984→            <p className="text-amber-300/80 text-sm mb-6">
+   985→              অ্যাপ থেকে কিনুন — এক্সক্লুসিভ ডিসকাউন্ট পান!
+   986→            </p>
+   987→            <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
+   988→              <Button
+   989→                size="lg"
+   990→                className="bg-white text-emerald-800 hover:bg-white/90 font-semibold gap-2 rounded-full h-12 px-6 shadow-lg"
+   991→                onClick={() => navigate('products')}
+   992→              >
+   993→                <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
+   994→                  <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
+   995→                </svg>
+   996→                App Store
+   997→              </Button>
+   998→              <Button
+   999→                size="lg"
+  1000→                className="bg-white text-emerald-800 hover:bg-white/90 font-semibold gap-2 rounded-full h-12 px-6 shadow-lg"
+  1001→                onClick={() => navigate('products')}
+  1002→              >
+  1003→                <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
+  1004→                  <path d="M3.18 23.49c.34.44.95.58 1.44.3L12 19.87l7.38 3.92c.49.28 1.1.14 1.44-.3.34-.44.28-1.06-.13-1.43L13 13.77V2.5c0-.83-.67-1.5-1.5-1.5S10 1.67 10 2.5v11.27L2.31 22.06c-.41.37-.47.99-.13 1.43z" />
+  1005→                </svg>
+  1006→                Google Play
+  1007→              </Button>
+  1008→            </div>
+  1009→          </div>
+  1010→          {/* Phone mockup */}
+  1011→          <div className="flex-shrink-0 relative">
+  1012→            <div className="relative w-48 h-80 md:w-56 md:h-96">
+  1013→              <div className="absolute inset-0 bg-gradient-to-b from-emerald-400 to-teal-500 rounded-[2rem] shadow-2xl border-4 border-white/20" />
+  1014→              <div className="absolute top-3 left-1/2 -translate-x-1/2 w-16 h-4 bg-black/30 rounded-full" />
+  1015→              <div className="absolute inset-4 rounded-[1.5rem] bg-white/10 backdrop-blur-sm flex items-center justify-center">
+  1016→                <div className="text-center">
+  1017→                  <Leaf className="h-10 w-10 text-white/80 mx-auto mb-2" />
+  1018→                  <p className="text-white/90 font-bold text-sm">Khati Khadyo</p>
+  1019→                  <p className="text-white/60 text-[10px]">খাঁটি খাদ্য</p>
+  1020→                </div>
+  1021→              </div>
+  1022→            </div>
+  1023→            {/* Floating notification */}
+  1024→            <motion.div
+  1025→              animate={{ y: [0, -8, 0] }}
+  1026→              transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
+  1027→              className="absolute -top-4 -right-4 bg-white rounded-xl shadow-xl px-3 py-2 flex items-center gap-2"
+  1028→            >
+  1029→              <div className="h-8 w-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+  1030→                <Gift className="h-4 w-4 text-emerald-600" />
+  1031→              </div>
+  1032→              <div>
+  1033→                <p className="text-[10px] font-bold text-foreground">App Only!</p>
+  1034→                <p className="text-[9px] text-emerald-600 font-semibold">15% Extra Off</p>
+  1035→              </div>
+  1036→            </motion.div>
+  1037→          </div>
+  1038→        </div>
+  1039→      </div>
+  1040→    </section>
+  1041→  )
+  1042→}
+  1043→
+  1044→// ── Loading Skeleton ──
+  1045→function HomeLoadingSkeleton() {
+  1046→  return (
+  1047→    <div className="space-y-0">
+  1048→      {/* Announcement bar skeleton */}
+  1049→      <Skeleton className="h-9 w-full rounded-none" />
+  1050→      {/* Hero skeleton */}
+  1051→      <Skeleton className="h-64 md:h-[440px] w-full rounded-none" />
+  1052→      {/* Search skeleton */}
+  1053→      <div className="py-8 px-4">
+  1054→        <Skeleton className="h-12 max-w-2xl mx-auto rounded-full" />
+  1055→      </div>
+  1056→      {/* Category skeleton */}
+  1057→      <div className="py-14">
+  1058→        <div className="container mx-auto px-4">
+  1059→          <div className="flex gap-5 overflow-hidden">
+  1060→            {Array.from({ length: 6 }).map((_, i) => (
+  1061→              <div key={i} className="flex flex-col items-center gap-2 shrink-0">
+  1062→                <Skeleton className="h-20 w-20 md:h-24 md:w-24 rounded-2xl" />
+  1063→                <Skeleton className="h-4 w-16" />
+  1064→              </div>
+  1065→            ))}
+  1066→          </div>
+  1067→        </div>
+  1068→      </div>
+  1069→      {/* Flash sale skeleton */}
+  1070→      <Skeleton className="h-72 w-full rounded-none" />
+  1071→      {/* Products skeleton */}
+  1072→      <div className="py-14">
+  1073→        <div className="container mx-auto px-4">
+  1074→          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+  1075→            {Array.from({ length: 4 }).map((_, i) => (
+  1076→              <Skeleton key={i} className="h-72 rounded-xl" />
+  1077→            ))}
+  1078→          </div>
+  1079→        </div>
+  1080→      </div>
+  1081→    </div>
+  1082→  )
+  1083→}
+  1084→
+  1085→// ── Main Component ──
+  1086→export default function HomePage() {
+  1087→  const { navigate, setSearchQuery, loadSiteConfig, siteConfig } = useAppStore()
+  1088→  const [heroBanners, setHeroBanners] = useState<Banner[]>([])
+  1089→  const [categories, setCategories] = useState<Category[]>([])
+  1090→  const [discountProducts, setDiscountProducts] = useState<Product[]>([])
+  1091→  const [featuredProducts, setFeaturedProducts] = useState<Product[]>([])
+  1092→  const [newArrivals, setNewArrivals] = useState<Product[]>([])
+  1093→  const [loading, setLoading] = useState(true)
+  1094→
+  1095→  useEffect(() => {
+  1096→    loadSiteConfig()
+  1097→  }, [loadSiteConfig])
+  1098→
+  1099→  useEffect(() => {
+  1100→    const loadAll = async () => {
+  1101→      setLoading(true)
+  1102→      try {
+  1103→        const [heroBannersRes, catRes, discRes, featRes, newArrRes] = await Promise.all([
+  1104→          fetch('/api/banners?status=active&location=hero').catch(() => null),
+  1105→          fetch('/api/categories').catch(() => null),
+  1106→          fetch('/api/products?status=active&minPrice=1&sort=discount&limit=8').catch(() => null),
+  1107→          fetch('/api/products?status=active&isFeatured=true&limit=8').catch(() => null),
+  1108→          fetch('/api/products?status=active&isNewArrival=true&limit=8').catch(() => null),
+  1109→        ])
+  1110→
+  1111→        if (heroBannersRes?.ok) {
+  1112→          const data = await heroBannersRes.json()
+  1113→          setHeroBanners(extractItems<Banner>(data))
+  1114→        }
+  1115→        if (catRes?.ok) {
+  1116→          const data = await catRes.json()
+  1117→          const cats = extractItems<Category>(data)
+  1118→          setCategories(cats.filter((c: Category) => c.showInHome !== false))
+  1119→        }
+  1120→        if (discRes?.ok) {
+  1121→          const data = await discRes.json()
+  1122→          const prods = extractItems<Product>(data)
+  1123→          setDiscountProducts(
+  1124→            prods.filter((p: Product) => p.discountPrice != null && p.discountPrice < p.price)
+  1125→          )
+  1126→        }
+  1127→        if (featRes?.ok) {
+  1128→          const data = await featRes.json()
+  1129→          setFeaturedProducts(extractItems<Product>(data))
+  1130→        }
+  1131→        if (newArrRes?.ok) {
+  1132→          const data = await newArrRes.json()
+  1133→          setNewArrivals(extractItems<Product>(data))
+  1134→        }
+  1135→      } catch (error) {
+  1136→        console.error('Failed to load homepage data:', error)
+  1137→      } finally {
+  1138→        setLoading(false)
+  1139→      }
+  1140→    }
+  1141→    loadAll()
+  1142→  }, [])
+  1143→
+  1144→  const handleSearchSubmit = (query: string) => {
+  1145→    setSearchQuery(query)
+  1146→    navigate('products')
+  1147→  }
+  1148→
+  1149→  if (loading) {
+  1150→    return <HomeLoadingSkeleton />
+  1151→  }
+  1152→
+  1153→  return (
+  1154→    <div className="min-h-screen">
+  1155→      {/* ── 1. Announcement Bar ── */}
+  1156→      <AnnouncementBar siteConfig={siteConfig} />
+  1157→
+  1158→      {/* ── 2. Search Bar (moved above Hero) ── */}
+  1159→      <div className="bg-gradient-to-b from-emerald-50/40 to-transparent py-6 md:py-8">
+  1160→        <div className="container mx-auto px-4 max-w-2xl">
+  1161→          <form
+  1162→            onSubmit={(e) => {
+  1163→              e.preventDefault()
+  1164→              const form = e.target as HTMLFormElement
+  1165→              const input = form.querySelector('input') as HTMLInputElement
+  1166→              if (input.value.trim()) handleSearchSubmit(input.value)
+  1167→            }}
+  1168→            className="flex gap-2"
+  1169→          >
+  1170→            <div className="relative flex-1">
+  1171→              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-emerald-500" />
+  1172→              <Input
+  1173→                placeholder="Search for authentic Bangladeshi food products..."
+  1174→                className="pl-11 h-12 bg-white shadow-md border-emerald-200/50 focus:border-emerald-400 rounded-full text-sm"
+  1175→              />
+  1176→            </div>
+  1177→            <Button
+  1178→              type="submit"
+  1179→              size="lg"
+  1180→              className="h-12 px-6 shadow-md bg-emerald-700 hover:bg-emerald-800 rounded-full"
+  1181→            >
+  1182→              Search
+  1183→            </Button>
+  1184→          </form>
+  1185→        </div>
+  1186→      </div>
+  1187→
+  1188→      {/* ── 3. Categories (moved immediately below Search) ── */}
+  1189→      <CategorySection categories={categories} navigate={navigate} />
+  1190→
+  1191→      {/* ── 4. Hero Banner Carousel (moved below Categories) ── */}
+  1192→      <HeroBannerCarousel banners={heroBanners} navigate={navigate} />
+  1193→
+  1194→      {/* ── 5. Flash Sale / Deal Timer Section (visual priority slightly reduced) ── */}
+  1195→      <FlashSaleSection products={discountProducts} navigate={navigate} siteConfig={siteConfig} />
+  1196→
+  1197→      {/* ── 5. Featured Products ── */}
+  1198→      {featuredProducts.length > 0 && (
+  1199→        <AnimatedSection className="py-10 md:py-14">
+  1200→          <div className="container mx-auto px-4">
+  1201→            <div className="flex items-end justify-between mb-6 md:mb-8">
+  1202→              <div>
+  1203→                <div className="inline-flex items-center gap-2 text-emerald-600 mb-1.5">
+  1204→                  <Star className="h-4 w-4" />
+  1205→                  <span className="text-xs font-semibold uppercase tracking-wider">Handpicked</span>
+  1206→                </div>
+  1207→                <h2 className="text-2xl md:text-3xl font-bold">Featured Products</h2>
+  1208→                <p className="text-sm text-muted-foreground mt-1">Premium picks our customers love</p>
+  1209→                {/* Decorative accent line */}
+  1210→                <div className="mt-2 h-1 w-16 rounded-full bg-gradient-to-r from-emerald-500 to-teal-400" />
+  1211→              </div>
+  1212→              <Button
+  1213→                variant="ghost"
+  1214→                className="hidden sm:flex items-center gap-1 text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 rounded-full"
+  1215→                onClick={() => navigate('products')}
+  1216→              >
+  1217→                View All <ArrowRight className="h-4 w-4" />
+  1218→              </Button>
+  1219→            </div>
+  1220→            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5">
+  1221→              {featuredProducts.map((p: Product) => (
+  1222→                <ProductCard key={p.id} product={p} />
+  1223→              ))}
+  1224→            </div>
+  1225→            {/* Mobile View All — shown below the grid on small screens */}
+  1226→            <div className="mt-6 text-center sm:hidden">
+  1227→              <Button
+  1228→                variant="outline"
+  1229→                className="gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 rounded-full px-6"
+  1230→                onClick={() => navigate('products')}
+  1231→              >
+  1232→                View All Featured <ArrowRight className="h-4 w-4" />
+  1233→              </Button>
+  1234→            </div>
+  1235→          </div>
+  1236→        </AnimatedSection>
+  1237→      )}
+  1238→
+  1239→      {/* ── 6. New Arrivals ── */}
+  1240→      <NewArrivalsSection products={newArrivals} navigate={navigate} />
+  1241→
+  1242→      {/* ── 7. Trust & Guarantees Section ── */}
+  1243→      <TrustSection />
+  1244→
+  1245→      {/* ── 7. Mobile App CTA ── */}
+  1246→      <MobileAppCTA navigate={navigate} />
+  1247→    </div>
+  1248→  )
+  1249→}
+  1250→

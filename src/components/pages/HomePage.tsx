@@ -20,6 +20,7 @@ import {
   Flame,
   Gift,
   GripHorizontal,
+  TrendingUp,
 } from 'lucide-react'
 import { motion, AnimatePresence, useInView } from 'framer-motion'
 import { Button } from '@/components/ui/button'
@@ -813,6 +814,55 @@ function FlashSaleSection({ products, navigate, siteConfig }: {
   )
 }
 
+// ── Best Sellers Section ──
+function BestSellersSection({ products, navigate }: {
+  products: Product[]
+  navigate: (page: PageName, params?: Record<string, unknown>) => void
+}) {
+  if (products.length === 0) return null
+
+  return (
+    <AnimatedSection className="py-10 md:py-14 bg-gradient-to-b from-teal-50/50 via-white to-white">
+      <div className="container mx-auto px-4">
+        <div className="flex items-end justify-between mb-6 md:mb-8">
+          <div>
+            <div className="inline-flex items-center gap-2 text-teal-600 mb-1.5">
+              <TrendingUp className="h-4 w-4" />
+              <span className="text-xs font-semibold uppercase tracking-wider">Top Rated</span>
+            </div>
+            <h2 className="text-2xl md:text-3xl font-bold">Best Sellers</h2>
+            <p className="text-sm text-muted-foreground mt-1">Most-loved products by our customers</p>
+            {/* Decorative teal underline */}
+            <div className="mt-2 h-1 w-16 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400" />
+          </div>
+          <Button
+            variant="ghost"
+            className="hidden sm:flex items-center gap-1 text-teal-700 hover:text-teal-800 hover:bg-teal-50 rounded-full"
+            onClick={() => navigate('products')}
+          >
+            View All <ArrowRight className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5">
+          {products.map((p) => (
+            <ProductCard key={p.id} product={p} />
+          ))}
+        </div>
+        {/* Mobile View All */}
+        <div className="mt-6 text-center sm:hidden">
+          <Button
+            variant="outline"
+            className="gap-2 border-teal-300 text-teal-700 hover:bg-teal-50 hover:text-teal-800 rounded-full px-6"
+            onClick={() => navigate('products')}
+          >
+            View All Best Sellers <ArrowRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </AnimatedSection>
+  )
+}
+
 // ── New Arrivals Section ──
 function NewArrivalsSection({ products, navigate }: {
   products: Product[]
@@ -1089,6 +1139,7 @@ export default function HomePage() {
   const [categories, setCategories] = useState<Category[]>([])
   const [discountProducts, setDiscountProducts] = useState<Product[]>([])
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([])
+  const [bestSellers, setBestSellers] = useState<Product[]>([])
   const [newArrivals, setNewArrivals] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -1100,11 +1151,12 @@ export default function HomePage() {
     const loadAll = async () => {
       setLoading(true)
       try {
-        const [heroBannersRes, catRes, discRes, featRes, newArrRes] = await Promise.all([
+        const [heroBannersRes, catRes, discRes, featRes, bestRes, newArrRes] = await Promise.all([
           fetch('/api/banners?status=active&location=hero').catch(() => null),
           fetch('/api/categories').catch(() => null),
           fetch('/api/products?status=active&minPrice=1&sort=discount&limit=8').catch(() => null),
           fetch('/api/products?status=active&isFeatured=true&limit=8').catch(() => null),
+          fetch('/api/products?status=active&isBestSeller=true&limit=8').catch(() => null),
           fetch('/api/products?status=active&isNewArrival=true&limit=8').catch(() => null),
         ])
 
@@ -1127,6 +1179,10 @@ export default function HomePage() {
         if (featRes?.ok) {
           const data = await featRes.json()
           setFeaturedProducts(extractItems<Product>(data))
+        }
+        if (bestRes?.ok) {
+          const data = await bestRes.json()
+          setBestSellers(extractItems<Product>(data))
         }
         if (newArrRes?.ok) {
           const data = await newArrRes.json()
@@ -1193,6 +1249,9 @@ export default function HomePage() {
 
       {/* ── 5. Flash Sale / Deal Timer Section (visual priority slightly reduced) ── */}
       <FlashSaleSection products={discountProducts} navigate={navigate} siteConfig={siteConfig} />
+
+      {/* ── 5a. Best Sellers ── */}
+      <BestSellersSection products={bestSellers} navigate={navigate} />
 
       {/* ── 5. Featured Products ── */}
       {featuredProducts.length > 0 && (

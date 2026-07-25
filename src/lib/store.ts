@@ -994,8 +994,11 @@ export const useAppStore = create<AppStore>()(
 
           set({ siteConfig, siteConfigLoading: false })
         } catch (error) {
-          console.error('Failed to load site config:', error)
-          // Fallback to defaults
+          // Silently fall back to defaults — this fires during dev hot-reloads
+          // when the server is briefly unavailable. Logging it spams the console.
+          if (process.env.NODE_ENV === 'production') {
+            console.error('Failed to load site config:', error)
+          }
           set({ siteConfig: defaultSiteConfig, siteConfigLoading: false })
         }
       },

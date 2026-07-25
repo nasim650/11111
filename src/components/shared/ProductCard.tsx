@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { Heart, ShoppingCart, Eye, Star, Package, Check, GitCompare, MapPin } from 'lucide-react'
+import { Heart, ShoppingCart, Eye, Star, Package, Check, GitCompare, MapPin, Loader2, Sparkles } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -164,7 +164,7 @@ export default function ProductCard({ product }: ProductCardProps) {
 
   return (
     <Card
-      className="group cursor-pointer overflow-hidden border-border/50 rounded-xl transition-all duration-500 hover:shadow-2xl hover:shadow-emerald-500/10 hover:-translate-y-1 hover:scale-[1.02]"
+      className="group cursor-pointer overflow-hidden border-border/50 rounded-xl transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/10 hover:-translate-y-1"
       onClick={() => navigate('product-detail', { id: product.id })}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -210,26 +210,21 @@ export default function ProductCard({ product }: ProductCardProps) {
           )}
         </AnimatePresence>
 
-        {/* Circular Discount Badge - Top Right */}
-        {hasDiscount && (
-          <motion.div
-            initial={{ scale: 0, rotate: -180 }}
-            animate={{ scale: 1, rotate: 0 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 20, delay: 0.1 }}
-            className={`absolute top-2 right-2 z-10 h-11 w-11 rounded-full flex items-center justify-center shadow-lg ${
-              discountPercent > 20
-                ? 'bg-gradient-to-br from-red-500 to-rose-600 shadow-red-500/40'
-                : 'bg-gradient-to-br from-emerald-500 to-orange-500 shadow-emerald-500/40'
-            }`}
-          >
-            <div className="text-center leading-none">
-              <span className="text-white text-[10px] font-extrabold block">-{discountPercent}%</span>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Badges - Top Left */}
-        <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">
+        {/* Badges - Top Left (including circular discount badge) */}
+        <div className="absolute top-2 left-2 flex flex-col gap-1.5 z-10">
+          {hasDiscount && (
+            <motion.div
+              initial={{ scale: 0, rotate: -180 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 20, delay: 0.1 }}
+              className="h-10 w-10 rounded-full flex items-center justify-center shadow-lg bg-gradient-to-br from-red-500 to-rose-600 shadow-red-500/40"
+              aria-label={`Discount ${discountPercent}%`}
+            >
+              <span className="text-white text-[10px] font-extrabold leading-none">
+                -{discountPercent}%
+              </span>
+            </motion.div>
+          )}
           {product.isNewArrival && (
             <motion.div
               initial={{ x: -20, opacity: 0 }}
@@ -265,9 +260,9 @@ export default function ProductCard({ product }: ProductCardProps) {
           )}
         </div>
 
-        {/* Origin Flag - Below discount badge */}
+        {/* Origin Flag - Top Right */}
         {isBangladeshi && (
-          <div className="absolute top-14 right-2 z-10">
+          <div className="absolute top-2 right-2 z-10">
             <div className="flex items-center gap-1 bg-white/90 backdrop-blur-sm rounded-full px-1.5 py-0.5 shadow-sm">
               <span className="text-[10px]">🇧🇩</span>
               <span className="text-[9px] font-semibold text-emerald-700 hidden sm:inline">Local</span>
@@ -283,7 +278,7 @@ export default function ProductCard({ product }: ProductCardProps) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
               transition={{ duration: 0.25, ease: 'easeOut' }}
-              className="absolute bottom-2 left-2 right-2 flex gap-1.5 z-10"
+              className="absolute bottom-2 left-2 flex gap-1.5 z-10"
             >
               <motion.button
                 initial={{ opacity: 0, y: 10 }}
@@ -325,43 +320,57 @@ export default function ProductCard({ product }: ProductCardProps) {
               >
                 <Eye className="h-3.5 w-3.5" />
               </motion.button>
-              <motion.button
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.97 }}
-                className="flex-1 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center gap-1 shadow-md hover:bg-emerald-700 transition-all text-xs font-semibold"
-                onClick={handleAddToCart}
-                disabled={loading}
-              >
-                <AnimatePresence mode="wait">
-                  {addedToCart ? (
-                    <motion.span
-                      key="check"
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      exit={{ scale: 0 }}
-                      className="flex items-center gap-1"
-                    >
-                      <Check className="h-3.5 w-3.5" />
-                      Added
-                    </motion.span>
-                  ) : (
-                    <motion.span
-                      key="cart"
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      exit={{ scale: 0 }}
-                      className="flex items-center gap-1"
-                    >
-                      <ShoppingCart className="h-3.5 w-3.5" />
-                      Add
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </motion.button>
             </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Quick Add to Cart - Circular button at bottom-right corner */}
+        <AnimatePresence>
+          {isHovered && !outOfStock && (
+            <motion.button
+              key="quick-add-cart"
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0, opacity: 0 }}
+              transition={{ delay: 0.15, type: 'spring', stiffness: 400, damping: 20 }}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={handleAddToCart}
+              disabled={loading}
+              aria-label="Quick add to cart"
+              className="absolute bottom-2 right-2 z-20 h-11 w-11 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-lg shadow-emerald-600/40 disabled:opacity-70 disabled:cursor-not-allowed transition-colors"
+            >
+              <AnimatePresence mode="wait">
+                {loading ? (
+                  <motion.span
+                    key="loading"
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    exit={{ scale: 0 }}
+                  >
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  </motion.span>
+                ) : addedToCart ? (
+                  <motion.span
+                    key="added"
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    exit={{ scale: 0 }}
+                  >
+                    <Check className="h-5 w-5" />
+                  </motion.span>
+                ) : (
+                  <motion.span
+                    key="cart"
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    exit={{ scale: 0 }}
+                  >
+                    <ShoppingCart className="h-5 w-5" />
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </motion.button>
           )}
         </AnimatePresence>
 
@@ -455,13 +464,12 @@ export default function ProductCard({ product }: ProductCardProps) {
             )}
           </div>
         ) : (
-          <div className="flex items-center gap-1">
-            <div className="flex">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Star key={i} className="h-3 w-3 text-gray-200" />
-              ))}
-            </div>
-            <span className="text-xs text-muted-foreground">No reviews</span>
+          <div className="flex items-center gap-1.5">
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-semibold border-emerald-300 text-emerald-700 bg-emerald-50/60">
+              <Sparkles className="h-2.5 w-2.5 mr-0.5" />
+              New
+            </Badge>
+            <span className="text-[10px] text-muted-foreground">No reviews yet</span>
           </div>
         )}
 
