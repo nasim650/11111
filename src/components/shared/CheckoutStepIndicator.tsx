@@ -15,10 +15,8 @@ export interface CheckoutStep {
 }
 
 export const CHECKOUT_STEPS: CheckoutStep[] = [
-  { id: 1, label: 'Cart', description: 'Review items', icon: ShoppingBag },
-  { id: 2, label: 'Shipping', description: 'Delivery info', icon: MapPin },
-  { id: 3, label: 'Payment', description: 'Choose payment', icon: CreditCard },
-  { id: 4, label: 'Confirm', description: 'Place order', icon: CheckCircle2 },
+  { id: 1, label: 'Delivery & Payment', description: 'Address, shipping & payment', icon: MapPin },
+  { id: 2, label: 'Review & Order', description: 'Confirm & place order', icon: CheckCircle2 },
 ]
 
 interface CheckoutStepIndicatorProps {
