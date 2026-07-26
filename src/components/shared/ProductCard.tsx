@@ -63,31 +63,10 @@ export default function ProductCard({ product }: ProductCardProps) {
   const [addedToCart, setAddedToCart] = useState(false)
   const [imgError, setImgError] = useState(false)
   const [imgLoaded, setImgLoaded] = useState(false)
-  const [compareChecked, setCompareChecked] = useState(isInCompare(product.id))
+  const [compareChecked, setCompareChecked] = useState(product?.id ? isInCompare(product.id) : false)
   const [isHovered, setIsHovered] = useState(false)
   const addedTimerRef = useRef<NodeJS.Timeout | null>(null)
-  const wishlisted = isInWishlist(product.id)
-  const imageUrl =
-    product.images?.[0]?.url && !imgError ? product.images[0].url : ''
-  const effectivePrice =
-    product.discountPrice != null ? product.discountPrice : product.price
-  const hasDiscount =
-    product.discountPrice != null && product.discountPrice < product.price
-  const discountPercent = hasDiscount
-    ? Math.round(((product.price - product.discountPrice!) / product.price) * 100)
-    : 0
-
-  // Stock status - updated threshold to <10 for "Low Stock"
-  const outOfStock = product.stock <= 0
-  const lowStock = product.stock > 0 && product.stock < 10
-  const stockPercentage = Math.min((product.stock / 50) * 100, 100) // assume 50 is "plenty"
-  const stockColor = product.stock <= 5 ? 'bg-red-500' : product.stock <= 15 ? 'bg-amber-500' : 'bg-emerald-500'
-
-  // Origin
-  const isBangladeshi = !product.origin || product.origin === 'Bangladesh' || product.origin === 'BD'
-
-  // Savings amount
-  const savingsAmount = hasDiscount ? product.price - product.discountPrice! : 0
+  const wishlisted = product?.id ? isInWishlist(product.id) : false
 
   // Cleanup timer
   useEffect(() => {
@@ -95,6 +74,32 @@ export default function ProductCard({ product }: ProductCardProps) {
       if (addedTimerRef.current) clearTimeout(addedTimerRef.current)
     }
   }, [])
+
+  if (!product || !product.id) return null
+
+  const imageUrl =
+    product.images?.[0]?.url && !imgError ? product.images[0].url : ''
+  const price = typeof product.price === 'number' ? product.price : 0
+  const stock = typeof product.stock === 'number' ? product.stock : 0
+  const effectivePrice =
+    product.discountPrice != null ? product.discountPrice : price
+  const hasDiscount =
+    product.discountPrice != null && product.discountPrice < price
+  const discountPercent = hasDiscount && price > 0
+    ? Math.round(((price - product.discountPrice!) / price) * 100)
+    : 0
+
+  // Stock status
+  const outOfStock = stock <= 0
+  const lowStock = stock > 0 && stock < 10
+  const stockPercentage = Math.min((stock / 50) * 100, 100)
+  const stockColor = stock <= 5 ? 'bg-red-500' : stock <= 15 ? 'bg-amber-500' : 'bg-emerald-500'
+
+  // Origin
+  const isBangladeshi = !product.origin || product.origin === 'Bangladesh' || product.origin === 'BD'
+
+  // Savings amount
+  const savingsAmount = hasDiscount ? product.price - product.discountPrice! : 0
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.stopPropagation()

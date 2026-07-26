@@ -16,15 +16,19 @@ export async function POST(request: NextRequest) {
     if (!parsed.ok) return NextResponse.json(validationError(parsed.errors), { status: 400 })
     const { email, phone, password } = parsed.data
 
-    const user = await db.user.findFirst({
-      where: {
-        OR: [
-          ...(email ? [{ email }] : []),
-          ...(phone ? [{ phone }] : []),
-        ],
-        isActive: true,
-      },
-    })
+    const conditions = [
+      ...(email ? [{ email }] : []),
+      ...(phone ? [{ phone }] : []),
+    ]
+
+    const user = conditions.length > 0
+      ? await db.user.findFirst({
+          where: {
+            OR: conditions,
+            isActive: true,
+          },
+        })
+      : null
 
     if (!user || !user.password) {
       return NextResponse.json(
@@ -58,9 +62,10 @@ export async function POST(request: NextRequest) {
     })
     return response
   } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Internal server error'
     console.error('Login error:', error)
     return NextResponse.json(
-      { success: false, error: 'Internal server error' },
+      { success: false, error: errorMsg },
       { status: 500 }
     )
   }

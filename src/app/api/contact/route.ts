@@ -151,13 +151,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Simulate admin notification
-    console.log(`[Contact Form] New message received:`)
-    console.log(`  From: ${name} (${email})`)
-    console.log(`  Subject: ${subject}`)
-    console.log(`  Message: ${message.substring(0, 100)}${message.length > 100 ? '...' : ''}`)
-    console.log(`  Phone: ${phone || 'N/A'}`)
-    console.log(`  --- Admin notification would be sent to admin@khatikhadyo.com ---`)
+
 
     return NextResponse.json(
       {

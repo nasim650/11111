@@ -38,11 +38,6 @@
   ],
   "exclude": [
     "node_modules",
-    "upload",
-    "examples",
-    "skills",
-    "tests",
-    "mini-services",
     ".next"
   ]
 }

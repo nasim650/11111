@@ -17,14 +17,13 @@ export async function POST(request: NextRequest) {
     const { name, email, phone, password } = parsed.data
 
     // Check if user already exists
-    const existingUser = await db.user.findFirst({
-      where: {
-        OR: [
-          ...(email ? [{ email }] : []),
-          ...(phone ? [{ phone }] : []),
-        ],
-      },
-    })
+    const conditions = [
+      ...(email ? [{ email }] : []),
+      ...(phone ? [{ phone }] : []),
+    ]
+    const existingUser = conditions.length > 0 
+      ? await db.user.findFirst({ where: { OR: conditions } }) 
+      : null
 
     if (existingUser) {
       return NextResponse.json(
@@ -62,9 +61,10 @@ export async function POST(request: NextRequest) {
     })
     return response
   } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Internal server error'
     console.error('Register error:', error)
     return NextResponse.json(
-      { success: false, error: 'Internal server error' },
+      { success: false, error: errorMsg },
       { status: 500 }
     )
   }

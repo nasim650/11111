@@ -79,9 +79,6 @@ export async function POST(request: NextRequest) {
     }
 
     const useCloudinary = isCloudinaryConfigured()
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('[uploads] useCloudinary=' + useCloudinary + ' cloudName=' + JSON.stringify(process.env.CLOUDINARY_CLOUD_NAME) + ' apiKeyEmpty=' + !process.env.CLOUDINARY_API_KEY + ' apiSecretEmpty=' + !process.env.CLOUDINARY_API_SECRET)
-    }
     const uploadedFiles: Array<{ url: string; filename: string; originalName: string; size: number; type: string }> = []
 
     for (const file of files) {

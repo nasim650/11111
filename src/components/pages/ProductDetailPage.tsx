@@ -150,10 +150,10 @@ function FullscreenViewer({
 }) {
   const [idx, setIdx] = useState(initialIndex)
 
-  // Sync idx when the dialog opens or initialIndex changes (lint fix preserved)
-  if (open && idx !== initialIndex) {
-    setIdx(initialIndex)
-  }
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (open) setIdx(initialIndex)
+  }, [open, initialIndex])
 
   useEffect(() => {
     if (!open) return
