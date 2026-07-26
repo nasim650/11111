@@ -63,11 +63,13 @@ export function packSmartAddress(data: SmartAddressData) {
  * Unpacks any raw DB Address object or string into a structured SmartAddressData
  */
 export function unpackSmartAddress(rawAddress: any): SmartAddressData {
+  const cleanDivision = (div: string) => (div || 'Dhaka').replace(/\s*Division$/, '').trim()
+
   if (!rawAddress) {
     return {
       name: '',
       phone: '',
-      division: 'Dhaka Division',
+      division: 'Dhaka',
       district: 'Dhaka',
       upazila: 'Mirpur',
       addressDetail: '',
@@ -93,7 +95,7 @@ export function unpackSmartAddress(rawAddress: any): SmartAddressData {
         name,
         phone,
         altPhone: meta.altPhone || '',
-        division: meta.division || 'Dhaka Division',
+        division: cleanDivision(meta.division),
         district: district || 'Dhaka',
         upazila: meta.upazila || city || 'Mirpur',
         unionOrArea: meta.unionOrArea || '',
@@ -108,17 +110,17 @@ export function unpackSmartAddress(rawAddress: any): SmartAddressData {
     }
   }
 
-  // Fallback parser for legacy unstructured address strings
-  const cleanStr = addressStr.replace(/__BDMETA__.*/, '').trim()
+  // Legacy free-text parsing fallback
+  const firstLine = addressStr.split(' | ')[0] || addressStr
   return {
     id: rawAddress.id,
     name,
     phone,
-    division: 'Dhaka Division',
-    district: district || 'Dhaka',
-    upazila: city || 'Dhaka',
-    addressDetail: cleanStr,
-    label: postalCodeLabel.length < 20 ? postalCodeLabel : 'Home',
+    division: cleanDivision(rawAddress.division || 'Dhaka'),
+    district,
+    upazila: city || 'Mirpur',
+    addressDetail: firstLine,
+    label: postalCodeLabel || 'Home',
     isDefault: rawAddress.isDefault ?? false,
   }
 }

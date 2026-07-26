@@ -891,68 +891,27 @@ export default function CheckoutPage() {
                     </CardContent>
                   </Card>
 
-                  {/* Delivery Speed Card */}
+                  {/* Delivery Method Card */}
                   <Card className="shadow-sm rounded-2xl border">
                     <SectionHeader
                       icon={Truck}
                       title="2. Delivery Method"
-                      subtitle="Choose your preferred delivery speed"
                     />
                     <CardContent className="pt-0">
-                      <RadioGroup
-                        value={shippingMethod}
-                        onValueChange={setShippingMethod}
-                        className="grid grid-cols-1 sm:grid-cols-2 gap-3"
-                      >
-                        <div
-                          onClick={() => setShippingMethod('standard')}
-                          className={`rounded-xl p-4 border-2 cursor-pointer transition-all ${
-                            shippingMethod === 'standard'
-                              ? 'border-primary bg-primary/5 shadow-sm'
-                              : 'border-border bg-card hover:border-primary/40'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-center gap-2">
-                              <RadioGroupItem value="standard" id="std" />
-                              <Label htmlFor="std" className="font-semibold text-sm cursor-pointer">
-                                Regular Delivery
-                              </Label>
-                            </div>
-                            <span className="text-xs font-bold text-primary">
-                              {sub >= freeThreshold ? 'FREE' : formatPrice(standardShipping)}
-                            </span>
+                      <div className="rounded-xl p-4 border-2 border-primary bg-primary/5 shadow-sm flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold">
+                            <Truck className="h-5 w-5" />
                           </div>
-                          <p className="text-xs text-muted-foreground mt-2 ml-6">
-                            Estimated delivery in 3–5 business days across Bangladesh.
-                          </p>
-                        </div>
-
-                        <div
-                          onClick={() => setShippingMethod('express')}
-                          className={`rounded-xl p-4 border-2 cursor-pointer transition-all ${
-                            shippingMethod === 'express'
-                              ? 'border-primary bg-primary/5 shadow-sm'
-                              : 'border-border bg-card hover:border-primary/40'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-center gap-2">
-                              <RadioGroupItem value="express" id="exp" />
-                              <Label htmlFor="exp" className="font-semibold text-sm cursor-pointer flex items-center gap-1">
-                                Express Delivery
-                                <Badge className="bg-amber-500 text-white text-[10px] px-1.5 py-0">Fast</Badge>
-                              </Label>
-                            </div>
-                            <span className="text-xs font-bold text-primary">
-                              {formatPrice(expressShipping)}
-                            </span>
+                          <div>
+                            <p className="font-bold text-sm text-foreground">Delivery</p>
+                            <p className="text-xs text-muted-foreground">Estimated delivery: 3–5 business days</p>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-2 ml-6">
-                            Next-day priority delivery in major metropolitan areas.
-                          </p>
                         </div>
-                      </RadioGroup>
+                        <Badge className="bg-emerald-600 text-white font-bold text-xs px-3 py-1">
+                          {sub >= freeThreshold ? 'Free Delivery' : formatPrice(standardShipping)}
+                        </Badge>
+                      </div>
                     </CardContent>
                   </Card>
 
@@ -961,9 +920,8 @@ export default function CheckoutPage() {
                     <SectionHeader
                       icon={CreditCard}
                       title="3. Payment Method"
-                      subtitle="Select how you wish to pay"
                     />
-                    <CardContent className="pt-0 space-y-3">
+                    <CardContent className="pt-0">
                       <RadioGroup
                         value={paymentMethod}
                         onValueChange={setPaymentMethod}
@@ -977,18 +935,13 @@ export default function CheckoutPage() {
                               : 'border-border bg-card hover:border-primary/40'
                           }`}
                         >
-                          <div className="flex items-start justify-between mb-1">
-                            <div className="flex items-center gap-2">
-                              <RadioGroupItem value="cod" id="cod" />
-                              <Label htmlFor="cod" className="font-semibold text-sm cursor-pointer flex items-center gap-1.5">
-                                <Banknote className="h-4 w-4 text-emerald-600" />
-                                Cash on Delivery (COD)
-                              </Label>
-                            </div>
+                          <div className="flex items-center gap-2">
+                            <RadioGroupItem value="cod" id="cod" />
+                            <Label htmlFor="cod" className="font-bold text-sm cursor-pointer flex items-center gap-2">
+                              <Banknote className="h-4 w-4 text-emerald-600" />
+                              Cash on Delivery
+                            </Label>
                           </div>
-                          <p className="text-xs text-muted-foreground ml-6 leading-relaxed">
-                            Pay with cash when your package is delivered right to your door.
-                          </p>
                         </div>
 
                         <div
@@ -999,18 +952,13 @@ export default function CheckoutPage() {
                               : 'border-border bg-card hover:border-primary/40'
                           }`}
                         >
-                          <div className="flex items-start justify-between mb-1">
-                            <div className="flex items-center gap-2">
-                              <RadioGroupItem value="online" id="online" />
-                              <Label htmlFor="online" className="font-semibold text-sm cursor-pointer flex items-center gap-1.5">
-                                <Wallet className="h-4 w-4 text-primary" />
-                                Online Payment (SSLCommerz)
-                              </Label>
-                            </div>
+                          <div className="flex items-center gap-2">
+                            <RadioGroupItem value="online" id="online" />
+                            <Label htmlFor="online" className="font-bold text-sm cursor-pointer flex items-center gap-2">
+                              <Wallet className="h-4 w-4 text-primary" />
+                              Online Payment
+                            </Label>
                           </div>
-                          <p className="text-xs text-muted-foreground ml-6 leading-relaxed">
-                            bKash, Nagad, Rocket, Visa, Mastercard, Internet Banking.
-                          </p>
                         </div>
                       </RadioGroup>
                     </CardContent>

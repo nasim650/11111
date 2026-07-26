@@ -5,17 +5,45 @@
  */
 
 export const BD_DIVISIONS: string[] = [
-  'Dhaka Division',
-  'Chattogram Division',
-  'Rajshahi Division',
-  'Khulna Division',
-  'Barishal Division',
-  'Sylhet Division',
-  'Rangpur Division',
-  'Mymensingh Division',
+  'Dhaka',
+  'Chattogram',
+  'Rajshahi',
+  'Khulna',
+  'Barishal',
+  'Sylhet',
+  'Rangpur',
+  'Mymensingh',
 ]
 
 export const BD_DISTRICTS_BY_DIVISION: Record<string, string[]> = {
+  Dhaka: [
+    'Dhaka', 'Faridpur', 'Gazipur', 'Gopalganj', 'Kishoreganj', 'Madaripur',
+    'Manikganj', 'Munshiganj', 'Narayanganj', 'Narsingdi', 'Rajbari', 'Shariatpur', 'Tangail'
+  ],
+  Chattogram: [
+    'Chattogram', 'Comilla', "Cox's Bazar", 'Feni', 'Khagrachhari', 'Lakshmipur',
+    'Noakhali', 'Rangamati', 'Brahmanbaria', 'Chandpur'
+  ],
+  Rajshahi: [
+    'Rajshahi', 'Bogra', 'Joypurhat', 'Naogaon', 'Natore', 'Nawabganj', 'Pabna', 'Sirajganj'
+  ],
+  Khulna: [
+    'Khulna', 'Bagerhat', 'Chuadanga', 'Jessore', 'Jhenaidah', 'Kushtia',
+    'Magura', 'Meherpur', 'Narail', 'Satkhira'
+  ],
+  Barishal: [
+    'Barishal', 'Barguna', 'Bhola', 'Jhalokati', 'Patuakhali', 'Pirojpur'
+  ],
+  Sylhet: [
+    'Sylhet', 'Habiganj', 'Moulvibazar', 'Sunamganj'
+  ],
+  Rangpur: [
+    'Rangpur', 'Dinajpur', 'Gaibandha', 'Kurigram', 'Lalmonirhat', 'Nilphamari', 'Panchagarh', 'Thakurgaon'
+  ],
+  Mymensingh: [
+    'Mymensingh', 'Jamalpur', 'Netrokona', 'Sherpur'
+  ],
+  // Fallbacks with ' Division' suffix for legacy compatibility
   'Dhaka Division': [
     'Dhaka', 'Faridpur', 'Gazipur', 'Gopalganj', 'Kishoreganj', 'Madaripur',
     'Manikganj', 'Munshiganj', 'Narayanganj', 'Narsingdi', 'Rajbari', 'Shariatpur', 'Tangail'

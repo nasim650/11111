@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  User, Phone, Mail, MapPin, Building, Home as HomeIcon,
-  Briefcase, Users, Store, Tag, Compass, FileText, CheckCircle2,
-  Eye, RefreshCw, AlertCircle, Sparkles
+  User, Phone, Mail, MapPin, Home as HomeIcon,
+  Briefcase, Users, Store, Tag, Compass, FileText, ChevronDown,
+  Search, Eye, Sparkles
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,19 +20,108 @@ import {
   BD_DIVISIONS,
   getDistrictsForDivision,
   getUpazilasForDistrict,
-  getAreasForUpazila
 } from '@/lib/bangladesh-locations'
 import { SmartAddressData } from '@/lib/bangladesh-address'
 
 const ADDRESS_LABELS = [
-  { id: 'Home', label: 'Home', icon: HomeIcon, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  { id: 'Office', label: 'Office', icon: Briefcase, color: 'bg-blue-50 text-blue-700 border-blue-200' },
-  { id: 'Family', label: 'Family', icon: Users, color: 'bg-purple-50 text-purple-700 border-purple-200' },
-  { id: 'Shop', label: 'Shop', icon: Store, color: 'bg-amber-50 text-amber-700 border-amber-200' },
-  { id: 'Other', label: 'Other', icon: Tag, color: 'bg-gray-50 text-gray-700 border-gray-200' },
+  { id: 'Home', label: 'Home', icon: HomeIcon },
+  { id: 'Office', label: 'Office', icon: Briefcase },
+  { id: 'Family', label: 'Family', icon: Users },
+  { id: 'Shop', label: 'Shop', icon: Store },
+  { id: 'Other', label: 'Other', icon: Tag },
 ]
 
 const DRAFT_KEY = 'khati_khadyo_address_draft'
+
+interface SearchableSelectProps {
+  label: string
+  value: string
+  onChange: (val: string) => void
+  options: string[]
+  placeholder: string
+  error?: string
+}
+
+function SearchableSelect({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder,
+  error,
+}: SearchableSelectProps) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const filtered = options.filter((opt) =>
+    opt.toLowerCase().includes(search.toLowerCase())
+  )
+
+  return (
+    <div className="relative" ref={ref}>
+      <Label className="text-xs font-medium mb-1 block text-foreground">{label}</Label>
+      <div
+        onClick={() => setOpen(!open)}
+        className={`flex items-center justify-between h-10 px-3 border rounded-xl bg-background text-sm cursor-pointer transition-colors ${
+          error ? 'border-red-500' : 'hover:border-primary/40'
+        }`}
+      >
+        <span className={value ? 'text-foreground font-medium truncate' : 'text-muted-foreground'}>
+          {value || placeholder}
+        </span>
+        <ChevronDown className="h-4 w-4 text-muted-foreground ml-1 flex-shrink-0" />
+      </div>
+
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-popover border rounded-xl shadow-lg p-2 max-h-60 overflow-hidden flex flex-col">
+          <div className="relative mb-1">
+            <Search className="h-3.5 w-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
+            <Input
+              autoFocus
+              placeholder="Search..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-8 pl-8 text-xs rounded-lg"
+            />
+          </div>
+          <div className="overflow-y-auto max-h-44 space-y-0.5 pr-1">
+            {filtered.length === 0 ? (
+              <p className="text-xs text-muted-foreground p-2 text-center">No matches found</p>
+            ) : (
+              filtered.map((item) => (
+                <div
+                  key={item}
+                  onClick={() => {
+                    onChange(item)
+                    setOpen(false)
+                    setSearch('')
+                  }}
+                  className={`px-3 py-2 rounded-lg text-xs cursor-pointer transition-colors ${
+                    value === item ? 'bg-primary text-white font-bold' : 'hover:bg-accent hover:text-accent-foreground'
+                  }`}
+                >
+                  {item}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+      {error && <p className="text-[11px] text-red-500 mt-1">{error}</p>}
+    </div>
+  )
+}
 
 interface SmartAddressFormProps {
   initialValues?: Partial<SmartAddressData>
@@ -48,7 +137,7 @@ export default function SmartAddressForm({
   onSubmit,
   onCancel,
   isSubmitting = false,
-  submitLabel = 'Save & Use Address',
+  submitLabel = 'Save Delivery Address',
   showDefaultCheckbox = true,
 }: SmartAddressFormProps) {
   const [formData, setFormData] = useState<SmartAddressData>(() => {
@@ -57,7 +146,7 @@ export default function SmartAddressForm({
       phone: initialValues?.phone || '',
       altPhone: initialValues?.altPhone || '',
       email: initialValues?.email || '',
-      division: initialValues?.division || 'Dhaka Division',
+      division: (initialValues?.division || 'Dhaka').replace(/\s*Division$/, '').trim(),
       district: initialValues?.district || 'Dhaka',
       upazila: initialValues?.upazila || 'Mirpur',
       unionOrArea: initialValues?.unionOrArea || '',
@@ -123,19 +212,19 @@ export default function SmartAddressForm({
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {}
-    if (!formData.name.trim()) errs.name = 'Full Name is required'
+    if (!formData.name.trim()) errs.name = 'Please enter your full name'
     if (!formData.phone.trim()) {
-      errs.phone = 'Primary Phone is required'
+      errs.phone = 'Please enter your mobile number'
     } else if (!/^(?:01\d{9}|\+8801\d{9})$/.test(formData.phone.trim())) {
-      errs.phone = 'Valid 11-digit BD phone number required (01XXXXXXXXX)'
+      errs.phone = 'Please enter a valid 11-digit mobile number'
     }
     if (formData.altPhone && !/^(?:01\d{9}|\+8801\d{9})$/.test(formData.altPhone.trim())) {
-      errs.altPhone = 'Valid 11-digit BD phone number required'
+      errs.altPhone = 'Please enter a valid 11-digit mobile number'
     }
-    if (!formData.division) errs.division = 'Division is required'
-    if (!formData.district) errs.district = 'District is required'
-    if (!formData.upazila) errs.upazila = 'Upazila / Thana is required'
-    if (!formData.addressDetail.trim()) errs.addressDetail = 'Detailed Address (House/Road or Village/Para) is required'
+    if (!formData.division) errs.division = 'Please select your division'
+    if (!formData.district) errs.district = 'Please select your district'
+    if (!formData.upazila) errs.upazila = 'Please select your upazila or city'
+    if (!formData.addressDetail.trim()) errs.addressDetail = 'Please enter your detailed address'
 
     setErrors(errs)
     return Object.keys(errs).length === 0
@@ -151,16 +240,16 @@ export default function SmartAddressForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5 bg-card border rounded-2xl p-5 shadow-sm">
-      {/* Header */}
+    <form onSubmit={handleSubmit} className="space-y-4 bg-card border rounded-2xl p-5 shadow-sm">
+      {/* Form Header */}
       <div className="flex items-center justify-between border-b pb-3">
         <div className="flex items-center gap-2">
           <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
             <MapPin className="h-4 w-4 text-primary" />
           </div>
           <div>
-            <h3 className="font-bold text-base text-foreground">Bangladesh Smart Address</h3>
-            <p className="text-xs text-muted-foreground">Form tailored for City, Town & Village deliveries</p>
+            <h3 className="font-bold text-sm text-foreground">Delivery Address</h3>
+            <p className="text-xs text-muted-foreground">Simple address for quick delivery anywhere in Bangladesh</p>
           </div>
         </div>
         <Button
@@ -175,203 +264,168 @@ export default function SmartAddressForm({
         </Button>
       </div>
 
-      {/* ─── Contact Information ───────────────────────────────────────────── */}
-      <div className="space-y-3">
-        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          Contact Information
-        </h4>
-
-        <div className="grid sm:grid-cols-2 gap-3">
-          <div>
-            <Label className="text-xs font-medium mb-1 block">Full Name *</Label>
-            <div className="relative">
-              <User className="h-4 w-4 absolute left-3 top-3 text-muted-foreground" />
-              <Input
-                placeholder="e.g. Nasim Parvez"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className={`pl-9 h-10 text-sm rounded-xl ${errors.name ? 'border-red-500' : ''}`}
-              />
-            </div>
-            {errors.name && <p className="text-[11px] text-red-500 mt-1">{errors.name}</p>}
-          </div>
-
-          <div>
-            <Label className="text-xs font-medium mb-1 block">Primary Phone Number *</Label>
-            <div className="relative">
-              <Phone className="h-4 w-4 absolute left-3 top-3 text-muted-foreground" />
-              <Input
-                placeholder="01712345678"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className={`pl-9 h-10 text-sm rounded-xl ${errors.phone ? 'border-red-500' : ''}`}
-              />
-            </div>
-            {errors.phone && <p className="text-[11px] text-red-500 mt-1">{errors.phone}</p>}
-          </div>
-        </div>
-
-        <div className="grid sm:grid-cols-2 gap-3">
-          <div>
-            <Label className="text-xs font-medium mb-1 block">Alternative Phone (Optional)</Label>
-            <div className="relative">
-              <Phone className="h-4 w-4 absolute left-3 top-3 text-muted-foreground/60" />
-              <Input
-                placeholder="018XXXXXXXX (for delivery rider)"
-                value={formData.altPhone || ''}
-                onChange={(e) => setFormData({ ...formData, altPhone: e.target.value })}
-                className="pl-9 h-10 text-sm rounded-xl"
-              />
-            </div>
-            {errors.altPhone && <p className="text-[11px] text-red-500 mt-1">{errors.altPhone}</p>}
-          </div>
-
-          <div>
-            <Label className="text-xs font-medium mb-1 block">Email Address (Optional)</Label>
-            <div className="relative">
-              <Mail className="h-4 w-4 absolute left-3 top-3 text-muted-foreground/60" />
-              <Input
-                type="email"
-                placeholder="customer@email.com"
-                value={formData.email || ''}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="pl-9 h-10 text-sm rounded-xl"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ─── Location Hierarchy (Cascading Dropdowns) ──────────────────────── */}
-      <div className="space-y-3 pt-1 border-t">
-        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          Location Hierarchy
-        </h4>
-
-        <div className="grid sm:grid-cols-3 gap-3">
-          {/* Division */}
-          <div>
-            <Label className="text-xs font-medium mb-1 block">Division *</Label>
-            <Select
-              value={formData.division}
-              onValueChange={handleDivisionChange}
-            >
-              <SelectTrigger className="h-10 text-sm rounded-xl">
-                <SelectValue placeholder="Select Division" />
-              </SelectTrigger>
-              <SelectContent>
-                {BD_DIVISIONS.map((d) => (
-                  <SelectItem key={d} value={d}>{d}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* District */}
-          <div>
-            <Label className="text-xs font-medium mb-1 block">District *</Label>
-            <Select
-              value={formData.district}
-              onValueChange={handleDistrictChange}
-            >
-              <SelectTrigger className="h-10 text-sm rounded-xl">
-                <SelectValue placeholder="Select District" />
-              </SelectTrigger>
-              <SelectContent>
-                {districts.map((d) => (
-                  <SelectItem key={d} value={d}>{d}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Upazila / City / Thana */}
-          <div>
-            <Label className="text-xs font-medium mb-1 block">Upazila / Thana *</Label>
-            <Select
-              value={formData.upazila}
-              onValueChange={(val) => setFormData({ ...formData, upazila: val })}
-            >
-              <SelectTrigger className="h-10 text-sm rounded-xl">
-                <SelectValue placeholder="Select Upazila/Thana" />
-              </SelectTrigger>
-              <SelectContent>
-                {upazilas.map((u) => (
-                  <SelectItem key={u} value={u}>{u}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Area / Union / Ward */}
+      {/* Contact Details */}
+      <div className="grid sm:grid-cols-2 gap-3">
         <div>
-          <Label className="text-xs font-medium mb-1 block">Area / Union / Ward (Optional)</Label>
-          <Input
-            placeholder="e.g. Mirpur DOHS, Section 10, Sector 4, or Union Name"
-            value={formData.unionOrArea || ''}
-            onChange={(e) => setFormData({ ...formData, unionOrArea: e.target.value })}
-            className="h-10 text-sm rounded-xl"
-          />
+          <Label className="text-xs font-medium mb-1 block">Full Name *</Label>
+          <div className="relative">
+            <User className="h-4 w-4 absolute left-3 top-3 text-muted-foreground" />
+            <Input
+              placeholder="Enter your full name"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className={`pl-9 h-10 text-sm rounded-xl ${errors.name ? 'border-red-500' : ''}`}
+            />
+          </div>
+          {errors.name && <p className="text-[11px] text-red-500 mt-1">{errors.name}</p>}
         </div>
-      </div>
-
-      {/* ─── Detailed Address Field ────────────────────────────────────────── */}
-      <div className="space-y-3 pt-1 border-t">
-        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          Detailed Address
-        </h4>
 
         <div>
-          <Label className="text-xs font-medium mb-1 block">
-            House / Road / Flat OR Village / Para / Bari *
-          </Label>
-          <Textarea
-            placeholder="Urban Example: House 15, Road 7, Block B&#10;Village Example: Village: South Char, Para: Mollabari"
-            value={formData.addressDetail}
-            onChange={(e) => setFormData({ ...formData, addressDetail: e.target.value })}
-            className={`min-h-[80px] text-sm rounded-xl resize-none ${errors.addressDetail ? 'border-red-500' : ''}`}
-          />
-          {errors.addressDetail && <p className="text-[11px] text-red-500 mt-1">{errors.addressDetail}</p>}
-          <p className="text-[11px] text-muted-foreground mt-1">
-            Accepts natural Bangladeshi writing style for both city apartments and rural villages.
-          </p>
+          <Label className="text-xs font-medium mb-1 block">Mobile Number *</Label>
+          <div className="relative">
+            <Phone className="h-4 w-4 absolute left-3 top-3 text-muted-foreground" />
+            <Input
+              placeholder="01XXXXXXXXX"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              className={`pl-9 h-10 text-sm rounded-xl ${errors.phone ? 'border-red-500' : ''}`}
+            />
+          </div>
+          {errors.phone && <p className="text-[11px] text-red-500 mt-1">{errors.phone}</p>}
+        </div>
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-3">
+        <div>
+          <Label className="text-xs font-medium mb-1 block">Alternative Phone (Optional)</Label>
+          <div className="relative">
+            <Phone className="h-4 w-4 absolute left-3 top-3 text-muted-foreground/60" />
+            <Input
+              placeholder="01XXXXXXXXX"
+              value={formData.altPhone || ''}
+              onChange={(e) => setFormData({ ...formData, altPhone: e.target.value })}
+              className="pl-9 h-10 text-sm rounded-xl"
+            />
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-1">Used if we cannot reach your primary number.</p>
+          {errors.altPhone && <p className="text-[11px] text-red-500 mt-1">{errors.altPhone}</p>}
         </div>
 
-        <div className="grid sm:grid-cols-2 gap-3">
-          <div>
-            <Label className="text-xs font-medium mb-1 block">Nearest Landmark (Optional)</Label>
-            <div className="relative">
-              <Compass className="h-4 w-4 absolute left-3 top-3 text-muted-foreground/60" />
-              <Input
-                placeholder="e.g. Near BRAC Bank, Opposite Mosque, Near School"
-                value={formData.landmark || ''}
-                onChange={(e) => setFormData({ ...formData, landmark: e.target.value })}
-                className="pl-9 h-10 text-sm rounded-xl"
-              />
-            </div>
-          </div>
-
-          <div>
-            <Label className="text-xs font-medium mb-1 block">Delivery Instruction / Note (Optional)</Label>
-            <div className="relative">
-              <FileText className="h-4 w-4 absolute left-3 top-3 text-muted-foreground/60" />
-              <Input
-                placeholder="e.g. Call before delivery, leave at gate"
-                value={formData.deliveryNote || ''}
-                onChange={(e) => setFormData({ ...formData, deliveryNote: e.target.value })}
-                className="pl-9 h-10 text-sm rounded-xl"
-              />
-            </div>
+        <div>
+          <Label className="text-xs font-medium mb-1 block">Email (Optional)</Label>
+          <div className="relative">
+            <Mail className="h-4 w-4 absolute left-3 top-3 text-muted-foreground/60" />
+            <Input
+              type="email"
+              placeholder="your@email.com"
+              value={formData.email || ''}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              className="pl-9 h-10 text-sm rounded-xl"
+            />
           </div>
         </div>
       </div>
 
-      {/* ─── Address Label Selector ────────────────────────────────────────── */}
-      <div className="space-y-2 pt-1 border-t">
-        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
-          Address Label
-        </Label>
+      {/* Location Dropdowns */}
+      <div className="grid sm:grid-cols-3 gap-3 pt-1 border-t">
+        {/* Division Dropdown */}
+        <div>
+          <Label className="text-xs font-medium mb-1 block">Division *</Label>
+          <Select
+            value={formData.division}
+            onValueChange={handleDivisionChange}
+          >
+            <SelectTrigger className="h-10 text-sm rounded-xl">
+              <SelectValue placeholder="Select Division" />
+            </SelectTrigger>
+            <SelectContent>
+              {BD_DIVISIONS.map((d) => (
+                <SelectItem key={d} value={d}>{d}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {errors.division && <p className="text-[11px] text-red-500 mt-1">{errors.division}</p>}
+        </div>
+
+        {/* District Searchable Dropdown */}
+        <SearchableSelect
+          label="District *"
+          value={formData.district}
+          onChange={handleDistrictChange}
+          options={districts}
+          placeholder="Select District"
+          error={errors.district}
+        />
+
+        {/* Upazila / City Searchable Dropdown */}
+        <SearchableSelect
+          label="Upazila / City *"
+          value={formData.upazila}
+          onChange={(val) => setFormData({ ...formData, upazila: val })}
+          options={upazilas}
+          placeholder="Select Upazila / City"
+          error={errors.upazila}
+        />
+      </div>
+
+      {/* Area / Union / Ward */}
+      <div>
+        <Label className="text-xs font-medium mb-1 block">Area / Union / Ward (Optional)</Label>
+        <Input
+          placeholder="Enter your area or union"
+          value={formData.unionOrArea || ''}
+          onChange={(e) => setFormData({ ...formData, unionOrArea: e.target.value })}
+          className="h-10 text-sm rounded-xl"
+        />
+      </div>
+
+      {/* Detailed Address */}
+      <div>
+        <Label className="text-xs font-medium mb-1 block">Detailed Address *</Label>
+        <Textarea
+          placeholder="House, Road, Village or Landmark"
+          value={formData.addressDetail}
+          onChange={(e) => setFormData({ ...formData, addressDetail: e.target.value })}
+          className={`min-h-[76px] text-sm rounded-xl resize-none ${errors.addressDetail ? 'border-red-500' : ''}`}
+        />
+        {errors.addressDetail && <p className="text-[11px] text-red-500 mt-1">{errors.addressDetail}</p>}
+        <p className="text-[11px] text-muted-foreground mt-1">
+          Enter house, road and flat number for city delivery, or village, para and bari name for village delivery.
+        </p>
+      </div>
+
+      {/* Landmark & Note */}
+      <div className="grid sm:grid-cols-2 gap-3">
+        <div>
+          <Label className="text-xs font-medium mb-1 block">Nearest Landmark (Optional)</Label>
+          <div className="relative">
+            <Compass className="h-4 w-4 absolute left-3 top-3 text-muted-foreground/60" />
+            <Input
+              placeholder="Nearest well-known place"
+              value={formData.landmark || ''}
+              onChange={(e) => setFormData({ ...formData, landmark: e.target.value })}
+              className="pl-9 h-10 text-sm rounded-xl"
+            />
+          </div>
+        </div>
+
+        <div>
+          <Label className="text-xs font-medium mb-1 block">Delivery Note (Optional)</Label>
+          <div className="relative">
+            <FileText className="h-4 w-4 absolute left-3 top-3 text-muted-foreground/60" />
+            <Input
+              placeholder="Special delivery instructions (optional)"
+              value={formData.deliveryNote || ''}
+              onChange={(e) => setFormData({ ...formData, deliveryNote: e.target.value })}
+              className="pl-9 h-10 text-sm rounded-xl"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Address Label Selector */}
+      <div className="pt-1 border-t">
+        <Label className="text-xs font-medium mb-1.5 block">Address Label</Label>
         <div className="flex flex-wrap gap-2">
           {ADDRESS_LABELS.map((item) => {
             const Icon = item.icon
@@ -381,7 +435,7 @@ export default function SmartAddressForm({
                 key={item.id}
                 type="button"
                 onClick={() => setFormData({ ...formData, label: item.id })}
-                className={`px-3.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all ${
                   isSelected
                     ? 'bg-primary text-white border-primary shadow-sm'
                     : 'bg-card text-muted-foreground hover:border-primary/40'
@@ -395,7 +449,7 @@ export default function SmartAddressForm({
         </div>
       </div>
 
-      {/* ─── Default Checkbox ──────────────────────────────────────────────── */}
+      {/* Default Address Checkbox */}
       {showDefaultCheckbox && (
         <div className="flex items-center gap-2 pt-1">
           <Checkbox
@@ -409,7 +463,7 @@ export default function SmartAddressForm({
         </div>
       )}
 
-      {/* ─── Live Address Preview Card ─────────────────────────────────────── */}
+      {/* Live Address Preview Card */}
       <AnimatePresence>
         {showPreview && (
           <motion.div
@@ -418,20 +472,20 @@ export default function SmartAddressForm({
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden"
           >
-            <div className="p-4 rounded-xl bg-muted/40 border border-primary/20 space-y-2">
+            <div className="p-3.5 rounded-xl bg-muted/30 border border-primary/20 space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-primary flex items-center gap-1">
                   <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                  Live Rider Delivery Preview Card
+                  Address Preview Card
                 </span>
                 <Badge className="bg-primary/10 text-primary border-primary/20 text-[10px]">
                   {formData.label}
                 </Badge>
               </div>
-              <div className="text-xs space-y-1 text-foreground/90 font-mono bg-card p-3 rounded-lg border">
-                <p className="font-bold text-sm text-foreground">{formData.name || 'Recipient Name'}</p>
+              <div className="text-xs space-y-1 text-foreground font-mono bg-card p-3 rounded-lg border">
+                <p className="font-bold text-foreground">{formData.name || 'Your Full Name'}</p>
                 <p className="text-primary font-semibold">📞 {formData.phone || '01XXXXXXXXX'} {formData.altPhone ? `(Alt: ${formData.altPhone})` : ''}</p>
-                <p className="text-muted-foreground mt-1">{formData.addressDetail || 'Detailed Address Line'}</p>
+                <p className="text-muted-foreground">{formData.addressDetail || 'House, Road, Village or Landmark'}</p>
                 <p className="text-muted-foreground">
                   {formData.unionOrArea ? `${formData.unionOrArea}, ` : ''}{formData.upazila}, {formData.district}, {formData.division}
                 </p>
@@ -443,14 +497,14 @@ export default function SmartAddressForm({
         )}
       </AnimatePresence>
 
-      {/* Actions */}
+      {/* Form Action Buttons */}
       <div className="flex gap-2 pt-2 border-t">
         {onCancel && (
           <Button
             type="button"
             variant="outline"
             onClick={onCancel}
-            className="flex-1 h-11 text-xs rounded-xl"
+            className="flex-1 h-10 text-xs rounded-xl"
           >
             Cancel
           </Button>
@@ -458,7 +512,7 @@ export default function SmartAddressForm({
         <Button
           type="submit"
           disabled={isSubmitting}
-          className="flex-1 h-11 text-xs rounded-xl font-bold shadow-sm"
+          className="flex-1 h-10 text-xs rounded-xl font-bold shadow-sm"
         >
           {isSubmitting ? 'Saving Address...' : submitLabel}
         </Button>
