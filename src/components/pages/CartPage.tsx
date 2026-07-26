@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/breadcrumb'
 import { useAppStore } from '@/lib/store'
 import { extractItems } from '@/lib/api'
+import { formatPrice, safeNum } from '@/lib/utils'
 import { toast } from 'sonner'
 
 interface SuggestedProduct {
@@ -54,13 +55,18 @@ export default function CartPage() {
     []
   )
 
-  const sub = subtotal()
-  const shipping = sub >= (siteConfig?.freeShippingThreshold || 1500) ? 0 : (siteConfig?.shippingCharge || 60)
-  const total = sub + shipping - discount
-  const itemCount = totalItems()
+  const sub = safeNum(subtotal(), 0)
+  const shippingThreshold = safeNum(siteConfig?.freeShippingThreshold, 1500)
+  const defaultShipping = safeNum(siteConfig?.shippingCharge, 60)
+  const shipping = sub >= shippingThreshold ? 0 : defaultShipping
+  const total = Math.max(0, safeNum(sub + shipping - safeNum(discount, 0), 0))
+  const itemCount = safeNum(totalItems(), 0)
   const totalSavings = cartItems.reduce((sum, item) => {
-    if (item.discountPrice != null && item.discountPrice < item.price) {
-      return sum + ((item.price - item.discountPrice) * item.quantity)
+    const p = safeNum(item.price)
+    const dp = item.discountPrice != null ? safeNum(item.discountPrice) : null
+    const q = safeNum(item.quantity, 1)
+    if (dp != null && dp < p) {
+      return sum + ((p - dp) * q)
     }
     return sum
   }, 0)
@@ -257,10 +263,10 @@ export default function CartPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium line-clamp-1">{item.productName}</p>
-                <p className="text-xs text-muted-foreground">৳{price.toLocaleString()} {item.unit && `· ${item.unit}`}</p>
+                <p className="text-xs text-muted-foreground">{formatPrice(price)} {item.unit && `· ${item.unit}`}</p>
               </div>
               <span className="text-sm font-semibold whitespace-nowrap">
-                ৳{(price * item.quantity).toLocaleString()}
+                {formatPrice(price * item.quantity)}
               </span>
             </div>
           )
@@ -273,24 +279,24 @@ export default function CartPage() {
       <div className="space-y-2.5 text-sm">
         <div className="flex justify-between">
           <span className="text-muted-foreground">Subtotal ({itemCount} items)</span>
-          <span className="font-medium">৳{sub.toLocaleString()}</span>
+          <span className="font-medium">{formatPrice(sub)}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">Delivery Charge</span>
           <span className={`font-medium ${shipping === 0 ? 'text-emerald-600' : ''}`}>
-            {shipping === 0 ? 'FREE' : `৳${shipping}`}
+            {shipping === 0 ? 'FREE' : formatPrice(shipping)}
           </span>
         </div>
         {discount > 0 && (
           <div className="flex justify-between">
             <span className="text-muted-foreground">Discount</span>
-            <span className="text-emerald-600 font-medium">-৳{discount.toLocaleString()}</span>
+            <span className="text-emerald-600 font-medium">-{formatPrice(discount)}</span>
           </div>
         )}
         <Separator />
         <div className="flex justify-between items-center pt-1">
           <span className="font-semibold">Total</span>
-          <span className="text-2xl font-bold text-primary">৳{Math.max(0, total).toLocaleString()}</span>
+          <span className="text-2xl font-bold text-primary">{formatPrice(total)}</span>
         </div>
       </div>
 
@@ -299,7 +305,7 @@ export default function CartPage() {
         <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center gap-2">
           <BadgeCheck className="h-4 w-4 text-emerald-600 flex-shrink-0" />
           <p className="text-sm font-medium text-emerald-700">
-            You save ৳{((totalSavings || 0) + (discount || 0)).toLocaleString()}
+            You save {formatPrice((totalSavings || 0) + (discount || 0))}
           </p>
         </div>
       )}
@@ -317,7 +323,7 @@ export default function CartPage() {
                 <Tag className="h-3 w-3 mr-1" />
                 {appliedCoupon}
               </Badge>
-              <span className="text-xs text-emerald-700 font-semibold">-৳{discount.toLocaleString()}</span>
+              <span className="text-xs text-emerald-700 font-semibold">-{formatPrice(discount)}</span>
             </div>
             <Button
               variant="ghost"
@@ -354,7 +360,7 @@ export default function CartPage() {
         <div className="p-3 rounded-lg bg-muted/40">
           <p className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1.5">
             <Truck className="h-3.5 w-3.5 text-primary" />
-            Add <span className="font-semibold text-foreground">৳{freeShippingRemaining.toLocaleString()}</span> more for free delivery
+            Add <span className="font-semibold text-foreground">{formatPrice(freeShippingRemaining)}</span> more for free delivery
           </p>
           <div className="h-1.5 rounded-full bg-muted overflow-hidden">
             <div
@@ -482,9 +488,9 @@ export default function CartPage() {
                           <p className="text-xs text-muted-foreground mt-0.5">per {item.unit}</p>
 
                           <div className="flex items-baseline gap-2 mt-1">
-                            <span className="font-bold text-primary">৳{price.toLocaleString()}</span>
+                            <span className="font-bold text-primary">{formatPrice(price)}</span>
                             {hasDiscount && (
-                              <span className="text-xs text-muted-foreground line-through">৳{item.price.toLocaleString()}</span>
+                              <span className="text-xs text-muted-foreground line-through">{formatPrice(item.price)}</span>
                             )}
                           </div>
 
@@ -511,7 +517,7 @@ export default function CartPage() {
                             </div>
 
                             <div className="flex items-center gap-3">
-                              <span className="font-bold text-sm sm:text-base">৳{(price * item.quantity).toLocaleString()}</span>
+                              <span className="font-bold text-sm sm:text-base">{formatPrice(price * item.quantity)}</span>
                               <button
                                 className="hidden sm:flex h-7 w-7 items-center justify-center text-muted-foreground hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                                 onClick={() => handleRemove(item.id)}
@@ -593,7 +599,7 @@ export default function CartPage() {
               </h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
                 {suggestedProducts.slice(0, 6).map((product) => {
-                  const effectivePrice = product.discountPrice ?? product.price
+                  const effectivePrice = product.discountPrice != null ? product.discountPrice : product.price
                   return (
                     <div key={product.id} className="border rounded-xl p-2 hover:shadow-md transition-all duration-200 group">
                       <div
@@ -612,7 +618,7 @@ export default function CartPage() {
                       >
                         {product.name}
                       </p>
-                      <p className="text-sm text-primary font-bold mt-1">৳{effectivePrice.toLocaleString()}</p>
+                      <p className="text-sm text-primary font-bold mt-1">{formatPrice(effectivePrice)}</p>
                       <Button
                         size="sm"
                         className="w-full h-7 text-xs mt-2 rounded-lg"
@@ -634,13 +640,13 @@ export default function CartPage() {
         <div className="container mx-auto px-4 py-3 flex items-center gap-3">
           <div className="flex-1 min-w-0">
             <p className="text-[11px] text-muted-foreground leading-tight">
-              {itemCount} item{itemCount !== 1 ? 's' : ''} · {shipping === 0 ? 'Free delivery' : `+৳${shipping} delivery`}
+              {itemCount} item{itemCount !== 1 ? 's' : ''} · {shipping === 0 ? 'Free delivery' : `+${formatPrice(shipping)} delivery`}
             </p>
             <p className="text-lg font-bold text-primary leading-tight">
-              ৳{Math.max(0, total).toLocaleString()}
+              {formatPrice(total)}
               {discount > 0 && (
                 <span className="ml-1.5 text-xs font-medium text-emerald-600">
-                  saving ৳{discount.toLocaleString()}
+                  saving {formatPrice(discount)}
                 </span>
               )}
             </p>

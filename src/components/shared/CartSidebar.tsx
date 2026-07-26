@@ -12,6 +12,7 @@ import { Progress } from '@/components/ui/progress'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { useAppStore } from '@/lib/store'
+import { formatPrice, safeNum } from '@/lib/utils'
 import { toast } from 'sonner'
 
 // ── Types ──
@@ -67,26 +68,29 @@ export default function CartSidebar() {
   const [suggestedProducts, setSuggestedProducts] = useState<SuggestedProduct[]>([])
   const [suggestedLoading, setSuggestedLoading] = useState(false)
 
-  const freeShippingThreshold = siteConfig?.freeShippingThreshold || 1500
-  const shippingCharge = siteConfig?.shippingCharge || 60
-  const currentSubtotal = subtotal()
-  const itemCount = totalItems()
-  const shippingProgress = Math.min((currentSubtotal / freeShippingThreshold) * 100, 100)
+  const freeShippingThreshold = safeNum(siteConfig?.freeShippingThreshold, 1500)
+  const shippingCharge = safeNum(siteConfig?.shippingCharge, 60)
+  const currentSubtotal = safeNum(subtotal(), 0)
+  const itemCount = safeNum(totalItems(), 0)
+  const shippingProgress = freeShippingThreshold > 0 ? Math.min((currentSubtotal / freeShippingThreshold) * 100, 100) : 100
   const isFreeShipping = currentSubtotal >= freeShippingThreshold
   const estimatedShipping = isFreeShipping ? 0 : shippingCharge
 
   // Calculate total savings from discounts
   const discountSavings = cartItems.reduce((sum, item) => {
-    if (item.discountPrice != null && item.discountPrice < item.price) {
-      return sum + (item.price - item.discountPrice) * (Number(item.quantity) || 0)
+    const p = safeNum(item.price)
+    const dp = item.discountPrice != null ? safeNum(item.discountPrice) : null
+    const q = safeNum(item.quantity, 1)
+    if (dp != null && dp < p) {
+      return sum + (p - dp) * q
     }
     return sum
   }, 0)
 
-  const couponDiscount = appliedCoupon?.discount || 0
-  const totalSavings = discountSavings + couponDiscount
-  const estimatedTotal = currentSubtotal + estimatedShipping - couponDiscount
-  const amountToFreeShipping = Math.max(freeShippingThreshold - currentSubtotal, 0)
+  const couponDiscount = safeNum(appliedCoupon?.discount, 0)
+  const totalSavings = safeNum(discountSavings + couponDiscount, 0)
+  const estimatedTotal = Math.max(0, safeNum(currentSubtotal + estimatedShipping - couponDiscount, 0))
+  const amountToFreeShipping = Math.max(0, safeNum(freeShippingThreshold - currentSubtotal, 0))
 
   // Animate total changes
   useEffect(() => {
@@ -328,10 +332,10 @@ export default function CartSidebar() {
                     <div className="flex items-center gap-2">
                       <Truck className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <span className="text-muted-foreground">
-                        Only <span className="font-bold text-primary">৳{amountToFreeShipping.toLocaleString()}</span> more for free shipping!
+                        Only <span className="font-bold text-primary">{formatPrice(amountToFreeShipping)}</span> more for free shipping!
                       </span>
                     </div>
-                    <span className="text-xs text-muted-foreground">৳{currentSubtotal.toLocaleString()} / ৳{freeShippingThreshold.toLocaleString()}</span>
+                    <span className="text-xs text-muted-foreground">{formatPrice(currentSubtotal)} / {formatPrice(freeShippingThreshold)}</span>
                   </div>
                   <div className="relative h-2.5 rounded-full bg-muted overflow-hidden">
                     <motion.div
@@ -366,10 +370,10 @@ export default function CartSidebar() {
                 >
                   <div className="flex items-center gap-2 text-emerald-700 text-sm font-medium">
                     <BadgeCheck className="h-4 w-4 shrink-0" />
-                    <span>You save <span className="font-bold">৳{totalSavings.toLocaleString()}</span></span>
+                    <span>You save <span className="font-bold">{formatPrice(totalSavings)}</span></span>
                     {discountSavings > 0 && couponDiscount > 0 && (
                       <span className="text-xs text-emerald-600/70">
-                        (৳{discountSavings.toLocaleString()} discounts + ৳{couponDiscount.toLocaleString()} coupon)
+                        ({formatPrice(discountSavings)} discounts + {formatPrice(couponDiscount)} coupon)
                       </span>
                     )}
                   </div>
@@ -447,11 +451,11 @@ export default function CartSidebar() {
                               transition={{ duration: 0.3 }}
                               className="text-sm font-bold text-primary"
                             >
-                              ৳{(itemPrice * qty).toLocaleString()}
+                              {formatPrice(itemPrice * qty)}
                             </motion.span>
                             {hasDiscount && (
                               <span className="text-xs text-muted-foreground line-through">
-                                ৳{(originalPrice * qty).toLocaleString()}
+                                {formatPrice(originalPrice * qty)}
                               </span>
                             )}
                           </div>
@@ -459,7 +463,7 @@ export default function CartSidebar() {
                           {/* Item savings */}
                           {itemSavings > 0 && (
                             <p className="text-[10px] text-emerald-600 font-medium mt-0.5">
-                              Save ৳{itemSavings.toLocaleString()}
+                              Save {formatPrice(itemSavings)}
                             </p>
                           )}
 
@@ -631,7 +635,7 @@ export default function CartSidebar() {
                         </div>
                         <div className="text-left min-w-0 max-w-[120px]">
                           <p className="text-xs font-medium line-clamp-1">{product.name}</p>
-                          <p className="text-xs font-bold text-primary">৳{effectivePrice.toLocaleString()}</p>
+                          <p className="text-xs font-bold text-primary">{formatPrice(effectivePrice)}</p>
                         </div>
                         <Plus className="h-3.5 w-3.5 text-muted-foreground group-hover/sug:text-primary transition-colors shrink-0" />
                       </motion.button>
@@ -646,7 +650,7 @@ export default function CartSidebar() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Subtotal ({itemCount} items)</span>
-                  <span className="font-medium">৳{currentSubtotal.toLocaleString()}</span>
+                  <span className="font-medium">{formatPrice(currentSubtotal)}</span>
                 </div>
 
                 {appliedCoupon && (
@@ -655,7 +659,7 @@ export default function CartSidebar() {
                       <Tag className="h-3 w-3" />
                       Coupon ({appliedCoupon.code})
                     </span>
-                    <span className="font-medium text-emerald-600">-৳{couponDiscount.toLocaleString()}</span>
+                    <span className="font-medium text-emerald-600">-{formatPrice(couponDiscount)}</span>
                   </div>
                 )}
 
@@ -664,7 +668,7 @@ export default function CartSidebar() {
                   {isFreeShipping ? (
                     <span className="font-medium text-primary">FREE</span>
                   ) : (
-                    <span className="font-medium">৳{estimatedShipping.toLocaleString()}</span>
+                    <span className="font-medium">{formatPrice(estimatedShipping)}</span>
                   )}
                 </div>
                 <Separator />
@@ -677,12 +681,12 @@ export default function CartSidebar() {
                     transition={{ duration: 0.4, ease: 'easeOut' }}
                     className="text-lg font-bold text-primary"
                   >
-                    ৳{estimatedTotal.toLocaleString()}
+                    {formatPrice(estimatedTotal)}
                   </motion.span>
                 </div>
                 {!isFreeShipping && (
                   <p className="text-xs text-muted-foreground">
-                    Free shipping on orders ৳{freeShippingThreshold.toLocaleString()}+
+                    Free shipping on orders {formatPrice(freeShippingThreshold)}+
                   </p>
                 )}
               </div>
@@ -700,7 +704,7 @@ export default function CartSidebar() {
                 </Button>
                 <Button className="flex-1 gap-2 shadow-lg shadow-primary/20" onClick={handleCheckout}>
                   Checkout
-                  <span className="text-xs opacity-80">৳{estimatedTotal.toLocaleString()}</span>
+                  <span className="text-xs opacity-80">{formatPrice(estimatedTotal)}</span>
                 </Button>
               </SheetFooter>
 

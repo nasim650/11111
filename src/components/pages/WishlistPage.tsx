@@ -26,6 +26,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { useAppStore, type CartItem, type WishlistItem } from '@/lib/store'
+import { formatPrice, safeNum } from '@/lib/utils'
 import { toast } from 'sonner'
 
 type SortOption = 'date' | 'price-asc' | 'price-desc' | 'name'
@@ -208,17 +209,17 @@ function WishlistItemCard({
         </h3>
         <div className="flex items-baseline gap-2">
           <span className="font-bold text-primary text-base">
-            ৳{(effectivePrice ?? 0).toLocaleString()}
+            {formatPrice(effectivePrice)}
           </span>
           {hasDiscount && (
             <span className="text-xs text-muted-foreground line-through">
-              ৳{item.price.toLocaleString()}
+              {formatPrice(item.price)}
             </span>
           )}
         </div>
         {savings > 0 && (
           <p className="text-xs text-emerald-600 font-medium flex items-center gap-1">
-            <Tag className="h-3 w-3" /> Save ৳{savings.toLocaleString()}
+            <Tag className="h-3 w-3" /> Save {formatPrice(savings)}
           </p>
         )}
         <div className="flex gap-2 pt-1">
@@ -588,10 +589,10 @@ export default function WishlistPage() {
                 </Badge>
               </h1>
               <p className="text-sm text-muted-foreground mt-1.5">
-                {wishlistItems.length} item{wishlistItems.length !== 1 ? 's' : ''} saved · Total value ৳{totalValue.toLocaleString()}
+                {wishlistItems.length} item{wishlistItems.length !== 1 ? 's' : ''} saved · Total value {formatPrice(totalValue)}
                 {totalSavings > 0 && (
                   <span className="text-emerald-600 ml-2 font-medium flex items-center gap-1 sm:inline-flex">
-                    <Tag className="h-3 w-3" /> Save ৳{totalSavings.toLocaleString()}
+                    <Tag className="h-3 w-3" /> Save {formatPrice(totalSavings)}
                   </span>
                 )}
               </p>

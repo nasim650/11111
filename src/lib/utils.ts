@@ -126,3 +126,21 @@ export function safeJsonParse<T>(str: string | null | undefined, fallback: T): T
     return fallback
   }
 }
+
+/**
+ * Safely parse any input value to a finite number, returning fallback if NaN/null/undefined.
+ */
+export function safeNum(value: unknown, fallback: number = 0): number {
+  if (value === null || value === undefined || value === '') return fallback
+  const num = Number(value)
+  return Number.isFinite(num) ? num : fallback
+}
+
+/**
+ * Format any currency value into a Bangladeshi Taka string (e.g. "৳1,200").
+ * Guaranteed to NEVER render "৳NaN", "undefined", or "null".
+ */
+export function formatPrice(value: unknown, fallback: number = 0): string {
+  const num = safeNum(value, fallback)
+  return `৳${Math.max(0, Math.round(num)).toLocaleString('en-US')}`
+}

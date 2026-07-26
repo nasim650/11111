@@ -58,6 +58,7 @@ import {
   AccordionContent,
 } from '@/components/ui/accordion'
 import { useAppStore, type PageName } from '@/lib/store'
+import { formatPrice } from '@/lib/utils'
 import { extractItems } from '@/lib/api'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -176,6 +177,7 @@ export default function Navbar() {
     cartItems,
     totalItems,
     subtotal,
+    removeFromCart,
     wishlistItems,
     language,
     setLanguage,
@@ -530,11 +532,11 @@ export default function Navbar() {
                   <p className="font-medium truncate group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">{item.name}</p>
                   <div className="flex items-center gap-2">
                     <span className="text-primary font-bold text-xs">
-                      ৳{(item.discountPrice || item.price).toLocaleString()}
+                      {formatPrice(item.discountPrice != null ? item.discountPrice : item.price)}
                     </span>
-                    {item.discountPrice && item.discountPrice < item.price && (
+                    {item.discountPrice != null && item.discountPrice < item.price && (
                       <span className="text-muted-foreground text-xs line-through">
-                        ৳{item.price.toLocaleString()}
+                        {formatPrice(item.price)}
                       </span>
                     )}
                     {item.category && (
@@ -914,7 +916,7 @@ export default function Navbar() {
                   </motion.button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  <p>Cart {itemCount > 0 && `(৳${cartSubtotal.toLocaleString()})`}</p>
+                  <p>Cart {itemCount > 0 && `(${formatPrice(cartSubtotal)})`}</p>
                 </TooltipContent>
               </Tooltip>
 
@@ -938,46 +940,51 @@ export default function Navbar() {
                               {itemCount} {itemCount === 1 ? 'item' : 'items'}
                             </p>
                             <p className="text-lg font-bold text-emerald-700 dark:text-emerald-400">
-                              ৳{cartSubtotal.toLocaleString()}
+                              {formatPrice(cartSubtotal)}
                             </p>
                           </div>
                         </div>
                         {/* Cart items */}
                         <div className="max-h-64 overflow-y-auto divide-y">
-                          {cartItems.slice(0, 4).map((item, index) => (
-                            <motion.div
-                              key={`mini-cart-${item.productId}-${index}`}
-                              initial={{ opacity: 0, x: 20 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: index * 0.05 }}
-                              className="flex items-center gap-3 p-3 hover:bg-muted/30 transition-colors group"
-                            >
-                              <div className="size-12 rounded-lg bg-muted flex items-center justify-center shrink-0 overflow-hidden border border-border/50 group-hover:border-emerald-200 dark:group-hover:border-emerald-800 transition-colors">
-                                {item.image ? (
-                                  <img src={item.image} alt="" className="size-full object-cover" />
-                                ) : (
-                                  <ShoppingBag className="size-5 text-muted-foreground" />
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">{item.productName}</p>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                  <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
-                                    ৳{((item.discountPrice || item.price) * item.quantity).toLocaleString()}
-                                  </span>
-                                  <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
-                                    ×{item.quantity}
-                                  </Badge>
-                                </div>
-                              </div>
-                              <button
-                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10"
-                                aria-label="Remove item"
+                          {cartItems.slice(0, 4).map((item, index) => {
+                            const effectiveP = item.discountPrice != null ? item.discountPrice : item.price
+                            const linePrice = effectiveP * (Number(item.quantity) || 1)
+                            return (
+                              <motion.div
+                                key={`mini-cart-${item.productId}-${index}`}
+                                initial={{ opacity: 0, x: 20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: index * 0.05 }}
+                                className="flex items-center gap-3 p-3 hover:bg-muted/30 transition-colors group"
                               >
-                                <Trash2 className="size-3.5 text-destructive" />
-                              </button>
-                            </motion.div>
-                          ))}
+                                <div className="size-12 rounded-lg bg-muted flex items-center justify-center shrink-0 overflow-hidden border border-border/50 group-hover:border-emerald-200 dark:group-hover:border-emerald-800 transition-colors">
+                                  {item.image ? (
+                                    <img src={item.image} alt="" className="size-full object-cover" />
+                                  ) : (
+                                    <ShoppingBag className="size-5 text-muted-foreground" />
+                                  )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">{item.productName}</p>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                                      {formatPrice(linePrice)}
+                                    </span>
+                                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
+                                      ×{item.quantity}
+                                    </Badge>
+                                  </div>
+                                </div>
+                                <button
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10"
+                                  onClick={() => removeFromCart(item.id)}
+                                  aria-label="Remove item"
+                                >
+                                  <Trash2 className="size-3.5 text-destructive" />
+                                </button>
+                              </motion.div>
+                            )
+                          })}
                           {cartItems.length > 4 && (
                             <div className="px-3 py-2 text-center">
                               <p className="text-xs text-muted-foreground">
@@ -990,7 +997,7 @@ export default function Navbar() {
                         <div className="p-3 border-t bg-muted/20 space-y-2">
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground">Subtotal</span>
-                            <span className="font-bold text-emerald-700 dark:text-emerald-400">৳{cartSubtotal.toLocaleString()}</span>
+                            <span className="font-bold text-emerald-700 dark:text-emerald-400">{formatPrice(cartSubtotal)}</span>
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <Button

@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { useAppStore, type CartItem, type WishlistItem } from '@/lib/store'
+import { formatPrice, safeNum } from '@/lib/utils'
 import { toast } from 'sonner'
 
 // ── Types ──
@@ -92,22 +93,25 @@ export default function QuickViewModal() {
   }, [hasMultipleImages, images.length])
 
   const handleAddToCart = async () => {
-    if (!product || product.stock <= 0) return
+    if (!product || product.stock <= 0) {
+      toast.error('Out of Stock', { description: 'This item is currently out of stock.' })
+      return
+    }
     setAdding(true)
     try {
       const imageUrl = product.images?.[0]?.url || '/placeholder.png'
       const cartItem: Omit<CartItem, 'id'> = {
         productId: product.id,
         productName: product.name,
-        price: product.price,
-        discountPrice: product.discountPrice,
-        quantity,
+        price: safeNum(product.price),
+        discountPrice: product.discountPrice != null ? safeNum(product.discountPrice) : null,
+        quantity: safeNum(quantity, 1),
         unit: product.unit,
         image: imageUrl,
-        stock: product.stock,
+        stock: safeNum(product.stock),
       }
       await addToCart(cartItem)
-      toast.success(`${quantity} item${quantity > 1 ? 's' : ''} added to cart`)
+      toast.success('Added to cart', { description: `${quantity}× ${product.name}` })
     } catch {
       toast.error('Failed to add to cart')
     } finally {
@@ -344,11 +348,11 @@ export default function QuickViewModal() {
               {/* Price */}
               <div className="flex items-baseline gap-2 mb-3">
                 <span className="text-2xl font-bold text-primary">
-                  ৳{effectivePrice?.toLocaleString()}
+                  {formatPrice(effectivePrice)}
                 </span>
                 {hasDiscount && (
                   <span className="text-base text-muted-foreground line-through">
-                    ৳{product.price.toLocaleString()}
+                    {formatPrice(product.price)}
                   </span>
                 )}
                 <span className="text-sm text-muted-foreground">/{product.unit}</span>
@@ -358,7 +362,7 @@ export default function QuickViewModal() {
               {hasDiscount && (
                 <div className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-xs font-medium px-2.5 py-1 rounded-md mb-3 w-fit">
                   <BadgeCheck className="h-3.5 w-3.5" />
-                  You save ৳{Math.round(product.price - product.discountPrice!).toLocaleString()} ({discountPercent}% off)
+                  You save {formatPrice(Math.round(safeNum(product.price) - safeNum(product.discountPrice)))} ({discountPercent}% off)
                 </div>
               )}
 
@@ -428,7 +432,7 @@ export default function QuickViewModal() {
                     </button>
                   </div>
                   <span className="text-xs text-muted-foreground">
-                    Total: <span className="font-bold text-primary">৳{((effectivePrice || 0) * quantity).toLocaleString()}</span>
+                    Total: <span className="font-bold text-primary">{formatPrice((effectivePrice || 0) * quantity)}</span>
                   </span>
                 </div>
 

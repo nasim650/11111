@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/sheet'
 import { useAppStore } from '@/lib/store'
 import { extractItems } from '@/lib/api'
+import { formatPrice, safeNum } from '@/lib/utils'
 import CheckoutStepIndicator from '@/components/shared/CheckoutStepIndicator'
 import { toast } from 'sonner'
 
@@ -377,11 +378,11 @@ export default function CheckoutPage() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{item.productName}</p>
               <p className="text-xs text-muted-foreground">
-                ৳{itemPrice.toLocaleString()} {item.unit && `· ${item.unit}`}
+                {formatPrice(itemPrice)} {item.unit && `· ${item.unit}`}
               </p>
             </div>
             <span className="text-sm font-semibold whitespace-nowrap">
-              ৳{(itemPrice * item.quantity).toLocaleString()}
+              {formatPrice(itemPrice * item.quantity)}
             </span>
           </div>
         )
@@ -393,18 +394,18 @@ export default function CheckoutPage() {
     <div className="space-y-2.5 text-sm">
       <div className="flex justify-between">
         <span className="text-muted-foreground">Subtotal ({totalItems()} items)</span>
-        <span className="font-medium">৳{sub.toLocaleString()}</span>
+        <span className="font-medium">{formatPrice(sub)}</span>
       </div>
       <div className="flex justify-between">
         <span className="text-muted-foreground">Delivery Charge</span>
         <span className={`font-medium ${shipping === 0 ? 'text-emerald-600' : ''}`}>
-          {shipping === 0 ? 'FREE' : `৳${shipping}`}
+          {shipping === 0 ? 'FREE' : formatPrice(shipping)}
         </span>
       </div>
       {discount > 0 && (
         <div className="flex justify-between">
           <span className="text-muted-foreground">Coupon Discount</span>
-          <span className="text-emerald-600 font-medium">-৳{discount.toLocaleString()}</span>
+          <span className="text-emerald-600 font-medium">-{formatPrice(discount)}</span>
         </div>
       )}
       <Separator />
@@ -416,14 +417,14 @@ export default function CheckoutPage() {
           animate={{ scale: 1 }}
           className="text-2xl font-bold text-primary"
         >
-          ৳{Math.max(0, total).toLocaleString()}
+          {formatPrice(total)}
         </motion.span>
       </div>
       {discount > 0 && (
         <div className="flex items-center gap-1.5 p-2 rounded-lg bg-emerald-50 text-xs">
           <Sparkles className="h-3.5 w-3.5 text-amber-500" />
           <span className="text-emerald-700 font-semibold">
-            Total savings: ৳{discount.toLocaleString()}!
+            Total savings: {formatPrice(discount)}!
           </span>
         </div>
       )}
@@ -514,7 +515,7 @@ export default function CheckoutPage() {
         <div className="flex items-center justify-between text-xs mb-2">
           <span className="text-amber-800 font-medium flex items-center gap-1">
             <Truck className="h-3.5 w-3.5" />
-            Add ৳{freeShippingRemaining.toLocaleString()} more for FREE delivery
+            Add {formatPrice(freeShippingRemaining)} more for FREE delivery
           </span>
         </div>
         <Progress
@@ -647,7 +648,7 @@ export default function CheckoutPage() {
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium truncate">{item.productName}</p>
                                 <p className="text-xs text-muted-foreground mt-0.5">
-                                  ৳{itemPrice.toLocaleString()} {item.unit && `· per ${item.unit}`}
+                                  {formatPrice(itemPrice)} {item.unit && `· per ${item.unit}`}
                                 </p>
                                 <div className="flex items-center gap-1.5 mt-1.5">
                                   <button
@@ -676,7 +677,7 @@ export default function CheckoutPage() {
                               </div>
                               <div className="text-right">
                                 <p className="text-sm font-bold whitespace-nowrap">
-                                  ৳{(itemPrice * item.quantity).toLocaleString()}
+                                  {formatPrice(itemPrice * item.quantity)}
                                 </p>
                               </div>
                             </div>
@@ -1456,10 +1457,10 @@ export default function CheckoutPage() {
                   {totalItems()} items · Tap to view summary
                 </p>
                 <p className="text-lg font-bold text-primary leading-tight">
-                  ৳{Math.max(0, total).toLocaleString()}
+                  {formatPrice(total)}
                   {discount > 0 && (
                     <span className="ml-1.5 text-xs font-medium text-emerald-600">
-                      saving ৳{discount.toLocaleString()}
+                      saving {formatPrice(discount)}
                     </span>
                   )}
                 </p>

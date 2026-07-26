@@ -4,6 +4,7 @@ import { ShoppingCart, ArrowRight } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/lib/store'
+import { formatPrice } from '@/lib/utils'
 
 /**
  * MobileCartBar
@@ -54,7 +55,7 @@ export default function MobileCartBar() {
               }
             }}
             className="flex items-center justify-between gap-3 px-4 pt-3 pb-3 cursor-pointer select-none"
-            aria-label={`View cart with ${itemCount} ${itemCount === 1 ? 'item' : 'items'}, total ৳${cartSubtotal.toLocaleString()}`}
+            aria-label={`View cart with ${itemCount} ${itemCount === 1 ? 'item' : 'items'}, total ${formatPrice(cartSubtotal)}`}
           >
             {/* Left: cart icon + count badge */}
             <div className="relative shrink-0">
@@ -72,7 +73,7 @@ export default function MobileCartBar() {
                 View Cart
               </p>
               <p className="text-base font-bold leading-tight text-emerald-700 truncate">
-                ৳{cartSubtotal.toLocaleString()}
+                {formatPrice(cartSubtotal)}
               </p>
             </div>
 

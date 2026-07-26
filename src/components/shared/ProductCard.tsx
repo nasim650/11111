@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { useAppStore, type CartItem, type WishlistItem } from '@/lib/store'
+import { formatPrice, safeNum } from '@/lib/utils'
 import { toast } from 'sonner'
 
 interface Product {
@@ -99,30 +100,41 @@ export default function ProductCard({ product }: ProductCardProps) {
   const isBangladeshi = !product.origin || product.origin === 'Bangladesh' || product.origin === 'BD'
 
   // Savings amount
-  const savingsAmount = hasDiscount ? product.price - product.discountPrice! : 0
+  const pVal = safeNum(product.price)
+  const dpVal = product.discountPrice != null ? safeNum(product.discountPrice) : null
+  const savingsAmount = hasDiscount && dpVal != null ? Math.max(0, pVal - dpVal) : 0
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (outOfStock) return
+    if (outOfStock) {
+      toast.error('Out of Stock', {
+        description: `"${product.name}" is currently out of stock.`,
+      })
+      return
+    }
     setLoading(true)
     try {
       const cartItem: Omit<CartItem, 'id'> = {
         productId: product.id,
         productName: product.name,
-        price: product.price,
-        discountPrice: product.discountPrice,
+        price: pVal,
+        discountPrice: dpVal,
         quantity: 1,
         unit: product.unit,
         image: imageUrl || '/placeholder.png',
-        stock: product.stock,
+        stock: safeNum(product.stock),
       }
       await addToCart(cartItem)
       setAddedToCart(true)
-      toast.success('Added to cart')
+      toast.success('Added to cart', {
+        description: `${product.name} added to your cart.`,
+      })
       if (addedTimerRef.current) clearTimeout(addedTimerRef.current)
-      addedTimerRef.current = setTimeout(() => setAddedToCart(false), 1500)
+      addedTimerRef.current = setTimeout(() => setAddedToCart(false), 2000)
     } catch {
-      toast.error('Failed to add to cart')
+      toast.error('Failed to add to cart', {
+        description: 'Please try again.',
+      })
     } finally {
       setLoading(false)
     }
@@ -353,11 +365,11 @@ export default function ProductCard({ product }: ProductCardProps) {
           <div className="space-y-0.5">
             <div className="flex items-baseline gap-1.5 flex-wrap">
               <span className="text-lg font-bold text-emerald-600">
-                ৳{effectivePrice.toLocaleString()}
+                {formatPrice(effectivePrice)}
               </span>
               {hasDiscount && (
                 <span className="text-sm text-muted-foreground line-through decoration-red-400/70">
-                  ৳{product.price.toLocaleString()}
+                  {formatPrice(product.price)}
                 </span>
               )}
               <span className="text-xs text-muted-foreground">/{product.unit}</span>
@@ -365,7 +377,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             {hasDiscount && (
               <p className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
                 <span className="inline-flex items-center justify-center h-4 px-1 rounded bg-emerald-100 text-emerald-700 text-[10px] font-bold">
-                  Save ৳{savingsAmount.toLocaleString()}
+                  Save {formatPrice(savingsAmount)}
                 </span>
               </p>
             )}

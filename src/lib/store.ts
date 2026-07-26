@@ -394,20 +394,37 @@ export const useAppStore = create<AppStore>()(
       cartLoading: false,
 
       totalItems: () => {
-        return get().cartItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)
+        return get().cartItems.reduce((sum, item) => {
+          const qty = Number(item.quantity)
+          return sum + (Number.isFinite(qty) && qty > 0 ? Math.floor(qty) : 0)
+        }, 0)
       },
 
       subtotal: () => {
-        return get().cartItems.reduce((sum, item) => {
+        const rawSubtotal = get().cartItems.reduce((sum, item) => {
           const price = item.discountPrice != null ? item.discountPrice : item.price
-          return sum + (Number(price) || 0) * (Number(item.quantity) || 0)
+          const p = Number(price)
+          const q = Number(item.quantity)
+          const validP = Number.isFinite(p) && p >= 0 ? p : 0
+          const validQ = Number.isFinite(q) && q > 0 ? q : 0
+          return sum + (validP * validQ)
         }, 0)
+        return Number.isFinite(rawSubtotal) ? Math.max(0, Math.round(rawSubtotal)) : 0
       },
 
       addToCart: async (item) => {
         const state = get()
         const userId = state.user?.id
         const sessionId = userId ? undefined : getOrCreateSessionId()
+
+        // Sanitize incoming prices and quantities
+        const safePrice = Number.isFinite(Number(item.price)) ? Number(item.price) : 0
+        const safeDiscountPrice = item.discountPrice != null && Number.isFinite(Number(item.discountPrice))
+          ? Number(item.discountPrice)
+          : null
+        const safeQuantity = Number.isFinite(Number(item.quantity)) && Number(item.quantity) > 0
+          ? Math.floor(Number(item.quantity))
+          : 1
 
         try {
           const token = get().accessToken
@@ -418,7 +435,7 @@ export const useAppStore = create<AppStore>()(
             headers,
             body: JSON.stringify({
               productId: item.productId,
-              quantity: item.quantity,
+              quantity: safeQuantity,
               unit: item.unit,
               ...(userId ? { userId } : { sessionId }),
             }),
@@ -430,8 +447,11 @@ export const useAppStore = create<AppStore>()(
           }
 
           const savedItem = await res.json()
+          const savedQty = Number.isFinite(Number(savedItem.quantity)) && Number(savedItem.quantity) > 0
+            ? Number(savedItem.quantity)
+            : safeQuantity
 
-          // Update local state: if item already exists, update it; otherwise add
+          // Update local state immediately
           set((s) => {
             const existingIndex = s.cartItems.findIndex(
               (ci) => ci.productId === item.productId
@@ -441,7 +461,9 @@ export const useAppStore = create<AppStore>()(
               updated[existingIndex] = {
                 ...updated[existingIndex],
                 id: savedItem.id,
-                quantity: savedItem.quantity,
+                price: safePrice,
+                discountPrice: safeDiscountPrice,
+                quantity: savedQty,
               }
               return { cartItems: updated }
             }
@@ -450,13 +472,13 @@ export const useAppStore = create<AppStore>()(
                 {
                   id: savedItem.id,
                   productId: item.productId,
-                  productName: item.productName,
-                  price: item.price,
-                  discountPrice: item.discountPrice,
-                  quantity: savedItem.quantity,
-                  unit: item.unit,
-                  image: item.image,
-                  stock: item.stock,
+                  productName: item.productName || 'Product',
+                  price: safePrice,
+                  discountPrice: safeDiscountPrice,
+                  quantity: savedQty,
+                  unit: item.unit || 'kg',
+                  image: item.image || '/placeholder.png',
+                  stock: Number.isFinite(Number(item.stock)) ? Number(item.stock) : 0,
                 },
                 ...s.cartItems,
               ],
@@ -472,9 +494,12 @@ export const useAppStore = create<AppStore>()(
             )
             if (existingIndex >= 0) {
               const updated = [...s.cartItems]
+              const currentQty = Number(updated[existingIndex].quantity) || 1
               updated[existingIndex] = {
                 ...updated[existingIndex],
-                quantity: updated[existingIndex].quantity + item.quantity,
+                price: safePrice,
+                discountPrice: safeDiscountPrice,
+                quantity: currentQty + safeQuantity,
               }
               return { cartItems: updated }
             }
@@ -482,8 +507,10 @@ export const useAppStore = create<AppStore>()(
               cartItems: [
                 {
                   ...item,
+                  price: safePrice,
+                  discountPrice: safeDiscountPrice,
                   id: `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-                  quantity: item.quantity || 1,
+                  quantity: safeQuantity,
                 },
                 ...s.cartItems,
               ],
