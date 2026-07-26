@@ -21,8 +21,45 @@ export function normalizeEmail(value: unknown): string | null {
 
 export function normalizePhone(value: unknown): string | null {
   if (typeof value !== 'string') return null
-  const phone = value.trim().replace(/[\s-]/g, '')
+  let phone = value.trim().replace(/[\s-]/g, '')
+  if (!phone) return null
+  if (phone.startsWith('+880')) {
+    phone = '0' + phone.slice(4)
+  } else if (phone.startsWith('880')) {
+    phone = '0' + phone.slice(3)
+  }
   return phone || null
+}
+
+export function parseIdentifier(value: unknown): {
+  type: 'email' | 'phone'
+  value: string
+} | {
+  type: 'invalid'
+  error: string
+} {
+  if (typeof value !== 'string') {
+    return { type: 'invalid', error: 'Email or phone number is required' }
+  }
+  const raw = value.trim()
+  if (!raw) {
+    return { type: 'invalid', error: 'Email or phone number is required' }
+  }
+
+  if (raw.includes('@')) {
+    const email = normalizeEmail(raw)
+    if (email && isValidEmail(email)) {
+      return { type: 'email', value: email }
+    }
+    return { type: 'invalid', error: 'Please enter a valid email address.' }
+  }
+
+  const phone = normalizePhone(raw)
+  if (phone && /^01\d{9}$/.test(phone)) {
+    return { type: 'phone', value: phone }
+  }
+
+  return { type: 'invalid', error: 'Please enter a valid Bangladeshi phone number.' }
 }
 
 export function normalizeCouponCode(value: unknown): string | null {
@@ -36,7 +73,8 @@ export function isValidEmail(value: string): boolean {
 }
 
 export function isValidBangladeshPhone(value: string): boolean {
-  return BD_PHONE_REGEX.test(value)
+  const normalized = normalizePhone(value)
+  return normalized ? /^01\d{9}$/.test(normalized) : false
 }
 
 export function validateStrongPassword(password: unknown): string | null {
@@ -102,15 +140,30 @@ export function validateRegistration(body: Record<string, unknown>): ValidationR
   password: string
 }> {
   const errors: Record<string, string> = {}
-  const email = normalizeEmail(body.email)
-  const phone = normalizePhone(body.phone)
+  let email: string | null = null
+  let phone: string | null = null
+
+  if (typeof body.identifier === 'string' && body.identifier.trim()) {
+    const parsed = parseIdentifier(body.identifier)
+    if (parsed.type === 'invalid') {
+      errors.identifier = parsed.error
+    } else if (parsed.type === 'email') {
+      email = parsed.value
+    } else {
+      phone = parsed.value
+    }
+  } else {
+    email = normalizeEmail(body.email)
+    phone = normalizePhone(body.phone)
+    if (!email && !phone) errors.identifier = 'Email or phone number is required'
+    if (email && !isValidEmail(email)) errors.email = 'Please enter a valid email address.'
+    if (phone && !isValidBangladeshPhone(phone)) errors.phone = 'Please enter a valid Bangladeshi phone number.'
+  }
+
   const name = cleanOptionalText(body.name, 80)
   const password = typeof body.password === 'string' ? body.password : ''
   const confirmPassword = body.confirmPassword
 
-  if (!email && !phone) errors.identifier = 'Email or phone is required'
-  if (email && !isValidEmail(email)) errors.email = 'Invalid email address'
-  if (phone && !isValidBangladeshPhone(phone)) errors.phone = 'Invalid Bangladesh phone number'
   if (body.name && !name) errors.name = 'Name contains invalid characters or is too long'
   const passwordError = validateStrongPassword(password)
   if (passwordError) errors.password = passwordError
@@ -128,13 +181,27 @@ export function validateLogin(body: Record<string, unknown>): ValidationResult<{
   password: string
 }> {
   const errors: Record<string, string> = {}
-  const email = normalizeEmail(body.email)
-  const phone = normalizePhone(body.phone)
-  const password = typeof body.password === 'string' ? body.password : ''
+  let email: string | null = null
+  let phone: string | null = null
 
-  if (!email && !phone) errors.identifier = 'Email or phone is required'
-  if (email && !isValidEmail(email)) errors.email = 'Invalid email address'
-  if (phone && !isValidBangladeshPhone(phone)) errors.phone = 'Invalid Bangladesh phone number'
+  if (typeof body.identifier === 'string' && body.identifier.trim()) {
+    const parsed = parseIdentifier(body.identifier)
+    if (parsed.type === 'invalid') {
+      errors.identifier = parsed.error
+    } else if (parsed.type === 'email') {
+      email = parsed.value
+    } else {
+      phone = parsed.value
+    }
+  } else {
+    email = normalizeEmail(body.email)
+    phone = normalizePhone(body.phone)
+    if (!email && !phone) errors.identifier = 'Email or phone number is required'
+    if (email && !isValidEmail(email)) errors.email = 'Please enter a valid email address.'
+    if (phone && !isValidBangladeshPhone(phone)) errors.phone = 'Please enter a valid Bangladeshi phone number.'
+  }
+
+  const password = typeof body.password === 'string' ? body.password : ''
   if (!password) errors.password = 'Password is required'
 
   if (Object.keys(errors).length > 0) return { ok: false, errors }

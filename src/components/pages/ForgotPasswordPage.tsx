@@ -11,19 +11,17 @@ import { toast } from 'sonner'
 
 export default function ForgotPasswordPage() {
   const { navigate, siteConfig } = useAppStore()
-  const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email.trim() && !phone.trim()) {
+    if (!identifier.trim()) {
       toast.error('Please enter your email or phone number')
       return
     }
     setLoading(true)
-    // Placeholder: no actual reset endpoint
     setTimeout(() => {
       setSent(true)
       setLoading(false)
@@ -45,8 +43,8 @@ export default function ForgotPasswordPage() {
           <CardTitle className="text-2xl">Forgot Password</CardTitle>
           <CardDescription>
             {sent
-              ? 'Check your email/phone for reset instructions'
-              : 'Enter your email or phone to reset your password'}
+              ? 'Check your email or phone for reset instructions'
+              : 'Enter your email or phone number to reset your password'}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -66,25 +64,13 @@ export default function ForgotPasswordPage() {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label htmlFor="fp-email">Email</Label>
+                <Label htmlFor="fp-identifier">Email or Phone Number</Label>
                 <Input
-                  id="fp-email"
-                  type="email"
-                  placeholder="your@email.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="mt-1"
-                />
-              </div>
-              <div className="text-center text-sm text-muted-foreground">or</div>
-              <div>
-                <Label htmlFor="fp-phone">Phone</Label>
-                <Input
-                  id="fp-phone"
-                  type="tel"
-                  placeholder="01XXXXXXXXX"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  id="fp-identifier"
+                  type="text"
+                  placeholder="Enter your email or phone number"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
                   className="mt-1"
                 />
               </div>

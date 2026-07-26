@@ -33,8 +33,7 @@ export default function RegisterPage() {
   const [currentStep, setCurrentStep] = useState<Step>(1)
 
   const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -46,8 +45,7 @@ export default function RegisterPage() {
 
   // Touched states for real-time validation
   const [nameTouched, setNameTouched] = useState(false)
-  const [emailTouched, setEmailTouched] = useState(false)
-  const [phoneTouched, setPhoneTouched] = useState(false)
+  const [identifierTouched, setIdentifierTouched] = useState(false)
   const [passwordTouched, setPasswordTouched] = useState(false)
   const [confirmTouched, setConfirmTouched] = useState(false)
 
@@ -55,11 +53,18 @@ export default function RegisterPage() {
   const nameValid = name.trim().length >= 2
   const nameError = nameTouched && !nameValid ? (name.trim() ? 'Name must be at least 2 characters' : 'Name is required') : ''
 
-  const emailValid = email.trim() !== '' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-  const emailError = emailTouched && email.trim() ? (!emailValid ? 'Please enter a valid email' : '') : ''
+  const isEmail = identifier.includes('@')
+  const identifierClean = identifier.trim()
+  const phoneNormalized = identifierClean.replace(/[\s-]/g, '').replace(/^(\+?88)/, '')
+  const identifierValid = isEmail
+    ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifierClean)
+    : /^01[3-9]\d{8}$/.test(phoneNormalized.startsWith('01') ? phoneNormalized : '0' + phoneNormalized)
 
-  const phoneValid = phone.trim() !== '' && /^01[3-9]\d{8}$/.test(phone.trim())
-  const phoneError = phoneTouched && phone.trim() ? (!phoneValid ? 'Enter a valid BD number (01XXXXXXXXX)' : '') : ''
+  const identifierError = identifierTouched && identifierClean
+    ? (!identifierValid
+        ? (isEmail ? 'Please enter a valid email address.' : 'Please enter a valid Bangladeshi phone number.')
+        : '')
+    : ''
 
   const passwordStrength = useMemo(() => getPasswordStrength(password), [password])
   const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword
@@ -71,7 +76,7 @@ export default function RegisterPage() {
 
   // Step completion checks
   const step1Complete = nameValid
-  const step2Complete = emailValid || phoneValid
+  const step2Complete = identifierValid
   const step3Complete = passwordValid && passwordsMatch && agreeTerms
 
   const canProceedStep1 = step1Complete
@@ -83,10 +88,9 @@ export default function RegisterPage() {
       if (!nameValid) return
       setCurrentStep(2)
     } else if (currentStep === 2) {
-      setEmailTouched(true)
-      setPhoneTouched(true)
-      if (!emailValid && !phoneValid) {
-        setError('Please enter a valid email or phone number')
+      setIdentifierTouched(true)
+      if (!identifierValid) {
+        setError(isEmail ? 'Please enter a valid email address.' : 'Please enter a valid Bangladeshi phone number.')
         return
       }
       setError('')
@@ -109,11 +113,10 @@ export default function RegisterPage() {
       setNameTouched(true)
       return
     }
-    if (!emailValid && !phoneValid) {
+    if (!identifierValid) {
       setCurrentStep(2)
-      setEmailTouched(true)
-      setPhoneTouched(true)
-      setError('Please enter a valid email or phone number')
+      setIdentifierTouched(true)
+      setError(isEmail ? 'Please enter a valid email address.' : 'Please enter a valid Bangladeshi phone number.')
       return
     }
     if (!passwordValid) {
@@ -135,8 +138,7 @@ export default function RegisterPage() {
     try {
       await register({
         name: name.trim(),
-        email: email.trim() || undefined,
-        phone: phone.trim() || undefined,
+        identifier: identifier.trim(),
         password,
       })
       setRegistered(true)
@@ -586,74 +588,42 @@ export default function RegisterPage() {
                     className="space-y-4"
                   >
                     <div className="space-y-2">
-                      <Label htmlFor="reg-email" className="text-sm font-medium flex items-center gap-1.5">
-                        Email Address
-                        {emailTouched && emailValid && <Check className="h-3.5 w-3.5 text-emerald-500" />}
+                      <Label htmlFor="reg-identifier" className="text-sm font-medium flex items-center gap-1.5">
+                        Email or Phone Number <span className="text-red-500">*</span>
+                        {identifierTouched && identifierValid && <Check className="h-3.5 w-3.5 text-emerald-500" />}
                       </Label>
                       <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        {isEmail ? (
+                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-all" />
+                        ) : (
+                          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-all" />
+                        )}
                         <Input
-                          id="reg-email"
-                          type="email"
-                          placeholder="your@email.com"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          onBlur={() => setEmailTouched(true)}
+                          id="reg-identifier"
+                          type="text"
+                          placeholder="Enter your email or phone number"
+                          value={identifier}
+                          onChange={(e) => setIdentifier(e.target.value)}
+                          onBlur={() => setIdentifierTouched(true)}
                           autoFocus
                           className={`pl-10 h-11 transition-colors ${
-                            emailError ? 'border-red-400 ring-2 ring-red-100 focus-visible:ring-red-200' :
-                            emailTouched && emailValid ? 'border-emerald-300 focus-visible:ring-emerald-200' : 'focus-visible:ring-primary/20'
+                            identifierError
+                              ? 'border-red-400 ring-2 ring-red-100 focus-visible:ring-red-200'
+                              : identifierTouched && identifierValid
+                              ? 'border-emerald-300 focus-visible:ring-emerald-200'
+                              : 'focus-visible:ring-primary/20'
                           }`}
                         />
                       </div>
-                      {emailError && (
+                      {identifierError && (
                         <motion.p
                           initial={{ opacity: 0, y: -5 }}
                           animate={{ opacity: 1, y: 0 }}
                           className="text-xs text-red-500 flex items-center gap-1"
                         >
-                          <AlertTriangle className="h-3 w-3" /> {emailError}
+                          <AlertTriangle className="h-3 w-3" /> {identifierError}
                         </motion.p>
                       )}
-                    </div>
-
-                    <div className="relative">
-                      <Separator />
-                      <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/70 backdrop-blur-sm px-3 text-xs text-muted-foreground">
-                        and/or
-                      </span>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="reg-phone" className="text-sm font-medium flex items-center gap-1.5">
-                        Phone Number
-                        {phoneTouched && phoneValid && <Check className="h-3.5 w-3.5 text-emerald-500" />}
-                      </Label>
-                      <div className="relative">
-                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          id="reg-phone"
-                          type="tel"
-                          placeholder="01XXXXXXXXX"
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
-                          onBlur={() => setPhoneTouched(true)}
-                          className={`pl-10 h-11 transition-colors ${
-                            phoneError ? 'border-red-400 ring-2 ring-red-100 focus-visible:ring-red-200' :
-                            phoneTouched && phoneValid ? 'border-emerald-300 focus-visible:ring-emerald-200' : 'focus-visible:ring-primary/20'
-                          }`}
-                        />
-                      </div>
-                      {phoneError && (
-                        <motion.p
-                          initial={{ opacity: 0, y: -5 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="text-xs text-red-500 flex items-center gap-1"
-                        >
-                          <AlertTriangle className="h-3 w-3" /> {phoneError}
-                        </motion.p>
-                      )}
-                      <p className="text-xs text-muted-foreground">Enter at least email or phone to continue</p>
                     </div>
                   </motion.div>
                 )}

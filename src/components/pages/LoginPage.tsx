@@ -13,8 +13,7 @@ import { toast } from 'sonner'
 
 export default function LoginPage() {
   const { login, navigate, siteConfig } = useAppStore()
-  const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
@@ -24,22 +23,29 @@ export default function LoginPage() {
   const [loginSuccess, setLoginSuccess] = useState(false)
 
   // Real-time validation
-  const [emailTouched, setEmailTouched] = useState(false)
-  const [phoneTouched, setPhoneTouched] = useState(false)
+  const [identifierTouched, setIdentifierTouched] = useState(false)
   const [passwordTouched, setPasswordTouched] = useState(false)
 
-  const emailValid = !email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-  const phoneValid = !phone.trim() || /^[\d+\-\s()]{7,15}$/.test(phone)
+  const identifierValid = !identifier.trim() || identifier.includes('@')
+    ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier.trim())
+    : /^(\+?88)?01[3-9]\d{8}$/.test(identifier.trim().replace(/[\s-]/g, ''))
   const passwordValid = password.length === 0 || password.length >= 6
-  const hasIdentifier = email.trim().length > 0 || phone.trim().length > 0
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     setFieldErrors({})
 
-    // Validate
     const errs: Record<string, boolean> = {}
+
+    if (!identifier.trim()) {
+      setError('Please enter your email or phone number')
+      errs.identifier = true
+      setIdentifierTouched(true)
+      setFieldErrors(errs)
+      return
+    }
+
     if (!password) {
       setError('Please enter your password')
       errs.password = true
@@ -54,29 +60,10 @@ export default function LoginPage() {
       setFieldErrors(errs)
       return
     }
-    if (!email && !phone) {
-      setError('Please enter your email or phone number')
-      errs.email = true
-      errs.phone = true
-      setFieldErrors(errs)
-      return
-    }
-    if (email.trim() && !emailValid) {
-      setError('Please enter a valid email address')
-      errs.email = true
-      setFieldErrors(errs)
-      return
-    }
-    if (phone.trim() && !phoneValid) {
-      setError('Please enter a valid phone number')
-      errs.phone = true
-      setFieldErrors(errs)
-      return
-    }
 
     setLoading(true)
     try {
-      await login({ email: email || undefined, phone: phone || undefined, password })
+      await login({ identifier: identifier.trim(), password })
       setLoginSuccess(true)
       toast.success('Login successful!')
       setTimeout(() => {
@@ -396,88 +383,54 @@ export default function LoginPage() {
               </AnimatePresence>
 
               <form onSubmit={handleSubmit} className="space-y-5">
-                {/* Email Field */}
+                {/* Single Unified Identifier Field */}
                 <motion.div
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.4 }}
                   className="space-y-2"
                 >
-                  <Label htmlFor="email" className="text-sm font-medium flex items-center gap-1">
-                    Email Address
-                    {emailTouched && email.trim() && emailValid && <Check className="h-3.5 w-3.5 text-emerald-500" />}
+                  <Label htmlFor="identifier" className="text-sm font-medium flex items-center gap-1">
+                    Email or Phone Number <span className="text-red-500">*</span>
+                    {identifierTouched && identifier.trim() && identifierValid && <Check className="h-3.5 w-3.5 text-emerald-500" />}
                   </Label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    {identifier.includes('@') ? (
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-all" />
+                    ) : (
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-all" />
+                    )}
                     <Input
-                      id="email"
-                      type="email"
-                      placeholder="your@email.com"
-                      value={email}
-                      onChange={(e) => { setEmail(e.target.value); setFieldErrors(prev => ({ ...prev, email: false })) }}
-                      onBlur={() => setEmailTouched(true)}
+                      id="identifier"
+                      type="text"
+                      placeholder="Enter your email or phone number"
+                      value={identifier}
+                      onChange={(e) => {
+                        setIdentifier(e.target.value)
+                        setFieldErrors((prev) => ({ ...prev, identifier: false }))
+                      }}
+                      onBlur={() => setIdentifierTouched(true)}
                       className={`pl-10 h-11 transition-colors ${
-                        fieldErrors.email ? 'border-red-400 ring-2 ring-red-100 focus-visible:ring-red-200' :
-                        emailTouched && email.trim() && !emailValid ? 'border-red-400 ring-2 ring-red-100 focus-visible:ring-red-200' :
-                        emailTouched && email.trim() && emailValid ? 'border-emerald-300 focus-visible:ring-emerald-200' :
-                        'focus-visible:ring-primary/20'
+                        fieldErrors.identifier
+                          ? 'border-red-400 ring-2 ring-red-100 focus-visible:ring-red-200'
+                          : identifierTouched && identifier.trim() && !identifierValid
+                          ? 'border-red-400 ring-2 ring-red-100 focus-visible:ring-red-200'
+                          : identifierTouched && identifier.trim() && identifierValid
+                          ? 'border-emerald-300 focus-visible:ring-emerald-200'
+                          : 'focus-visible:ring-primary/20'
                       }`}
                     />
                   </div>
-                  {emailTouched && email.trim() && !emailValid && (
+                  {identifierTouched && identifier.trim() && !identifierValid && (
                     <motion.p
                       initial={{ opacity: 0, y: -5 }}
                       animate={{ opacity: 1, y: 0 }}
                       className="text-xs text-red-500 flex items-center gap-1"
                     >
-                      <AlertCircle className="h-3 w-3" /> Please enter a valid email address
-                    </motion.p>
-                  )}
-                </motion.div>
-
-                {/* Divider */}
-                <div className="relative">
-                  <Separator />
-                  <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/70 backdrop-blur-sm px-3 text-xs text-muted-foreground">
-                    or sign in with phone
-                  </span>
-                </div>
-
-                {/* Phone Field */}
-                <motion.div
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.5 }}
-                  className="space-y-2"
-                >
-                  <Label htmlFor="phone" className="text-sm font-medium flex items-center gap-1">
-                    Phone Number
-                    {phoneTouched && phone.trim() && phoneValid && <Check className="h-3.5 w-3.5 text-emerald-500" />}
-                  </Label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="phone"
-                      type="tel"
-                      placeholder="01XXXXXXXXX"
-                      value={phone}
-                      onChange={(e) => { setPhone(e.target.value); setFieldErrors(prev => ({ ...prev, phone: false })) }}
-                      onBlur={() => setPhoneTouched(true)}
-                      className={`pl-10 h-11 transition-colors ${
-                        fieldErrors.phone ? 'border-red-400 ring-2 ring-red-100 focus-visible:ring-red-200' :
-                        phoneTouched && phone.trim() && !phoneValid ? 'border-red-400 ring-2 ring-red-100 focus-visible:ring-red-200' :
-                        phoneTouched && phone.trim() && phoneValid ? 'border-emerald-300 focus-visible:ring-emerald-200' :
-                        'focus-visible:ring-primary/20'
-                      }`}
-                    />
-                  </div>
-                  {phoneTouched && phone.trim() && !phoneValid && (
-                    <motion.p
-                      initial={{ opacity: 0, y: -5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="text-xs text-red-500 flex items-center gap-1"
-                    >
-                      <AlertCircle className="h-3 w-3" /> Please enter a valid phone number
+                      <AlertCircle className="h-3 w-3" />
+                      {identifier.includes('@')
+                        ? 'Please enter a valid email address.'
+                        : 'Please enter a valid Bangladeshi phone number.'}
                     </motion.p>
                   )}
                 </motion.div>

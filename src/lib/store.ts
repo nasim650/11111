@@ -154,8 +154,8 @@ export interface AppStore {
   user: User | null
   isAuthenticated: boolean
   accessToken: string | null
-  login: (credentials: { email?: string; phone?: string; password: string }) => Promise<void>
-  register: (data: { name: string; email?: string; phone?: string; password: string }) => Promise<void>
+  login: (credentials: { identifier?: string; email?: string; phone?: string; password: string }) => Promise<void>
+  register: (data: { name?: string; identifier?: string; email?: string; phone?: string; password: string }) => Promise<void>
   logout: () => void
   setUser: (user: User | null) => void
   loadUser: () => void
