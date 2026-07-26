@@ -169,398 +169,259 @@ export default function ProductCard({ product }: ProductCardProps) {
 
   return (
     <Card
-      className="group cursor-pointer overflow-hidden border-border/50 rounded-xl transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/10 hover:-translate-y-1"
+      className="group cursor-pointer overflow-hidden border-border/60 rounded-xl bg-white transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/10 hover:border-emerald-300 hover:-translate-y-1 flex flex-col justify-between h-full"
       onClick={() => navigate('product-detail', { id: product.id })}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className="relative aspect-square overflow-hidden bg-muted/30 rounded-t-xl">
-        {/* Shimmer loading effect for images */}
-        {imageUrl && !imgLoaded && (
-          <div className="absolute inset-0 shimmer" />
-        )}
-
-        {imageUrl ? (
-          <motion.div
-            className="absolute inset-0"
-            animate={{ scale: isHovered ? 1.1 : 1 }}
-            transition={{ duration: 0.6, ease: 'easeOut' }}
-          >
-            <Image
-              src={imageUrl}
-              alt={product.name}
-              fill
-              className={`object-cover transition-opacity duration-300 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
-              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-              onError={() => setImgError(true)}
-              onLoad={() => setImgLoaded(true)}
-            />
-          </motion.div>
-        ) : (
-          <div className="flex items-center justify-center h-full bg-gradient-to-br from-primary/10 to-primary/5">
-            <Package className="h-12 w-12 text-primary/30" />
-          </div>
-        )}
-
-        {/* Gradient overlay on hover for better action button visibility */}
-        <AnimatePresence>
-          {isHovered && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent z-[5]"
-            />
+      <div>
+        <div className="relative aspect-square overflow-hidden bg-muted/30 rounded-t-xl">
+          {/* Shimmer loading effect for images */}
+          {imageUrl && !imgLoaded && (
+            <div className="absolute inset-0 shimmer" />
           )}
-        </AnimatePresence>
 
-        {/* Badges - Top Left (including circular discount badge) */}
-        <div className="absolute top-2 left-2 flex flex-col gap-1.5 z-10">
-          {hasDiscount && (
-            <motion.div
-              initial={{ scale: 0, rotate: -180 }}
-              animate={{ scale: 1, rotate: 0 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 20, delay: 0.1 }}
-              className="h-10 w-10 rounded-full flex items-center justify-center shadow-lg bg-gradient-to-br from-red-500 to-rose-600 shadow-red-500/40"
-              aria-label={`Discount ${discountPercent}%`}
-            >
-              <span className="text-white text-[10px] font-extrabold leading-none">
-                -{discountPercent}%
-              </span>
-            </motion.div>
+          {imageUrl ? (
+            <div className="absolute inset-0 overflow-hidden">
+              <Image
+                src={imageUrl}
+                alt={product.name}
+                fill
+                className={`object-cover transition-all duration-500 group-hover:scale-105 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
+                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                onError={() => setImgError(true)}
+                onLoad={() => setImgLoaded(true)}
+              />
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-full bg-gradient-to-br from-primary/10 to-primary/5">
+              <Package className="h-12 w-12 text-primary/30" />
+            </div>
           )}
-          {product.isNewArrival && (
-            <motion.div
-              initial={{ x: -20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ delay: 0.2 }}
-            >
-              <Badge className="bg-emerald-500 text-white text-xs px-2 shadow-sm shadow-emerald-500/30 font-bold tracking-wide">
+
+          {/* Badges - Top Left */}
+          <div className="absolute top-2 left-2 flex flex-col gap-1.5 z-10 pointer-events-none">
+            {hasDiscount && (
+              <div
+                className="h-9 w-9 rounded-full flex items-center justify-center shadow-md bg-gradient-to-br from-red-500 to-rose-600 shadow-red-500/30"
+                aria-label={`Discount ${discountPercent}%`}
+              >
+                <span className="text-white text-[10px] font-extrabold leading-none">
+                  -{discountPercent}%
+                </span>
+              </div>
+            )}
+            {product.isNewArrival && (
+              <Badge className="bg-emerald-500 text-white text-[10px] px-2 shadow-sm font-bold tracking-wide">
                 NEW
               </Badge>
-            </motion.div>
-          )}
-          {product.isBestSeller && !product.isNewArrival && (
-            <motion.div
-              initial={{ x: -20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ delay: 0.2 }}
-            >
-              <Badge className="bg-amber-500 text-white text-xs px-2 shadow-sm shadow-amber-500/30 font-bold tracking-wide">
+            )}
+            {product.isBestSeller && !product.isNewArrival && (
+              <Badge className="bg-amber-500 text-white text-[10px] px-2 shadow-sm font-bold tracking-wide">
                 HOT 🔥
               </Badge>
-            </motion.div>
-          )}
-          {lowStock && !outOfStock && (
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: 'spring', stiffness: 500, damping: 25, delay: 0.3 }}
-            >
+            )}
+            {lowStock && !outOfStock && (
               <Badge className="bg-orange-500/90 text-white text-[10px] px-1.5 py-0 shadow-sm animate-pulse">
                 Low Stock
               </Badge>
-            </motion.div>
-          )}
-        </div>
-
-        {/* Origin Flag - Top Right */}
-        {isBangladeshi && (
-          <div className="absolute top-2 right-2 z-10">
-            <div className="flex items-center gap-1 bg-white/90 backdrop-blur-sm rounded-full px-1.5 py-0.5 shadow-sm">
-              <span className="text-[10px]">🇧🇩</span>
-              <span className="text-[9px] font-semibold text-emerald-700 hidden sm:inline">Local</span>
-            </div>
+            )}
           </div>
-        )}
 
-        {/* Quick Action Buttons - Appear from bottom on Hover */}
-        <AnimatePresence>
-          {isHovered && !outOfStock && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              transition={{ duration: 0.25, ease: 'easeOut' }}
-              className="absolute bottom-2 left-2 flex gap-1.5 z-10"
+          {/* Floating Quick Action Buttons - Top Right (Absolute Positioning, No Reflow) */}
+          <div className="absolute top-2 right-2 flex flex-col gap-1.5 z-20">
+            {/* Wishlist Button: Always accessible on touch/mobile, slides in cleanly on desktop */}
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={handleWishlist}
+              className={`h-8 w-8 rounded-full flex items-center justify-center shadow-md backdrop-blur-sm transition-all duration-300 ${
+                wishlisted
+                  ? 'bg-red-500 text-white opacity-100'
+                  : 'bg-white/95 text-gray-700 hover:bg-white hover:text-red-500 sm:opacity-0 sm:translate-x-2 group-hover:opacity-100 group-hover:translate-x-0'
+              }`}
+              aria-label={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
             >
+              <Heart className={`h-4 w-4 transition-colors ${wishlisted ? 'fill-white text-white' : ''}`} />
+            </motion.button>
+
+            {/* Quick View Button */}
+            {!outOfStock && (
               <motion.button
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.05 }}
-                whileHover={{ scale: 1.15 }}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={handleQuickView}
+                className="h-8 w-8 rounded-full bg-white/95 backdrop-blur-sm flex items-center justify-center shadow-md text-gray-700 hover:bg-white hover:text-emerald-700 sm:opacity-0 sm:translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300"
+                aria-label="Quick view"
+              >
+                <Eye className="h-4 w-4" />
+              </motion.button>
+            )}
+
+            {/* Compare Button */}
+            {!outOfStock && (
+              <motion.button
+                whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
                 onClick={handleCompare}
-                className={`h-8 w-8 rounded-full flex items-center justify-center shadow-md transition-all ${
+                className={`h-8 w-8 rounded-full flex items-center justify-center shadow-md backdrop-blur-sm transition-all duration-300 ${
                   compareChecked
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-white/90 text-gray-600 hover:bg-white hover:text-emerald-700'
+                    ? 'bg-emerald-600 text-white opacity-100'
+                    : 'bg-white/95 text-gray-700 hover:bg-white hover:text-emerald-700 sm:opacity-0 sm:translate-x-2 group-hover:opacity-100 group-hover:translate-x-0'
                 }`}
                 aria-label={compareChecked ? 'Remove from comparison' : 'Compare'}
               >
-                <GitCompare className="h-3.5 w-3.5" />
+                <GitCompare className="h-4 w-4" />
               </motion.button>
-              <motion.button
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                whileHover={{ scale: 1.15 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={handleWishlist}
-                className="h-8 w-8 rounded-full bg-white/90 flex items-center justify-center shadow-md text-gray-600 hover:bg-white hover:text-red-500 transition-all"
-                aria-label={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
-              >
-                <Heart className={`h-3.5 w-3.5 transition-all duration-300 ${wishlisted ? 'fill-red-500 text-red-500' : ''}`} />
-              </motion.button>
-              <motion.button
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15 }}
-                whileHover={{ scale: 1.15 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={handleQuickView}
-                className="h-8 w-8 rounded-full bg-white/90 flex items-center justify-center shadow-md text-gray-600 hover:bg-white hover:text-emerald-700 transition-all"
-                aria-label="Quick view"
-              >
-                <Eye className="h-3.5 w-3.5" />
-              </motion.button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            )}
+          </div>
 
-        {/* Quick Add to Cart - Circular button at bottom-right corner */}
-        <AnimatePresence>
-          {isHovered && !outOfStock && (
-            <motion.button
-              key="quick-add-cart"
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0, opacity: 0 }}
-              transition={{ delay: 0.15, type: 'spring', stiffness: 400, damping: 20 }}
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={handleAddToCart}
-              disabled={loading}
-              aria-label="Quick add to cart"
-              className="absolute bottom-2 right-2 z-20 h-11 w-11 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-lg shadow-emerald-600/40 disabled:opacity-70 disabled:cursor-not-allowed transition-colors"
-            >
-              <AnimatePresence mode="wait">
-                {loading ? (
-                  <motion.span
-                    key="loading"
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    exit={{ scale: 0 }}
-                  >
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  </motion.span>
-                ) : addedToCart ? (
-                  <motion.span
-                    key="added"
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    exit={{ scale: 0 }}
-                  >
-                    <Check className="h-5 w-5" />
-                  </motion.span>
-                ) : (
-                  <motion.span
-                    key="cart"
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    exit={{ scale: 0 }}
-                  >
-                    <ShoppingCart className="h-5 w-5" />
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </motion.button>
-          )}
-        </AnimatePresence>
-
-        {/* Out of stock overlay */}
-        {outOfStock && (
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] flex items-center justify-center z-20">
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-            >
-              <Badge variant="secondary" className="text-sm bg-white/95 text-gray-800 font-bold px-5 py-1.5 shadow-xl">
+          {/* Out of stock overlay */}
+          {outOfStock && (
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] flex items-center justify-center z-20">
+              <Badge variant="secondary" className="text-xs bg-white/95 text-gray-800 font-bold px-4 py-1 shadow-xl">
                 Out of Stock
               </Badge>
-            </motion.div>
+            </div>
+          )}
+        </div>
+
+        {/* Stock Progress Bar - directly under image */}
+        {!outOfStock && (
+          <div className="h-1 bg-muted">
+            <div
+              className={`h-full ${stockColor} transition-all duration-500`}
+              style={{ width: `${stockPercentage}%` }}
+            />
           </div>
         )}
+        {outOfStock && (
+          <div className="h-1 bg-red-200" />
+        )}
 
-        {/* Compare indicator - always visible when in compare */}
-        <AnimatePresence>
-          {compareChecked && !isHovered && (
-            <motion.div
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-              className="absolute bottom-2 left-2 z-10"
-            >
-              <div className="flex items-center gap-1 bg-emerald-600 text-white rounded-full px-2 py-0.5 shadow-md shadow-emerald-500/30">
-                <GitCompare className="size-3" />
-                <span className="text-[10px] font-bold">Compare</span>
-              </div>
-            </motion.div>
+        <CardContent className="p-3 space-y-1.5">
+          {/* Category */}
+          {product.category && (
+            <p className="text-xs text-muted-foreground truncate">
+              {product.category.name}
+            </p>
           )}
-        </AnimatePresence>
+
+          {/* Name */}
+          <h3 className="font-medium text-sm line-clamp-2 leading-tight min-h-[2.5rem] group-hover:text-emerald-700 transition-colors duration-200">
+            {product.name}
+          </h3>
+
+          {/* Rating */}
+          {(product.averageRating != null && product.averageRating > 0) ? (
+            <div className="flex items-center gap-1">
+              <div className="flex">
+                {Array.from({ length: 5 }).map((_, i) => {
+                  const fill = product.averageRating! - i
+                  return (
+                    <Star
+                      key={i}
+                      className={`h-3 w-3 ${
+                        i < Math.round(product.averageRating!)
+                          ? 'fill-amber-400 text-amber-400'
+                          : fill > 0 && fill < 1
+                          ? 'fill-amber-400/50 text-amber-400'
+                          : 'text-gray-200'
+                      }`}
+                    />
+                  )
+                })}
+              </div>
+              <span className="text-xs text-amber-600 font-semibold">{product.averageRating!.toFixed(1)}</span>
+              {product.reviewCount != null && product.reviewCount > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  ({product.reviewCount})
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-semibold border-emerald-300 text-emerald-700 bg-emerald-50/60">
+                <Sparkles className="h-2.5 w-2.5 mr-0.5" />
+                New
+              </Badge>
+              <span className="text-[10px] text-muted-foreground">No reviews yet</span>
+            </div>
+          )}
+
+          {/* Price with savings */}
+          <div className="space-y-0.5">
+            <div className="flex items-baseline gap-1.5 flex-wrap">
+              <span className="text-lg font-bold text-emerald-600">
+                ৳{effectivePrice.toLocaleString()}
+              </span>
+              {hasDiscount && (
+                <span className="text-sm text-muted-foreground line-through decoration-red-400/70">
+                  ৳{product.price.toLocaleString()}
+                </span>
+              )}
+              <span className="text-xs text-muted-foreground">/{product.unit}</span>
+            </div>
+            {hasDiscount && (
+              <p className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
+                <span className="inline-flex items-center justify-center h-4 px-1 rounded bg-emerald-100 text-emerald-700 text-[10px] font-bold">
+                  Save ৳{savingsAmount.toLocaleString()}
+                </span>
+              </p>
+            )}
+          </div>
+
+          {/* Stock Indicator Text */}
+          {!outOfStock && (
+            <div className="flex items-center justify-between">
+              <span className={`text-[10px] font-medium ${lowStock ? 'text-red-500 animate-pulse' : 'text-muted-foreground'}`}>
+                {lowStock ? `Only ${product.stock} left!` : 'In Stock'}
+              </span>
+              {lowStock && (
+                <span className="text-[10px] text-orange-500 font-semibold">
+                  Hurry up!
+                </span>
+              )}
+            </div>
+          )}
+        </CardContent>
       </div>
 
-      {/* Stock Progress Bar - directly under image */}
-      {!outOfStock && (
-        <div className="h-1 bg-muted">
-          <motion.div
-            className={`h-full ${stockColor}`}
-            initial={{ width: 0 }}
-            animate={{ width: `${stockPercentage}%` }}
-            transition={{ duration: 0.8, delay: 0.3, ease: 'easeOut' }}
-          />
-        </div>
-      )}
-      {outOfStock && (
-        <div className="h-1 bg-red-200" />
-      )}
-
-      <CardContent className="p-3 space-y-1.5">
-        {/* Category */}
-        {product.category && (
-          <p className="text-xs text-muted-foreground truncate">
-            {product.category.name}
-          </p>
-        )}
-
-        {/* Name */}
-        <h3 className="font-medium text-sm line-clamp-2 leading-tight min-h-[2.5rem] group-hover:text-emerald-700 transition-colors duration-200">
-          {product.name}
-        </h3>
-
-        {/* Rating */}
-        {(product.averageRating != null && product.averageRating > 0) ? (
-          <div className="flex items-center gap-1">
-            <div className="flex">
-              {Array.from({ length: 5 }).map((_, i) => {
-                const fill = product.averageRating! - i
-                return (
-                  <Star
-                    key={i}
-                    className={`h-3 w-3 ${
-                      i < Math.round(product.averageRating!)
-                        ? 'fill-amber-400 text-amber-400'
-                        : fill > 0 && fill < 1
-                        ? 'fill-amber-400/50 text-amber-400'
-                        : 'text-gray-200'
-                    }`}
-                  />
-                )
-              })}
-            </div>
-            <span className="text-xs text-amber-600 font-semibold">{product.averageRating!.toFixed(1)}</span>
-            {product.reviewCount != null && product.reviewCount > 0 && (
-              <span className="text-xs text-muted-foreground">
-                ({product.reviewCount})
-              </span>
+      {/* Permanently Visible Add to Cart Button — Never Hidden, Never Moved */}
+      <div className="p-3 pt-0 mt-auto">
+        <Button
+          className="w-full h-10 text-sm font-semibold rounded-xl transition-colors bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm hover:shadow"
+          size="sm"
+          disabled={outOfStock || loading}
+          onClick={handleAddToCart}
+        >
+          <AnimatePresence mode="wait">
+            {addedToCart ? (
+              <motion.span
+                key="added"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0 }}
+                className="flex items-center justify-center gap-1.5"
+              >
+                <Check className="h-4 w-4" />
+                Added to Cart!
+              </motion.span>
+            ) : (
+              <motion.span
+                key="default"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0 }}
+                className="flex items-center justify-center gap-1.5"
+              >
+                <ShoppingCart className="h-4 w-4" />
+                {loading ? 'Adding...' : outOfStock ? 'Out of Stock' : 'Add to Cart'}
+              </motion.span>
             )}
-          </div>
-        ) : (
-          <div className="flex items-center gap-1.5">
-            <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-semibold border-emerald-300 text-emerald-700 bg-emerald-50/60">
-              <Sparkles className="h-2.5 w-2.5 mr-0.5" />
-              New
-            </Badge>
-            <span className="text-[10px] text-muted-foreground">No reviews yet</span>
-          </div>
-        )}
-
-        {/* Price with savings */}
-        <div className="space-y-0.5">
-          <div className="flex items-baseline gap-1.5 flex-wrap">
-            <motion.span
-              key={effectivePrice}
-              initial={{ scale: 1.1, color: '#059669' }}
-              animate={{ scale: 1, color: '#059669' }}
-              transition={{ duration: 0.3 }}
-              className="text-lg font-bold text-emerald-600"
-            >
-              ৳{effectivePrice.toLocaleString()}
-            </motion.span>
-            {hasDiscount && (
-              <span className="text-sm text-muted-foreground line-through decoration-red-400/70">
-                ৳{product.price.toLocaleString()}
-              </span>
-            )}
-            <span className="text-xs text-muted-foreground">/{product.unit}</span>
-          </div>
-          {hasDiscount && (
-            <motion.p
-              initial={{ opacity: 0, x: -5 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 }}
-              className="text-xs text-emerald-600 font-semibold flex items-center gap-1"
-            >
-              <span className="inline-flex items-center justify-center h-4 px-1 rounded bg-emerald-100 text-emerald-700 text-[10px] font-bold">
-                Save ৳{savingsAmount.toLocaleString()}
-              </span>
-            </motion.p>
-          )}
-        </div>
-
-        {/* Stock Indicator Text */}
-        {!outOfStock && (
-          <div className="flex items-center justify-between">
-            <span className={`text-[10px] font-medium ${lowStock ? 'text-red-500 animate-pulse' : 'text-muted-foreground'}`}>
-              {lowStock ? `Only ${product.stock} left!` : 'In Stock'}
-            </span>
-            {lowStock && (
-              <span className="text-[10px] text-orange-500 font-semibold">
-                Hurry up!
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Add to cart button (visible always on mobile, on desktop when not hovered) */}
-        <div className={`${isHovered ? 'hidden sm:hidden' : ''}`}>
-          <Button
-            className="w-full h-11 text-sm mt-2 min-h-[44px] transition-all duration-200 active:scale-[0.98] bg-emerald-600 hover:bg-emerald-700 text-white"
-            size="sm"
-            disabled={outOfStock || loading}
-            onClick={handleAddToCart}
-          >
-            <AnimatePresence mode="wait">
-              {addedToCart ? (
-                <motion.span
-                  key="added"
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  exit={{ scale: 0 }}
-                  className="flex items-center gap-1.5"
-                >
-                  <Check className="h-4 w-4" />
-                  Added!
-                </motion.span>
-              ) : (
-                <motion.span
-                  key="default"
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  exit={{ scale: 0 }}
-                  className="flex items-center gap-1.5"
-                >
-                  <ShoppingCart className="h-4 w-4" />
-                  {loading ? 'Adding...' : outOfStock ? 'Out of Stock' : 'Add to Cart'}
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </Button>
-        </div>
-      </CardContent>
+          </AnimatePresence>
+        </Button>
+      </div>
     </Card>
   )
 }
