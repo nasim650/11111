@@ -33,6 +33,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useAppStore, type PageName } from '@/lib/store'
 import { extractItems } from '@/lib/api'
 import ProductCard from '@/components/shared/ProductCard'
+import { toast } from 'sonner'
 
 // ── Types ──
 interface Banner {
@@ -72,6 +73,7 @@ interface Product {
   status?: string
   isNewArrival?: boolean
   isBestSeller?: boolean
+  isFeatured?: boolean
   shortDescription?: string
 }
 
@@ -971,40 +973,36 @@ function FlashSaleSection({ products, navigate, siteConfig }: {
   const flashSaleSubtitle = siteConfig?.flashSaleSubtitle || 'Today'
 
   return (
-    <section className="py-6 bg-gradient-to-r from-red-600 via-red-500 to-rose-500 text-white relative overflow-hidden">
-      {/* Decorative elements */}
-      <div className="absolute inset-0 opacity-10">
-        <div className="absolute top-0 left-0 w-40 h-40 bg-white rounded-full -translate-x-1/2 -translate-y-1/2" />
-        <div className="absolute bottom-0 right-0 w-56 h-56 bg-white rounded-full translate-x-1/3 translate-y-1/3" />
-        <div className="absolute top-1/2 right-1/4 w-20 h-20 bg-white rounded-full" />
-      </div>
-      {/* Zigzag pattern */}
-      <div className="absolute top-0 left-0 right-0 h-3 overflow-hidden">
-        <svg viewBox="0 0 1200 12" className="w-full h-full" preserveAspectRatio="none">
-          <path d="M0 12 L30 0 L60 12 L90 0 L120 12 L150 0 L180 12 L210 0 L240 12 L270 0 L300 12 L330 0 L360 12 L390 0 L420 12 L450 0 L480 12 L510 0 L540 12 L570 0 L600 12 L630 0 L660 12 L690 0 L720 12 L750 0 L780 12 L810 0 L840 12 L870 0 L900 12 L930 0 L960 12 L990 0 L1020 12 L1050 0 L1080 12 L1110 0 L1140 12 L1170 0 L1200 12" fill="white" opacity="0.15" />
-        </svg>
-      </div>
+    <section className="py-8 bg-gradient-to-br from-emerald-950 via-emerald-900 to-emerald-950 text-white relative overflow-hidden border-y border-emerald-800/60 shadow-2xl">
+      {/* Subtle gold glow accents */}
+      <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-0 left-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="container mx-auto px-4 relative z-10">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 pb-4 border-b border-emerald-800/60">
           <div className="flex items-center gap-3">
-            <div className="relative">
-              <Flame className="h-6 w-6 text-amber-300" />
+            <div className="h-10 w-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
+              <Flame className="h-5 w-5 text-amber-400" />
             </div>
-            <h2 className="text-lg md:text-xl font-semibold">{flashSaleTitle}</h2>
-            <Badge className="bg-amber-400 text-red-700 font-semibold text-xs px-2 py-0.5">
-              {flashSaleSubtitle}
-            </Badge>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl md:text-2xl font-bold tracking-tight text-white">{flashSaleTitle}</h2>
+                <Badge className="bg-amber-400 text-emerald-950 font-bold text-xs px-2.5 py-0.5">
+                  {flashSaleSubtitle}
+                </Badge>
+              </div>
+              <p className="text-xs text-emerald-200/70 mt-0.5">Limited stock deals at discounted prices</p>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Clock className="h-4 w-4 text-white/80" />
-            <span className="text-sm text-white/80">Ends in:</span>
+          <div className="flex items-center gap-3 bg-emerald-900/60 backdrop-blur-md border border-emerald-700/50 rounded-2xl px-4 py-2">
+            <Clock className="h-4 w-4 text-amber-400" />
+            <span className="text-xs text-emerald-100 font-medium">Offer ends in:</span>
             <FlashSaleCountdown />
           </div>
           <Button
             variant="secondary"
             size="sm"
-            className="bg-white text-red-600 hover:bg-white/90 font-semibold rounded-full shadow-md"
+            className="bg-amber-400 hover:bg-amber-500 text-emerald-950 font-bold rounded-full shadow-lg gap-1 px-5"
             onClick={() => navigate('products')}
           >
             View All Deals <ArrowRight className="h-4 w-4 ml-1" />
@@ -1397,6 +1395,281 @@ function MobileAppCTA({ navigate }: {
   )
 }
 
+// ── Seasonal Collection Section ──
+function SeasonalCollectionSection({ navigate }: { navigate: (page: PageName, params?: Record<string, unknown>) => void }) {
+  const collections = [
+    {
+      title: 'সুন্দরবনের প্রাকৃতিক মধু',
+      subtitle: 'Pure Sundarbans Wild Honey',
+      tag: 'Seasonal Special',
+      bg: 'from-amber-50 to-orange-50 border-amber-200',
+      icon: '🍯',
+      link: 'honey-jaggery',
+    },
+    {
+      title: 'কাঠের ঘানির সরিষার তেল',
+      subtitle: 'Cold-Pressed Mustard Oil',
+      tag: 'Traditional',
+      bg: 'from-yellow-50 to-amber-50 border-yellow-200',
+      icon: '🫒',
+      link: 'ghee-oils',
+    },
+    {
+      title: 'খাঁটি খেজুরের পাটালি গুড়',
+      subtitle: 'Pure Date Palm Jaggery',
+      tag: 'Winter Harvest',
+      bg: 'from-orange-50 to-amber-100/50 border-orange-200',
+      icon: '🪵',
+      link: 'honey-jaggery',
+    },
+    {
+      title: 'প্রিমিয়াম দেশি স্পেশাল কম্বো',
+      subtitle: 'Organic Family Gift Pack',
+      tag: 'Best Value',
+      bg: 'from-emerald-50 to-teal-50 border-emerald-200',
+      icon: '🎁',
+      link: 'special-combos',
+    },
+  ]
+
+  return (
+    <AnimatedSection className="py-12 md:py-16 bg-white border-t border-emerald-100/50">
+      <div className="container mx-auto px-4">
+        <div className="text-center max-w-2xl mx-auto mb-10">
+          <Badge className="bg-amber-100 text-amber-800 border-amber-200 mb-2 font-semibold">
+            বাংলাদেশি বিশেষ কালেকশন
+          </Badge>
+          <h2 className="text-2xl md:text-3xl font-extrabold text-foreground">
+            Seasonal & Signature Collections
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Handcrafted traditional food essentials prepared with care
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {collections.map((item) => (
+            <motion.div
+              key={item.title}
+              whileHover={{ y: -4 }}
+              className={`p-6 rounded-2xl bg-gradient-to-br ${item.bg} border shadow-sm hover:shadow-md transition-all flex flex-col justify-between cursor-pointer`}
+              onClick={() => navigate('products', { category: item.link })}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-3xl">{item.icon}</span>
+                  <Badge variant="outline" className="bg-white/80 backdrop-blur-sm text-[10px] font-bold">
+                    {item.tag}
+                  </Badge>
+                </div>
+                <h3 className="font-bold text-lg text-foreground line-clamp-1">{item.title}</h3>
+                <p className="text-xs text-muted-foreground mt-0.5 font-medium">{item.subtitle}</p>
+              </div>
+              <div className="mt-6 flex items-center gap-1 text-xs font-bold text-emerald-800">
+                Explore Collection <ArrowRight className="h-3.5 w-3.5" />
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </AnimatedSection>
+  )
+}
+
+// ── Customer Reviews Section ──
+function CustomerReviewsSection() {
+  const reviews = [
+    {
+      name: 'Dr. Rafiqul Islam',
+      location: 'Dhanmondi, Dhaka',
+      rating: 5,
+      comment: 'খাঁটি খাদ্যের আখের গুড় এবং সরিষার তেলের কোয়ালিটি সত্যিই দারুণ। পরিবারের জন্য নিয়মিত অর্ডার করি।',
+      date: '2 days ago',
+    },
+    {
+      name: 'Nusrat Jahan',
+      location: 'Gulshan, Dhaka',
+      rating: 5,
+      comment: 'Sundarbans honey is 100% pure! Fast delivery and exceptional customer support.',
+      date: '1 week ago',
+    },
+    {
+      name: 'Mahmudul Hasan',
+      location: 'Panchlaish, Chittagong',
+      rating: 5,
+      comment: 'পণ্য হাতে পাওয়ার পর দেখে টাকা দেয়ার সুবিধা সত্যিই ভরসা জাগায়। ঘি-এর অরিজিনাল ঘ্রাণ পাওয়া যায়।',
+      date: '2 weeks ago',
+    },
+  ]
+
+  return (
+    <AnimatedSection className="py-12 md:py-16 bg-gradient-to-b from-stone-50 to-white">
+      <div className="container mx-auto px-4">
+        <div className="text-center max-w-xl mx-auto mb-10">
+          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 mb-2 font-semibold">
+            গ্রাহকদের সন্তুষ্টি
+          </Badge>
+          <h2 className="text-2xl md:text-3xl font-extrabold text-foreground">
+            What Our Customers Say
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Over 10,000+ happy Bangladeshi families trust Khati Khadyo
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {reviews.map((r, i) => (
+            <div key={i} className="p-6 rounded-2xl bg-white border border-stone-200/80 shadow-sm flex flex-col justify-between space-y-4">
+              <div className="space-y-3">
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: r.rating }).map((_, idx) => (
+                    <Star key={idx} className="h-4 w-4 fill-amber-400 text-amber-400" />
+                  ))}
+                </div>
+                <p className="text-sm text-foreground/90 italic leading-relaxed">&ldquo;{r.comment}&rdquo;</p>
+              </div>
+              <div className="flex items-center justify-between pt-3 border-t border-stone-100">
+                <div>
+                  <h4 className="font-bold text-sm text-foreground flex items-center gap-1">
+                    {r.name}
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                  </h4>
+                  <p className="text-[11px] text-muted-foreground">{r.location}</p>
+                </div>
+                <span className="text-[10px] text-muted-foreground bg-stone-100 px-2 py-0.5 rounded-full">{r.date}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </AnimatedSection>
+  )
+}
+
+// ── FAQ Section ──
+function FAQSection() {
+  const [openIndex, setOpenIndex] = useState<number | null>(0)
+
+  const faqs = [
+    {
+      q: 'পণ্যের ১০০% খাঁটি হওয়ার নিশ্চয়তা কী?',
+      a: 'আমরা সরাসরি নিবন্ধিত কৃষক ও বিশ্বস্ত প্রস্তুতকারকদের কাছ থেকে পণ্য সংগ্রহ করি। ক্ষতিকারক কেমিক্যাল বা ভেজালমুক্ত তা নিশ্চিত করতে নিজস্ব কোয়ালিটি কন্ট্রোল টিম কাজ করে।',
+    },
+    {
+      q: 'ডেলিভারি চার্জ এবং সময় কতদিন?',
+      a: 'ঢাকা সিটিতে ২৪–৪৮ ঘণ্টার মধ্যে হোম ডেলিভারি এবং ঢাকার বাইরে ২–৩ কার্যদিবসের মধ্যে পৌঁছায়। ৳১,৫০০ বা তার বেশি অর্ডারে সারা বাংলাদেশে ডেলিভারি একদম ফ্রি!',
+    },
+    {
+      q: 'ক্যাশ অন ডেলিভারিতে পণ্য দেখে মূল্য পরিশোধ করা যাবে?',
+      a: 'হ্যাঁ, আমাদের প্রতিটি অর্ডারে ক্যাশ অন ডেলিভারি (Cash on Delivery) সুবিধা রয়েছে। পণ্য হাতে পেয়ে চেক করে নেওয়ার সুযোগ রয়েছে।',
+    },
+    {
+      q: 'পণ্য পছন্দ না হলে বা কোন সমস্যা থাকলে কীভাবে রিটার্ন করব?',
+      a: 'পণ্য রিসিভ করার ২৪ ঘণ্টার মধ্যে আমাদের হেল্পলাইন বা ফেসবুক পেজে জানালে দ্রুততম সময়ে বিনামূল্যে পণ্য রিপ্লেস বা রিফান্ড দেয়া হয়।',
+    },
+  ]
+
+  return (
+    <AnimatedSection className="py-12 md:py-16 bg-white border-t border-stone-100">
+      <div className="container mx-auto px-4 max-w-3xl">
+        <div className="text-center mb-10">
+          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 mb-2 font-semibold">
+            সাধারণ প্রশ্ন উত্তর
+          </Badge>
+          <h2 className="text-2xl md:text-3xl font-extrabold text-foreground">
+            Frequently Asked Questions
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">Everything you need to know about shopping with us</p>
+        </div>
+
+        <div className="space-y-3">
+          {faqs.map((faq, i) => {
+            const isOpen = openIndex === i
+            return (
+              <div
+                key={i}
+                className="border border-stone-200 rounded-xl overflow-hidden bg-stone-50/50 transition-colors"
+              >
+                <button
+                  type="button"
+                  className="w-full p-4 text-left font-bold text-sm md:text-base text-foreground flex items-center justify-between gap-4"
+                  onClick={() => setOpenIndex(isOpen ? null : i)}
+                >
+                  <span>{faq.q}</span>
+                  <span className={`h-6 w-6 rounded-full bg-white flex items-center justify-center border text-xs transition-transform ${isOpen ? 'rotate-180 bg-emerald-50 text-emerald-700' : ''}`}>
+                    ▼
+                  </span>
+                </button>
+                <AnimatePresence>
+                  {isOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="p-4 pt-0 text-sm text-muted-foreground leading-relaxed border-t border-stone-200/60 bg-white">
+                        {faq.a}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </AnimatedSection>
+  )
+}
+
+// ── Newsletter Section ──
+function NewsletterSection() {
+  const [input, setInput] = useState('')
+  const [subscribed, setSubscribed] = useState(false)
+
+  const handleSubscribe = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (input.trim()) {
+      setSubscribed(true)
+      toast.success('Thank you for subscribing! Check your inbox for a discount coupon.')
+    }
+  }
+
+  return (
+    <section className="py-12 bg-gradient-to-r from-emerald-900 via-emerald-800 to-emerald-900 text-white relative overflow-hidden">
+      <div className="container mx-auto px-4 max-w-4xl text-center relative z-10">
+        <Sparkles className="h-8 w-8 text-amber-400 mx-auto mb-3" />
+        <h2 className="text-2xl md:text-3xl font-extrabold mb-2">
+          বিশেষ অফার ও ডিসকাউন্ট পেতে সাবস্ক্রাইব করুন
+        </h2>
+        <p className="text-emerald-100/80 text-sm max-w-xl mx-auto mb-6">
+          Subscribe to our newsletter to receive exclusive offers, new arrivals, and purity guarantee updates.
+        </p>
+
+        {subscribed ? (
+          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 inline-flex items-center gap-2 text-amber-300 font-bold text-sm">
+            <Check className="h-5 w-5" /> You are subscribed! Discount code: KHATI20
+          </div>
+        ) : (
+          <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+            <Input
+              type="text"
+              placeholder="Enter your email or phone"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              className="bg-white text-foreground h-12 rounded-full px-5 placeholder:text-muted-foreground text-sm flex-1 shadow-md border-0"
+            />
+            <Button type="submit" className="h-12 px-7 rounded-full bg-amber-400 hover:bg-amber-500 text-emerald-950 font-bold shadow-lg">
+              Subscribe
+            </Button>
+          </form>
+        )}
+      </div>
+    </section>
+  )
+}
+
 // ── Loading Skeleton ──
 function HomeLoadingSkeleton() {
   return (
@@ -1440,8 +1713,7 @@ function HomeLoadingSkeleton() {
 
 // ── Main Component ──
 export default function HomePage() {
-  const { navigate, setSearchQuery, loadSiteConfig, siteConfig } = useAppStore()
-  // Recently Viewed IDs are persisted in localStorage via the Zustand store
+  const { navigate, setSearchQuery, siteConfig } = useAppStore()
   const recentlyViewed = useAppStore((s) => s.recentlyViewed || [])
   const [heroBanners, setHeroBanners] = useState<Banner[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -1453,49 +1725,30 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    loadSiteConfig()
-  }, [loadSiteConfig])
-
-  useEffect(() => {
-    const loadAll = async () => {
-      setLoading(true)
+    async function loadAll() {
       try {
-        const [heroBannersRes, catRes, discRes, featRes, bestRes, newArrRes] = await Promise.all([
-          fetch('/api/banners?status=active&location=hero').catch(() => null),
-          fetch('/api/categories').catch(() => null),
-          fetch('/api/products?status=active&minPrice=1&sort=discount&limit=8').catch(() => null),
-          fetch('/api/products?status=active&isFeatured=true&limit=8').catch(() => null),
-          fetch('/api/products?status=active&isBestSeller=true&limit=8').catch(() => null),
-          fetch('/api/products?status=active&isNewArrival=true&limit=8').catch(() => null),
+        const [bannersRes, catsRes, prodsRes] = await Promise.all([
+          fetch('/api/banners'),
+          fetch('/api/categories'),
+          fetch('/api/products?limit=50'),
         ])
 
-        if (heroBannersRes?.ok) {
-          const data = await heroBannersRes.json()
-          setHeroBanners(extractItems<Banner>(data))
+        if (bannersRes.ok) {
+          const bData = await bannersRes.json()
+          setHeroBanners(extractItems<Banner>(bData))
         }
-        if (catRes?.ok) {
-          const data = await catRes.json()
-          const cats = extractItems<Category>(data)
-          setCategories(cats.filter((c: Category) => c.showInHome !== false))
+        if (catsRes.ok) {
+          const cData = await catsRes.json()
+          setCategories(extractItems<Category>(cData))
         }
-        if (discRes?.ok) {
-          const data = await discRes.json()
-          const prods = extractItems<Product>(data)
-          setDiscountProducts(
-            prods.filter((p: Product) => p.discountPrice != null && p.discountPrice < p.price)
-          )
-        }
-        if (featRes?.ok) {
-          const data = await featRes.json()
-          setFeaturedProducts(extractItems<Product>(data))
-        }
-        if (bestRes?.ok) {
-          const data = await bestRes.json()
-          setBestSellers(extractItems<Product>(data))
-        }
-        if (newArrRes?.ok) {
-          const data = await newArrRes.json()
-          setNewArrivals(extractItems<Product>(data))
+        if (prodsRes.ok) {
+          const pData = await prodsRes.json()
+          const allProds = extractItems<Product>(pData)
+
+          setFeaturedProducts(allProds.filter((p) => p.isFeatured || p.status === 'active').slice(0, 8))
+          setDiscountProducts(allProds.filter((p) => p.discountPrice != null && p.discountPrice < p.price))
+          setBestSellers(allProds.filter((p) => p.isBestSeller).slice(0, 8))
+          setNewArrivals(allProds.filter((p) => p.isNewArrival).slice(0, 8))
         }
       } catch (error) {
         console.error('Failed to load homepage data:', error)
@@ -1506,11 +1759,6 @@ export default function HomePage() {
     loadAll()
   }, [])
 
-  // ── Recently Viewed: fetch product details for persisted IDs ──
-  // Fires whenever the persisted recentlyViewed ID list changes (e.g. user
-  // returns from a product detail page). Fetches each product by ID in
-  // parallel, filters failures, and caps the display at 4 items so the
-  // section stays compact and prominent for returning users.
   useEffect(() => {
     if (!recentlyViewed || recentlyViewed.length === 0) {
       setRecentProducts([])
@@ -1543,8 +1791,6 @@ export default function HomePage() {
     navigate('products')
   }
 
-  // ── Deal of the Day product: highest discount % from discountProducts,
-  // falling back to the first featured product when no discounts exist.
   const dealProduct = useMemo<Product | null>(() => {
     if (discountProducts.length > 0) {
       const discountPct = (p: Product) =>
@@ -1564,11 +1810,11 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-stone-50/30 text-foreground">
       {/* ── 1. Announcement Bar ── */}
       <AnnouncementBar siteConfig={siteConfig} />
 
-      {/* ── 2. Search Bar (moved above Hero) ── */}
+      {/* ── 2. Search Bar ── */}
       <div className="bg-gradient-to-b from-emerald-50/40 to-transparent py-6 md:py-8">
         <div className="container mx-auto px-4 max-w-2xl">
           <form
@@ -1590,7 +1836,7 @@ export default function HomePage() {
             <Button
               type="submit"
               size="lg"
-              className="h-12 px-6 shadow-md bg-emerald-700 hover:bg-emerald-800 rounded-full"
+              className="h-12 px-6 shadow-md bg-emerald-700 hover:bg-emerald-800 rounded-full text-white font-bold"
             >
               Search
             </Button>
@@ -1598,27 +1844,16 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ── 3. Categories (moved immediately below Search) ── */}
-      <CategorySection categories={categories} navigate={navigate} />
-
-      {/* ── 4. Hero Banner Carousel (moved below Categories) ── */}
+      {/* ── 3. Large Hero Banner Carousel ── */}
       <HeroBannerCarousel banners={heroBanners} navigate={navigate} />
 
-      {/* ── 4b. Deal of the Day (single featured product + midnight countdown) ── */}
-      {dealProduct && (
-        <DealOfTheDaySection product={dealProduct} navigate={navigate} />
-      )}
+      {/* ── 4. Featured Categories (Large Premium Cards, Bengali Primary) ── */}
+      <CategorySection categories={categories} navigate={navigate} />
 
-      {/* ── 4a. Recently Viewed (localStorage-backed; shown for returning users) ── */}
-      <RecentlyViewedSection products={recentProducts} navigate={navigate} />
-
-      {/* ── 5. Flash Sale / Deal Timer Section (visual priority slightly reduced) ── */}
+      {/* ── 5. Flash Sale (Elegantly Redesigned Dark Forest Theme) ── */}
       <FlashSaleSection products={discountProducts} navigate={navigate} siteConfig={siteConfig} />
 
-      {/* ── 5a. Best Sellers ── */}
-      <BestSellersSection products={bestSellers} navigate={navigate} />
-
-      {/* ── 5. Featured Products ── */}
+      {/* ── 6. Featured Products ── */}
       {featuredProducts.length > 0 && (
         <AnimatedSection className="py-10 md:py-14">
           <div className="container mx-auto px-4">
@@ -1630,7 +1865,6 @@ export default function HomePage() {
                 </div>
                 <h2 className="text-2xl md:text-3xl font-bold">Featured Products</h2>
                 <p className="text-sm text-muted-foreground mt-1">Premium picks our customers love</p>
-                {/* Decorative accent line */}
                 <div className="mt-2 h-1 w-16 rounded-full bg-gradient-to-r from-emerald-500 to-teal-400" />
               </div>
               <Button
@@ -1646,27 +1880,32 @@ export default function HomePage() {
                 <ProductCard key={p.id} product={p} />
               ))}
             </div>
-            {/* Mobile View All — shown below the grid on small screens */}
-            <div className="mt-6 text-center sm:hidden">
-              <Button
-                variant="outline"
-                className="gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 rounded-full px-6"
-                onClick={() => navigate('products')}
-              >
-                View All Featured <ArrowRight className="h-4 w-4" />
-              </Button>
-            </div>
           </div>
         </AnimatedSection>
       )}
 
-      {/* ── 6. New Arrivals ── */}
-      <NewArrivalsSection products={newArrivals} navigate={navigate} />
+      {/* ── 7. Best Sellers ── */}
+      <BestSellersSection products={bestSellers} navigate={navigate} />
 
-      {/* ── 7. Trust & Guarantees Section ── */}
+      {/* ── 8. Deal of the Day ── */}
+      {dealProduct && (
+        <DealOfTheDaySection product={dealProduct} navigate={navigate} />
+      )}
+
+      {/* ── 9. Seasonal Collection ── */}
+      <SeasonalCollectionSection navigate={navigate} />
+
+      {/* ── 10. Why Choose Khati Khadyo (Trust Pillars) ── */}
       <TrustSection />
 
-      {/* ── 7. Mobile App CTA ── */}
+      {/* ── 11. Customer Reviews ── */}
+      <CustomerReviewsSection />
+
+      {/* ── 12. Frequently Asked Questions (FAQ Accordion) ── */}
+      <FAQSection />
+
+      {/* ── 13. Newsletter & Mobile App Download ── */}
+      <NewsletterSection />
       <MobileAppCTA navigate={navigate} />
     </div>
   )
