@@ -9,6 +9,7 @@ import {
   ArrowLeft, RefreshCw, Zap, Tag, ShoppingBag, ChevronDown,
   Phone, User, Mail, Home as HomeIcon, AlertCircle, Minus, Plus,
   X, Info, Sparkles, Package, Edit2, Trash2, Check, Star, CheckCircle,
+  Building, Users, Store, Compass, FileText
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,6 +31,8 @@ import { useAppStore } from '@/lib/store'
 import { extractItems } from '@/lib/api'
 import { formatPrice, safeNum } from '@/lib/utils'
 import CheckoutStepIndicator from '@/components/shared/CheckoutStepIndicator'
+import SmartAddressForm from '@/components/shared/SmartAddressForm'
+import { packSmartAddress, unpackSmartAddress, type SmartAddressData } from '@/lib/bangladesh-address'
 import { toast } from 'sonner'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -44,21 +47,6 @@ interface Address {
   postalCode?: string
   isDefault: boolean
 }
-
-// ─── Bangladesh Districts (grouped by division) ─────────────────────────────
-
-const divisionDistricts: Record<string, string[]> = {
-  'Dhaka Division': ['Dhaka', 'Faridpur', 'Gazipur', 'Gopalganj', 'Kishoreganj', 'Madaripur', 'Manikganj', 'Munshiganj', 'Narayanganj', 'Narsingdi', 'Rajbari', 'Shariatpur', 'Tangail'],
-  'Rajshahi Division': ['Bogra', 'Joypurhat', 'Naogaon', 'Natore', 'Nawabganj', 'Pabna', 'Rajshahi', 'Sirajganj'],
-  'Chittagong Division': ['Chittagong', 'Comilla', "Cox's Bazar", 'Feni', 'Khagrachhari', 'Lakshmipur', 'Noakhali', 'Rangamati', 'Brahmanbaria', 'Chandpur'],
-  'Khulna Division': ['Khulna', 'Bagerhat', 'Chuadanga', 'Jessore', 'Jhenaidah', 'Kushtia', 'Magura', 'Meherpur', 'Narail', 'Satkhira'],
-  'Barisal Division': ['Barisal', 'Barguna', 'Bhola', 'Jhalokati', 'Patuakhali', 'Pirojpur'],
-  'Sylhet Division': ['Sylhet', 'Habiganj', 'Moulvibazar', 'Sunamganj'],
-  'Rangpur Division': ['Rangpur', 'Dinajpur', 'Gaibandha', 'Kurigram', 'Lalmonirhat', 'Nilphamari', 'Panchagarh', 'Thakurgaon'],
-  'Mymensingh Division': ['Mymensingh', 'Jamalpur', 'Netrokona', 'Sherpur'],
-}
-
-const bangladeshDistricts = Object.values(divisionDistricts).flat()
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -79,21 +67,13 @@ export default function CheckoutPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [showCouponInput, setShowCouponInput] = useState(true)
 
-  // Guest form
-  const [guestName, setGuestName] = useState('')
-  const [guestPhone, setGuestPhone] = useState('')
-  const [guestEmail, setGuestEmail] = useState('')
-  const [guestAddress, setGuestAddress] = useState('')
-  const [guestCity, setGuestCity] = useState('')
-  const [guestDistrict, setGuestDistrict] = useState('')
-
-  // Add & Edit address forms
+  // Smart Address Form Controls
   const [showAddAddress, setShowAddAddress] = useState(false)
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null)
   const [savingAddress, setSavingAddress] = useState(false)
-  const [newAddrIsDefault, setNewAddrIsDefault] = useState(false)
-  const [newAddr, setNewAddr] = useState({ name: '', phone: '', address: '', city: '', district: '', postalCode: '' })
-  const [editingAddr, setEditingAddr] = useState({ name: '', phone: '', address: '', city: '', district: '', postalCode: '', isDefault: false })
+
+  // Guest Smart Address Form State
+  const [guestSmartData, setGuestSmartData] = useState<SmartAddressData | null>(null)
 
   // Mobile summary sheet
   const [mobileSummaryOpen, setMobileSummaryOpen] = useState(false)
@@ -134,8 +114,6 @@ export default function CheckoutPage() {
   const freeShippingProgress = Math.min((sub / freeThreshold) * 100, 100)
   const freeShippingRemaining = Math.max(freeThreshold - sub, 0)
 
-  const validatePhone = (p: string) => /^(?:01\d{9}|\+8801\d{9})$/.test(p)
-
   // ─── Step 1 Validation ────────────────────────────────────────────────────
   const validateStep1 = (): boolean => {
     const errors: Record<string, string> = {}
@@ -159,17 +137,9 @@ export default function CheckoutPage() {
         }
       }
     } else {
-      if (!guestName.trim()) errors.guestName = 'Full name is required'
-      if (!guestPhone.trim()) {
-        errors.guestPhone = 'Mobile number is required'
-      } else if (!validatePhone(guestPhone)) {
-        errors.guestPhone = 'Enter a valid BD mobile number (01XXXXXXXXX)'
-      }
-      if (!guestAddress.trim()) errors.guestAddress = 'Delivery address is required'
-      if (!guestCity.trim()) errors.guestCity = 'City is required'
-
-      if (Object.keys(errors).length > 0) {
-        toast.error('Please complete all required contact & shipping fields')
+      if (!guestSmartData || !guestSmartData.name || !guestSmartData.phone || !guestSmartData.addressDetail) {
+        errors.guestAddress = 'Please complete your contact & delivery address'
+        toast.error('Please complete your contact & delivery address')
       }
     }
 
@@ -221,35 +191,30 @@ export default function CheckoutPage() {
     }
   }
 
-  // ─── Address CRUD (Instant State Sync & Auto-select) ─────────────────────
+  // ─── Smart Address Save Handler (Instant Sync & Auto-Select) ──────────────
 
-  const handleAddAddress = async () => {
+  const handleSaveSmartAddress = async (smart: SmartAddressData) => {
     if (!user?.id) return
-    if (!newAddr.name.trim() || !newAddr.phone.trim() || !newAddr.address.trim() || !newAddr.city.trim()) {
-      toast.error('Please fill in required fields', { description: 'Name, phone, address, and city are required.' })
-      return
-    }
-
     setSavingAddress(true)
     try {
       const token = useAppStore.getState().accessToken
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (token) headers['Authorization'] = `Bearer ${token}`
 
+      const packed = packSmartAddress(smart)
       const isFirst = addresses.length === 0
-      const setAsDefault = isFirst || newAddrIsDefault
+      const setAsDefault = isFirst || !!smart.isDefault
 
-      const res = await fetch('/api/addresses', {
-        method: 'POST',
+      const isEdit = !!editingAddressId
+      const url = isEdit ? `/api/addresses/${editingAddressId}` : '/api/addresses'
+      const method = isEdit ? 'PUT' : 'POST'
+
+      const res = await fetch(url, {
+        method,
         headers,
         body: JSON.stringify({
           userId: user.id,
-          name: newAddr.name.trim(),
-          phone: newAddr.phone.trim(),
-          address: newAddr.address.trim(),
-          city: newAddr.city.trim(),
-          district: newAddr.district?.trim() || null,
-          postalCode: newAddr.postalCode?.trim() || null,
+          ...packed,
           isDefault: setAsDefault,
         }),
       })
@@ -259,103 +224,34 @@ export default function CheckoutPage() {
         throw new Error(data.error || 'Unable to save address. Please try again.')
       }
 
-      // CRITICAL FIX: Properly unwrap created address object from API response
       const savedAddress: Address = data.data || data
+      if (!savedAddress?.id) throw new Error('Saved address payload invalid')
 
-      if (!savedAddress?.id) {
-        throw new Error('Saved address data invalid')
-      }
-
-      // Synchronously update address list and set as default if applicable
       setAddresses((prev) => {
         const updated = setAsDefault
           ? prev.map((a) => ({ ...a, isDefault: false }))
           : [...prev]
+        if (isEdit) {
+          return updated.map((a) => (a.id === editingAddressId ? savedAddress : a))
+        }
         return [savedAddress, ...updated.filter((a) => a.id !== savedAddress.id)]
       })
 
-      // INSTANT AUTO-SELECT NEW ADDRESS
+      // INSTANT AUTO-SELECT
       setSelectedAddressId(savedAddress.id)
       setShowAddAddress(false)
-      setNewAddr({ name: '', phone: '', address: '', city: '', district: '', postalCode: '' })
-      setNewAddrIsDefault(false)
+      setEditingAddressId(null)
       setFormErrors((prev) => {
         const next = { ...prev }
         delete next.address
         return next
       })
 
-      toast.success('Address saved successfully', {
-        description: 'Using your new delivery address.',
+      toast.success(isEdit ? 'Address updated successfully' : 'Address saved successfully', {
+        description: 'Using your new Bangladesh delivery address.',
       })
     } catch (err: any) {
       toast.error(err.message || 'Unable to save address. Please try again.')
-    } finally {
-      setSavingAddress(false)
-    }
-  }
-
-  const handleStartEditAddress = (addr: Address, e: React.MouseEvent) => {
-    e.stopPropagation()
-    setEditingAddressId(addr.id)
-    setEditingAddr({
-      name: addr.name,
-      phone: addr.phone,
-      address: addr.address,
-      city: addr.city,
-      district: addr.district || '',
-      postalCode: addr.postalCode || '',
-      isDefault: addr.isDefault,
-    })
-  }
-
-  const handleUpdateAddress = async () => {
-    if (!editingAddressId || !user?.id) return
-    if (!editingAddr.name.trim() || !editingAddr.phone.trim() || !editingAddr.address.trim() || !editingAddr.city.trim()) {
-      toast.error('Please fill in required fields', { description: 'Name, phone, address, and city are required.' })
-      return
-    }
-
-    setSavingAddress(true)
-    try {
-      const token = useAppStore.getState().accessToken
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (token) headers['Authorization'] = `Bearer ${token}`
-
-      const res = await fetch(`/api/addresses/${editingAddressId}`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({
-          userId: user.id,
-          name: editingAddr.name.trim(),
-          phone: editingAddr.phone.trim(),
-          address: editingAddr.address.trim(),
-          city: editingAddr.city.trim(),
-          district: editingAddr.district?.trim() || null,
-          postalCode: editingAddr.postalCode?.trim() || null,
-          isDefault: editingAddr.isDefault,
-        }),
-      })
-
-      const data = await res.json()
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Unable to update address.')
-      }
-
-      const updatedAddress: Address = data.data || data
-
-      setAddresses((prev) =>
-        prev.map((a) => {
-          if (a.id === editingAddressId) return updatedAddress
-          if (updatedAddress.isDefault) return { ...a, isDefault: false }
-          return a
-        })
-      )
-      setSelectedAddressId(updatedAddress.id)
-      setEditingAddressId(null)
-      toast.success('Address updated successfully', { description: 'Using updated delivery details.' })
-    } catch (err: any) {
-      toast.error(err.message || 'Unable to update address.')
     } finally {
       setSavingAddress(false)
     }
@@ -442,11 +338,12 @@ export default function CheckoutPage() {
       if (isAuthenticated && user?.id) {
         orderData.userId = user.id
         orderData.addressId = selectedAddressId
-      } else {
-        orderData.guestName = guestName.trim()
-        orderData.guestPhone = guestPhone.trim()
-        orderData.guestEmail = guestEmail.trim() || undefined
-        orderData.guestAddress = `${guestAddress.trim()}, ${guestCity.trim()}${guestDistrict ? `, ${guestDistrict.trim()}` : ''}`
+      } else if (guestSmartData) {
+        orderData.guestName = guestSmartData.name
+        orderData.guestPhone = guestSmartData.phone
+        orderData.guestEmail = guestSmartData.email || undefined
+        const packedGuest = packSmartAddress(guestSmartData)
+        orderData.guestAddress = packedGuest.address
       }
 
       const res = await fetch('/api/orders', {
@@ -732,6 +629,7 @@ export default function CheckoutPage() {
   )
 
   const selectedAddrObj = addresses.find((a) => a.id === selectedAddressId)
+  const selectedSmartAddr = selectedAddrObj ? unpackSmartAddress(selectedAddrObj) : null
 
   // ─── Main Render ──────────────────────────────────────────────────────────
 
@@ -789,14 +687,14 @@ export default function CheckoutPage() {
                   <Card className="shadow-sm rounded-2xl border">
                     <SectionHeader
                       icon={MapPin}
-                      title="1. Delivery Address"
-                      subtitle="Choose or add a delivery address"
+                      title="1. Bangladesh Smart Delivery Address"
+                      subtitle="Select or create a delivery address for City, Town or Village"
                       badge="Required"
                     />
                     <CardContent className="space-y-4 pt-0">
                       {isAuthenticated && user?.id ? (
                         <>
-                          {/* Saved Addresses List */}
+                          {/* Saved Addresses Cards */}
                           {addresses.length > 0 && !showAddAddress && !editingAddressId && (
                             <div className="space-y-3">
                               <RadioGroup
@@ -813,11 +711,12 @@ export default function CheckoutPage() {
                               >
                                 {addresses.map((addr) => {
                                   const isSelected = selectedAddressId === addr.id
+                                  const smart = unpackSmartAddress(addr)
                                   return (
                                     <div
                                       key={addr.id}
                                       onClick={() => setSelectedAddressId(addr.id)}
-                                      className={`relative rounded-xl p-4 border-2 cursor-pointer transition-all duration-200 flex flex-col justify-between ${
+                                      className={`relative rounded-2xl p-4 border-2 cursor-pointer transition-all duration-200 flex flex-col justify-between ${
                                         isSelected
                                           ? 'border-primary bg-primary/5 shadow-sm'
                                           : 'border-border bg-card hover:border-primary/40'
@@ -827,29 +726,55 @@ export default function CheckoutPage() {
                                         <div className="flex items-start justify-between gap-2 mb-2">
                                           <div className="flex items-center gap-2">
                                             <RadioGroupItem value={addr.id} id={addr.id} className="mt-0.5" />
-                                            <span className="font-semibold text-sm text-foreground truncate max-w-[150px]">
-                                              {addr.name}
+                                            <span className="font-bold text-sm text-foreground truncate max-w-[150px]">
+                                              {smart.name}
                                             </span>
                                           </div>
-                                          {addr.isDefault && (
-                                            <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[10px] px-2 py-0">
-                                              Default
+                                          <div className="flex items-center gap-1">
+                                            <Badge className="bg-primary/10 text-primary border-primary/20 text-[10px]">
+                                              {smart.label || 'Home'}
                                             </Badge>
-                                          )}
+                                            {addr.isDefault && (
+                                              <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[10px]">
+                                                Default
+                                              </Badge>
+                                            )}
+                                          </div>
                                         </div>
-                                        <p className="text-xs text-muted-foreground font-medium mb-1">
-                                          <Phone className="h-3 w-3 inline mr-1" />
-                                          {addr.phone}
+
+                                        <p className="text-xs text-primary font-semibold mb-1">
+                                          📞 {smart.phone} {smart.altPhone ? `(Alt: ${smart.altPhone})` : ''}
                                         </p>
-                                        <p className="text-xs text-foreground/80 leading-relaxed line-clamp-2">
-                                          {addr.address}, {addr.city}{addr.district ? `, ${addr.district}` : ''}
+
+                                        <p className="text-xs text-foreground/90 leading-relaxed font-mono">
+                                          {smart.addressDetail}
                                         </p>
+
+                                        <p className="text-[11px] text-muted-foreground mt-0.5 font-medium">
+                                          {smart.unionOrArea ? `${smart.unionOrArea}, ` : ''}{smart.upazila}, {smart.district}, {smart.division}
+                                        </p>
+
+                                        {smart.landmark && (
+                                          <p className="text-[11px] text-amber-700 font-semibold mt-1 flex items-center gap-1">
+                                            📍 Landmark: {smart.landmark}
+                                          </p>
+                                        )}
+
+                                        {smart.deliveryNote && (
+                                          <p className="text-[11px] text-emerald-700 italic mt-0.5 flex items-center gap-1">
+                                            📝 Note: {smart.deliveryNote}
+                                          </p>
+                                        )}
                                       </div>
 
-                                      <div className="flex items-center justify-between pt-3 mt-2 border-t border-border/50 text-xs">
+                                      <div className="flex items-center justify-between pt-3 mt-3 border-t border-border/50 text-xs">
                                         <button
                                           type="button"
-                                          onClick={(e) => handleStartEditAddress(addr, e)}
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            setEditingAddressId(addr.id)
+                                            setShowAddAddress(false)
+                                          }}
                                           className="text-primary hover:underline font-medium flex items-center gap-1"
                                         >
                                           <Edit2 className="h-3 w-3" /> Edit
@@ -887,225 +812,59 @@ export default function CheckoutPage() {
                                 type="button"
                                 variant="outline"
                                 onClick={() => {
-                                  setNewAddr({ name: user.name || '', phone: user.phone || '', address: '', city: 'Dhaka', district: 'Dhaka', postalCode: '' })
+                                  setEditingAddressId(null)
                                   setShowAddAddress(true)
                                 }}
                                 className="w-full h-11 border-dashed border-2 rounded-xl text-primary hover:bg-primary/5 font-semibold text-xs"
                               >
-                                + Add New Delivery Address
+                                + Add New Smart Address
                               </Button>
                             </div>
                           )}
 
-                          {/* No saved address state */}
+                          {/* Empty Address State */}
                           {addresses.length === 0 && !showAddAddress && !editingAddressId && (
                             <div className="text-center py-6 border-2 border-dashed rounded-xl bg-muted/20 p-4">
                               <MapPin className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-50" />
                               <p className="text-sm font-semibold mb-1">No saved addresses found</p>
-                              <p className="text-xs text-muted-foreground mb-4">Add a delivery address to complete your order</p>
+                              <p className="text-xs text-muted-foreground mb-4">Add a Bangladesh Smart Address to complete your order</p>
                               <Button
-                                onClick={() => {
-                                  setNewAddr({ name: user.name || '', phone: user.phone || '', address: '', city: 'Dhaka', district: 'Dhaka', postalCode: '' })
-                                  setShowAddAddress(true)
-                                }}
+                                onClick={() => setShowAddAddress(true)}
                                 className="rounded-xl px-6 h-10 text-xs font-semibold"
                               >
-                                + Create Delivery Address
+                                + Create Smart Address
                               </Button>
                             </div>
                           )}
 
-                          {/* Add Address Form */}
+                          {/* Add Address Smart Form */}
                           {showAddAddress && (
-                            <div className="space-y-3 bg-card border rounded-xl p-4 shadow-sm">
-                              <div className="flex items-center justify-between border-b pb-2">
-                                <h4 className="font-semibold text-sm">Add New Address</h4>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setShowAddAddress(false)}
-                                  className="h-7 w-7 p-0 rounded-full"
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </div>
-                              <div className="grid sm:grid-cols-2 gap-3">
-                                <div>
-                                  <Label className="text-xs font-medium mb-1 block">Full Name *</Label>
-                                  <Input
-                                    placeholder="Enter recipient name"
-                                    value={newAddr.name}
-                                    onChange={(e) => setNewAddr({ ...newAddr, name: e.target.value })}
-                                    className="h-10 text-sm rounded-xl"
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs font-medium mb-1 block">Phone Number *</Label>
-                                  <Input
-                                    placeholder="017XXXXXXXX"
-                                    value={newAddr.phone}
-                                    onChange={(e) => setNewAddr({ ...newAddr, phone: e.target.value })}
-                                    className="h-10 text-sm rounded-xl"
-                                  />
-                                </div>
-                              </div>
-                              <div>
-                                <Label className="text-xs font-medium mb-1 block">Detailed Address (House/Road/Area) *</Label>
-                                <Input
-                                  placeholder="e.g. House 12, Road 5, Block B, Mirpur"
-                                  value={newAddr.address}
-                                  onChange={(e) => setNewAddr({ ...newAddr, address: e.target.value })}
-                                  className="h-10 text-sm rounded-xl"
-                                />
-                              </div>
-                              <div className="grid sm:grid-cols-2 gap-3">
-                                <div>
-                                  <Label className="text-xs font-medium mb-1 block">City / Area *</Label>
-                                  <Input
-                                    placeholder="e.g. Dhaka, Chittagong"
-                                    value={newAddr.city}
-                                    onChange={(e) => setNewAddr({ ...newAddr, city: e.target.value })}
-                                    className="h-10 text-sm rounded-xl"
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs font-medium mb-1 block">District</Label>
-                                  <Select
-                                    value={newAddr.district}
-                                    onValueChange={(val) => setNewAddr({ ...newAddr, district: val })}
-                                  >
-                                    <SelectTrigger className="h-10 text-sm rounded-xl">
-                                      <SelectValue placeholder="Select District" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {bangladeshDistricts.map((d) => (
-                                        <SelectItem key={d} value={d}>{d}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-2 pt-1">
-                                <Checkbox
-                                  id="new-default"
-                                  checked={newAddrIsDefault}
-                                  onCheckedChange={(c) => setNewAddrIsDefault(!!c)}
-                                />
-                                <Label htmlFor="new-default" className="text-xs cursor-pointer">
-                                  Set as default delivery address
-                                </Label>
-                              </div>
-
-                              <div className="flex gap-2 pt-2">
-                                <Button
-                                  variant="outline"
-                                  onClick={() => setShowAddAddress(false)}
-                                  className="flex-1 h-10 text-xs rounded-xl"
-                                >
-                                  Cancel
-                                </Button>
-                                <Button
-                                  onClick={handleAddAddress}
-                                  disabled={savingAddress}
-                                  className="flex-1 h-10 text-xs rounded-xl font-semibold"
-                                >
-                                  {savingAddress ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
-                                  Save & Use Address
-                                </Button>
-                              </div>
-                            </div>
+                            <SmartAddressForm
+                              initialValues={{ name: user.name || '', phone: user.phone || '' }}
+                              onSubmit={handleSaveSmartAddress}
+                              onCancel={() => setShowAddAddress(false)}
+                              isSubmitting={savingAddress}
+                              submitLabel="Save & Use Smart Address"
+                            />
                           )}
 
-                          {/* Edit Address Form */}
+                          {/* Edit Address Smart Form */}
                           {editingAddressId && (
-                            <div className="space-y-3 bg-card border rounded-xl p-4 shadow-sm">
-                              <div className="flex items-center justify-between border-b pb-2">
-                                <h4 className="font-semibold text-sm">Edit Address</h4>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setEditingAddressId(null)}
-                                  className="h-7 w-7 p-0 rounded-full"
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </div>
-                              <div className="grid sm:grid-cols-2 gap-3">
-                                <div>
-                                  <Label className="text-xs font-medium mb-1 block">Full Name *</Label>
-                                  <Input
-                                    value={editingAddr.name}
-                                    onChange={(e) => setEditingAddr({ ...editingAddr, name: e.target.value })}
-                                    className="h-10 text-sm rounded-xl"
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs font-medium mb-1 block">Phone Number *</Label>
-                                  <Input
-                                    value={editingAddr.phone}
-                                    onChange={(e) => setEditingAddr({ ...editingAddr, phone: e.target.value })}
-                                    className="h-10 text-sm rounded-xl"
-                                  />
-                                </div>
-                              </div>
-                              <div>
-                                <Label className="text-xs font-medium mb-1 block">Detailed Address *</Label>
-                                <Input
-                                  value={editingAddr.address}
-                                  onChange={(e) => setEditingAddr({ ...editingAddr, address: e.target.value })}
-                                  className="h-10 text-sm rounded-xl"
-                                />
-                              </div>
-                              <div className="grid sm:grid-cols-2 gap-3">
-                                <div>
-                                  <Label className="text-xs font-medium mb-1 block">City *</Label>
-                                  <Input
-                                    value={editingAddr.city}
-                                    onChange={(e) => setEditingAddr({ ...editingAddr, city: e.target.value })}
-                                    className="h-10 text-sm rounded-xl"
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs font-medium mb-1 block">District</Label>
-                                  <Select
-                                    value={editingAddr.district}
-                                    onValueChange={(val) => setEditingAddr({ ...editingAddr, district: val })}
-                                  >
-                                    <SelectTrigger className="h-10 text-sm rounded-xl">
-                                      <SelectValue placeholder="Select District" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {bangladeshDistricts.map((d) => (
-                                        <SelectItem key={d} value={d}>{d}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-
-                              <div className="flex gap-2 pt-2">
-                                <Button
-                                  variant="outline"
-                                  onClick={() => setEditingAddressId(null)}
-                                  className="flex-1 h-10 text-xs rounded-xl"
-                                >
-                                  Cancel
-                                </Button>
-                                <Button
-                                  onClick={handleUpdateAddress}
-                                  disabled={savingAddress}
-                                  className="flex-1 h-10 text-xs rounded-xl font-semibold"
-                                >
-                                  {savingAddress ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
-                                  Save Changes
-                                </Button>
-                              </div>
-                            </div>
+                            <SmartAddressForm
+                              initialValues={
+                                addresses.find((a) => a.id === editingAddressId)
+                                  ? unpackSmartAddress(addresses.find((a) => a.id === editingAddressId))
+                                  : undefined
+                              }
+                              onSubmit={handleSaveSmartAddress}
+                              onCancel={() => setEditingAddressId(null)}
+                              isSubmitting={savingAddress}
+                              submitLabel="Update Address Changes"
+                            />
                           )}
                         </>
                       ) : (
-                        /* Guest Contact & Shipping Form */
+                        /* Guest Smart Address Form */
                         <div className="space-y-4">
                           <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs flex items-center justify-between">
                             <span className="text-amber-800 font-medium">Checking out as Guest</span>
@@ -1118,94 +877,21 @@ export default function CheckoutPage() {
                             </button>
                           </div>
 
-                          <div className="grid sm:grid-cols-2 gap-3">
-                            <div>
-                              <Label className="text-xs font-medium mb-1 block">Full Name *</Label>
-                              <Input
-                                placeholder="Enter your full name"
-                                value={guestName}
-                                onChange={(e) => setGuestName(e.target.value)}
-                                className={`h-10 text-sm rounded-xl ${formErrors.guestName ? 'border-red-500' : ''}`}
-                              />
-                              {formErrors.guestName && (
-                                <p className="text-[11px] text-red-500 mt-1">{formErrors.guestName}</p>
-                              )}
-                            </div>
-
-                            <div>
-                              <Label className="text-xs font-medium mb-1 block">Mobile Number (01XXXXXXXXX) *</Label>
-                              <Input
-                                placeholder="01712345678"
-                                value={guestPhone}
-                                onChange={(e) => setGuestPhone(e.target.value)}
-                                className={`h-10 text-sm rounded-xl ${formErrors.guestPhone ? 'border-red-500' : ''}`}
-                              />
-                              {formErrors.guestPhone && (
-                                <p className="text-[11px] text-red-500 mt-1">{formErrors.guestPhone}</p>
-                              )}
-                            </div>
-                          </div>
-
-                          <div>
-                            <Label className="text-xs font-medium mb-1 block">Email Address (Optional)</Label>
-                            <Input
-                              placeholder="your@email.com"
-                              type="email"
-                              value={guestEmail}
-                              onChange={(e) => setGuestEmail(e.target.value)}
-                              className="h-10 text-sm rounded-xl"
-                            />
-                          </div>
-
-                          <div>
-                            <Label className="text-xs font-medium mb-1 block">Full Delivery Address (House/Road/Area) *</Label>
-                            <Input
-                              placeholder="e.g. House 45, Road 12, Sector 3, Uttara"
-                              value={guestAddress}
-                              onChange={(e) => setGuestAddress(e.target.value)}
-                              className={`h-10 text-sm rounded-xl ${formErrors.guestAddress ? 'border-red-500' : ''}`}
-                            />
-                            {formErrors.guestAddress && (
-                              <p className="text-[11px] text-red-500 mt-1">{formErrors.guestAddress}</p>
-                            )}
-                          </div>
-
-                          <div className="grid sm:grid-cols-2 gap-3">
-                            <div>
-                              <Label className="text-xs font-medium mb-1 block">City / Area *</Label>
-                              <Input
-                                placeholder="e.g. Dhaka, Chittagong"
-                                value={guestCity}
-                                onChange={(e) => setGuestCity(e.target.value)}
-                                className={`h-10 text-sm rounded-xl ${formErrors.guestCity ? 'border-red-500' : ''}`}
-                              />
-                              {formErrors.guestCity && (
-                                <p className="text-[11px] text-red-500 mt-1">{formErrors.guestCity}</p>
-                              )}
-                            </div>
-                            <div>
-                              <Label className="text-xs font-medium mb-1 block">District</Label>
-                              <Select
-                                value={guestDistrict}
-                                onValueChange={(val) => setGuestDistrict(val)}
-                              >
-                                <SelectTrigger className="h-10 text-sm rounded-xl">
-                                  <SelectValue placeholder="Select District" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {bangladeshDistricts.map((d) => (
-                                    <SelectItem key={d} value={d}>{d}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
+                          <SmartAddressForm
+                            initialValues={guestSmartData || undefined}
+                            onSubmit={(data) => {
+                              setGuestSmartData(data)
+                              toast.success('Guest delivery address saved!')
+                            }}
+                            submitLabel="Confirm Delivery Address"
+                            showDefaultCheckbox={false}
+                          />
                         </div>
                       )}
                     </CardContent>
                   </Card>
 
-                  {/* Delivery Method Card */}
+                  {/* Delivery Speed Card */}
                   <Card className="shadow-sm rounded-2xl border">
                     <SectionHeader
                       icon={Truck}
@@ -1410,18 +1096,28 @@ export default function CheckoutPage() {
                         <div className="flex gap-3">
                           <MapPin className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                           <div className="text-xs space-y-1">
-                            <p className="font-semibold text-sm text-foreground">Delivery Address</p>
-                            {isAuthenticated && selectedAddrObj ? (
+                            <p className="font-semibold text-sm text-foreground flex items-center gap-2">
+                              Delivery Address
+                              {selectedSmartAddr?.label && (
+                                <Badge className="bg-primary/10 text-primary border-primary/20 text-[10px]">
+                                  {selectedSmartAddr.label}
+                                </Badge>
+                              )}
+                            </p>
+                            {isAuthenticated && selectedSmartAddr ? (
                               <>
-                                <p className="font-medium text-foreground">{selectedAddrObj.name} · {selectedAddrObj.phone}</p>
-                                <p className="text-muted-foreground">{selectedAddrObj.address}, {selectedAddrObj.city}{selectedAddrObj.district ? `, ${selectedAddrObj.district}` : ''}</p>
+                                <p className="font-bold text-foreground">{selectedSmartAddr.name} · 📞 {selectedSmartAddr.phone}</p>
+                                <p className="text-muted-foreground font-mono">{selectedSmartAddr.addressDetail}</p>
+                                <p className="text-muted-foreground">{selectedSmartAddr.upazila}, {selectedSmartAddr.district}, {selectedSmartAddr.division}</p>
+                                {selectedSmartAddr.landmark && <p className="text-amber-700 font-semibold">📍 Landmark: {selectedSmartAddr.landmark}</p>}
                               </>
-                            ) : (
+                            ) : guestSmartData ? (
                               <>
-                                <p className="font-medium text-foreground">{guestName} · {guestPhone}</p>
-                                <p className="text-muted-foreground">{guestAddress}, {guestCity}{guestDistrict ? `, ${guestDistrict}` : ''}</p>
+                                <p className="font-bold text-foreground">{guestSmartData.name} · 📞 {guestSmartData.phone}</p>
+                                <p className="text-muted-foreground font-mono">{guestSmartData.addressDetail}</p>
+                                <p className="text-muted-foreground">{guestSmartData.upazila}, {guestSmartData.district}, {guestSmartData.division}</p>
                               </>
-                            )}
+                            ) : null}
                           </div>
                         </div>
                         <Button

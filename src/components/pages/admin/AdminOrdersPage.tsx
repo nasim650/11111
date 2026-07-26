@@ -26,6 +26,7 @@ import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
 import { extractItems, authFetch } from '@/lib/api'
 import { useAppStore } from '@/lib/store'
+import { unpackSmartAddress, generateDeliveryLabelText } from '@/lib/bangladesh-address'
 import {
   ShoppingCart, Eye, Truck, Package,
   X, Loader2, ArrowUpDown, CheckCircle2, ListChecks,
@@ -581,23 +582,68 @@ export default function AdminOrdersPage() {
                 </div>
               </div>
 
-              {/* Customer Info */}
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Card>
-                  <CardContent className="p-4">
-                    <h4 className="text-sm font-semibold mb-2">Customer Info</h4>
-                    <p className="text-sm">{selectedOrder.customerName ?? 'N/A'}</p>
-                    <p className="text-sm text-muted-foreground">{selectedOrder.customerEmail ?? ''}</p>
-                    <p className="text-sm text-muted-foreground">{selectedOrder.customerPhone ?? ''}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
-                    <h4 className="text-sm font-semibold mb-2">Shipping Address</h4>
-                    <p className="text-sm">{selectedOrder.shippingAddress ?? 'N/A'}</p>
-                  </CardContent>
-                </Card>
-              </div>
+              {/* Customer Info & Bangladesh Smart Address */}
+              {(() => {
+                const smart = unpackSmartAddress({
+                  name: selectedOrder.customerName,
+                  phone: selectedOrder.customerPhone,
+                  address: selectedOrder.shippingAddress,
+                })
+                return (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Card>
+                      <CardContent className="p-4">
+                        <h4 className="text-sm font-semibold mb-2">Customer Info</h4>
+                        <p className="text-sm font-bold">{selectedOrder.customerName ?? 'N/A'}</p>
+                        <p className="text-sm text-primary font-semibold">📞 {selectedOrder.customerPhone ?? ''}</p>
+                        {smart.altPhone && <p className="text-xs text-muted-foreground">Alt Phone: {smart.altPhone}</p>}
+                        <p className="text-xs text-muted-foreground mt-1">{selectedOrder.customerEmail ?? ''}</p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-primary/20 bg-primary/[0.02]">
+                      <CardContent className="p-4 space-y-1 text-xs">
+                        <div className="flex items-center justify-between mb-1">
+                          <h4 className="text-sm font-bold text-foreground">Shipping Address</h4>
+                          <Badge className="bg-primary/10 text-primary border-primary/20 text-[10px]">
+                            {smart.label || 'Home'}
+                          </Badge>
+                        </div>
+                        <p className="font-mono text-foreground font-semibold">{smart.addressDetail}</p>
+                        <p className="text-muted-foreground">
+                          {smart.unionOrArea ? `${smart.unionOrArea}, ` : ''}{smart.upazila}, {smart.district}, {smart.division}
+                        </p>
+                        {smart.landmark && <p className="text-amber-700 font-semibold">📍 Landmark: {smart.landmark}</p>}
+                        {selectedOrder.note && <p className="text-emerald-700 italic">📝 Note: {selectedOrder.note}</p>}
+                        
+                        <div className="pt-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full h-8 text-[11px] font-bold border-primary/30 text-primary hover:bg-primary/10"
+                            onClick={() => {
+                              const labelText = generateDeliveryLabelText(
+                                smart,
+                                selectedOrder.orderNumber,
+                                selectedOrder.total,
+                                selectedOrder.paymentMethod
+                              )
+                              const printWin = window.open('', '_blank')
+                              if (printWin) {
+                                printWin.document.write(`<pre style="font-family:monospace;font-size:14px;padding:20px;line-height:1.5">${labelText}</pre>`)
+                                printWin.document.close()
+                                printWin.print()
+                              }
+                            }}
+                          >
+                            🖨️ Print Rider Delivery Label (5s Scan)
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )
+              })()}
 
               {/* Items */}
               <div>

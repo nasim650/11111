@@ -32,6 +32,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useAppStore } from '@/lib/store'
 import { extractItems } from '@/lib/api'
+import SmartAddressForm from '@/components/shared/SmartAddressForm'
+import { packSmartAddress, unpackSmartAddress, type SmartAddressData } from '@/lib/bangladesh-address'
 import { toast } from 'sonner'
 interface Address {
   id: string
@@ -327,39 +329,39 @@ export default function ProfilePage() {
     return Object.keys(errs).length === 0
   }
 
-  const handleAddAddress = async () => {
+  const handleSaveSmartAddress = async (smart: SmartAddressData) => {
     if (!user?.id) return
-    if (!validateAddressForm()) return
+    setSaving(true)
     try {
-      if (editingAddressId) {
-        const res = await fetch(`/api/addresses/${editingAddressId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(addressForm),
-        })
-        if (!res.ok) throw new Error('Failed to update address')
-        const data = await res.json()
-        const updated = data.data || data
-        setAddresses(addresses.map((a) => a.id === editingAddressId ? { ...a, ...updated } : a))
-        toast.success('Address updated!')
+      const packed = packSmartAddress(smart)
+      const isEdit = !!editingAddressId
+      const url = isEdit ? `/api/addresses/${editingAddressId}` : '/api/addresses'
+      const method = isEdit ? 'PUT' : 'POST'
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, ...packed }),
+      })
+
+      if (!res.ok) throw new Error(isEdit ? 'Failed to update address' : 'Failed to save address')
+      const data = await res.json()
+      const saved = data.data || data
+
+      if (isEdit) {
+        setAddresses(addresses.map((a) => (a.id === editingAddressId ? saved : a)))
+        toast.success('Address updated successfully!')
       } else {
-        const res = await fetch('/api/addresses', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...addressForm, userId: user.id }),
-        })
-        if (!res.ok) throw new Error('Failed to add address')
-        const data = await res.json()
-        const newAddr = data.data || data
-        setAddresses([...addresses, newAddr])
-        toast.success('Address added!')
+        setAddresses([...addresses, saved])
+        toast.success('Smart address saved successfully!')
       }
+
       setShowAddressForm(false)
       setEditingAddressId(null)
-      setAddressForm({ name: '', phone: '', address: '', city: '', district: '', postalCode: '', isDefault: false })
-      setAddressErrors({})
-    } catch {
-      toast.error(editingAddressId ? 'Failed to update address' : 'Failed to add address')
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save address')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -890,104 +892,33 @@ export default function ProfilePage() {
                   </Button>
                 </CardHeader>
                 <CardContent>
-                  {/* Add/Edit Address Form */}
                   <AnimatePresence>
-                    {showAddressForm && (
+                    {(showAddressForm || editingAddressId) && (
                       <motion.div
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
                         exit={{ opacity: 0, height: 0 }}
-                        transition={{ duration: 0.3 }}
                         className="mb-6 overflow-hidden"
                       >
-                        <div className="p-5 border-2 border-dashed border-primary/30 rounded-xl bg-primary/5">
-                          <h4 className="font-medium text-sm mb-3 flex items-center gap-2">
-                            <Home className="h-4 w-4 text-primary" /> {editingAddressId ? 'Edit Address' : 'New Address'}
-                          </h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Full Name <span className="text-red-500">*</span></Label>
-                              <Input
-                                value={addressForm.name}
-                                onChange={(e) => { setAddressForm({ ...addressForm, name: e.target.value }); setAddressErrors(prev => ({ ...prev, name: '' })) }}
-                                placeholder="Recipient name"
-                                className={`h-9 text-sm rounded-lg ${addressErrors.name ? 'border-red-400 ring-2 ring-red-100' : ''}`}
-                              />
-                              {addressErrors.name && <p className="text-xs text-red-500">{addressErrors.name}</p>}
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Phone <span className="text-red-500">*</span></Label>
-                              <Input
-                                value={addressForm.phone}
-                                onChange={(e) => { setAddressForm({ ...addressForm, phone: e.target.value }); setAddressErrors(prev => ({ ...prev, phone: '' })) }}
-                                placeholder="01XXXXXXXXX"
-                                className={`h-9 text-sm rounded-lg ${addressErrors.phone ? 'border-red-400 ring-2 ring-red-100' : ''}`}
-                              />
-                              {addressErrors.phone && <p className="text-xs text-red-500">{addressErrors.phone}</p>}
-                            </div>
-                            <div className="sm:col-span-2 space-y-1.5">
-                              <Label className="text-xs">Address <span className="text-red-500">*</span></Label>
-                              <Input
-                                value={addressForm.address}
-                                onChange={(e) => { setAddressForm({ ...addressForm, address: e.target.value }); setAddressErrors(prev => ({ ...prev, address: '' })) }}
-                                placeholder="House, road, area"
-                                className={`h-9 text-sm rounded-lg ${addressErrors.address ? 'border-red-400 ring-2 ring-red-100' : ''}`}
-                              />
-                              {addressErrors.address && <p className="text-xs text-red-500">{addressErrors.address}</p>}
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">City <span className="text-red-500">*</span></Label>
-                              <Input
-                                value={addressForm.city}
-                                onChange={(e) => { setAddressForm({ ...addressForm, city: e.target.value }); setAddressErrors(prev => ({ ...prev, city: '' })) }}
-                                placeholder="City"
-                                className={`h-9 text-sm rounded-lg ${addressErrors.city ? 'border-red-400 ring-2 ring-red-100' : ''}`}
-                              />
-                              {addressErrors.city && <p className="text-xs text-red-500">{addressErrors.city}</p>}
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">District</Label>
-                              <Input
-                                value={addressForm.district}
-                                onChange={(e) => setAddressForm({ ...addressForm, district: e.target.value })}
-                                placeholder="District"
-                                className="h-9 text-sm rounded-lg"
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Postal Code</Label>
-                              <Input
-                                value={addressForm.postalCode}
-                                onChange={(e) => setAddressForm({ ...addressForm, postalCode: e.target.value })}
-                                placeholder="Postal code"
-                                className="h-9 text-sm rounded-lg"
-                              />
-                            </div>
-                            <div className="sm:col-span-2 flex items-center gap-2 pt-1">
-                              <Switch
-                                checked={addressForm.isDefault}
-                                onCheckedChange={(checked) => setAddressForm({ ...addressForm, isDefault: checked })}
-                              />
-                              <Label className="text-xs cursor-pointer">Set as default address</Label>
-                            </div>
-                          </div>
-                          <div className="flex gap-2 mt-4">
-                            <Button size="sm" className="rounded-lg" onClick={handleAddAddress} disabled={saving}>
-                              {saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-1.5" /> : <Save className="h-4 w-4 mr-1.5" />}
-                              {editingAddressId ? 'Update Address' : 'Save Address'}
-                            </Button>
-                            <Button size="sm" variant="outline" className="rounded-lg" onClick={() => {
-                              setShowAddressForm(false)
-                              setEditingAddressId(null)
-                              setAddressErrors({})
-                            }}>Cancel</Button>
-                          </div>
-                        </div>
+                        <SmartAddressForm
+                          initialValues={
+                            editingAddressId
+                              ? unpackSmartAddress(addresses.find((a) => a.id === editingAddressId))
+                              : { name: user?.name || '', phone: user?.phone || '' }
+                          }
+                          onSubmit={handleSaveSmartAddress}
+                          onCancel={() => {
+                            setShowAddressForm(false)
+                            setEditingAddressId(null)
+                          }}
+                          isSubmitting={saving}
+                          submitLabel={editingAddressId ? 'Update Smart Address' : 'Save Smart Address'}
+                        />
                       </motion.div>
                     )}
                   </AnimatePresence>
 
-                  {addresses.length === 0 && !showAddressForm ? (
+                  {addresses.length === 0 && !showAddressForm && !editingAddressId ? (
                     <motion.div
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -997,15 +928,16 @@ export default function ProfilePage() {
                         <MapPin className="h-12 w-12 text-muted-foreground/30" />
                       </div>
                       <p className="text-muted-foreground font-medium text-lg">No saved addresses</p>
-                      <p className="text-sm text-muted-foreground mt-1">Add an address to speed up checkout</p>
+                      <p className="text-sm text-muted-foreground mt-1">Add a Bangladesh Smart Address for fast 1-click checkout</p>
                       <Button
                         variant="default"
-                        className="mt-5 rounded-xl px-6"
+                        className="mt-5 rounded-xl px-6 font-bold"
                         onClick={() => {
+                          setEditingAddressId(null)
                           setShowAddressForm(true)
                         }}
                       >
-                        <Plus className="h-4 w-4 mr-1.5" /> Add Your First Address
+                        <Plus className="h-4 w-4 mr-1.5" /> Add Your Smart Address
                       </Button>
                     </motion.div>
                   ) : (
@@ -1015,66 +947,73 @@ export default function ProfilePage() {
                       animate="animate"
                       className="grid grid-cols-1 sm:grid-cols-2 gap-4"
                     >
-                      {addresses.map((addr) => (
-                        <motion.div
-                          key={addr.id}
-                          variants={staggerItem}
-                          whileHover={{ y: -2 }}
-                          className={`relative border rounded-xl p-5 hover:shadow-md transition-all group ${
-                            addr.isDefault ? 'border-primary/40 ring-2 ring-primary/10 bg-gradient-to-br from-primary/[0.02] to-primary/[0.04]' : 'hover:border-primary/30'
-                          }`}
-                        >
-                          {addr.isDefault && (
-                            <div className="absolute top-3 right-3">
-                              <Badge className="bg-primary text-white text-xs rounded-full px-2.5 py-0.5 shadow-sm">
-                                <Star className="h-3 w-3 mr-1" /> Default
+                      {addresses.map((addr) => {
+                        const smart = unpackSmartAddress(addr)
+                        return (
+                          <motion.div
+                            key={addr.id}
+                            variants={staggerItem}
+                            whileHover={{ y: -2 }}
+                            className={`relative border rounded-2xl p-5 hover:shadow-md transition-all group ${
+                              addr.isDefault ? 'border-primary/40 ring-2 ring-primary/10 bg-gradient-to-br from-primary/[0.02] to-primary/[0.04]' : 'hover:border-primary/30'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <Badge className="bg-primary/10 text-primary border-primary/20 text-xs">
+                                {smart.label || 'Home'}
                               </Badge>
+                              {addr.isDefault && (
+                                <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-xs">
+                                  <Star className="h-3 w-3 mr-1" /> Default
+                                </Badge>
+                              )}
                             </div>
-                          )}
-                          <div className="flex items-start gap-3">
-                            <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors shadow-sm ${
-                              addr.isDefault ? 'bg-primary/15' : 'bg-primary/10 group-hover:bg-primary/15'
-                            }`}>
-                              <Home className="h-5 w-5 text-primary" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-sm">{addr.name}</p>
-                              <p className="text-xs text-muted-foreground mt-0.5">{addr.phone}</p>
-                              <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2 leading-relaxed">
-                                {addr.address}, {addr.city}{addr.district ? `, ${addr.district}` : ''}{addr.postalCode ? ` - ${addr.postalCode}` : ''}
+
+                            <div className="space-y-1 text-xs">
+                              <p className="font-bold text-sm text-foreground">{smart.name}</p>
+                              <p className="text-primary font-semibold">📞 {smart.phone} {smart.altPhone ? `(Alt: ${smart.altPhone})` : ''}</p>
+                              <p className="text-muted-foreground font-mono mt-1">{smart.addressDetail}</p>
+                              <p className="text-muted-foreground font-medium">
+                                {smart.unionOrArea ? `${smart.unionOrArea}, ` : ''}{smart.upazila}, {smart.district}, {smart.division}
                               </p>
+                              {smart.landmark && <p className="text-amber-700 font-semibold mt-1">📍 Landmark: {smart.landmark}</p>}
+                              {smart.deliveryNote && <p className="text-emerald-700 italic">📝 Note: {smart.deliveryNote}</p>}
                             </div>
-                          </div>
-                          <div className="flex gap-2 mt-4 pt-3 border-t">
-                            {!addr.isDefault && (
+
+                            <div className="flex gap-2 mt-4 pt-3 border-t">
+                              {!addr.isDefault && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-xs h-8 rounded-lg text-primary hover:text-primary hover:bg-primary/10"
+                                  onClick={() => handleSetDefaultAddress(addr.id)}
+                                >
+                                  <Star className="h-3.5 w-3.5 mr-1" /> Set Default
+                                </Button>
+                              )}
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 className="text-xs h-8 rounded-lg text-primary hover:text-primary hover:bg-primary/10"
-                                onClick={() => handleSetDefaultAddress(addr.id)}
+                                onClick={() => {
+                                  setEditingAddressId(addr.id)
+                                  setShowAddressForm(false)
+                                }}
                               >
-                                <Star className="h-3.5 w-3.5 mr-1" /> Set Default
+                                <Edit3 className="h-3.5 w-3.5 mr-1" /> Edit
                               </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-xs h-8 rounded-lg text-primary hover:text-primary hover:bg-primary/10"
-                              onClick={() => handleEditAddress(addr)}
-                            >
-                              <Edit3 className="h-3.5 w-3.5 mr-1" /> Edit
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-xs h-8 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50"
-                              onClick={() => handleDeleteAddress(addr.id)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
-                            </Button>
-                          </div>
-                        </motion.div>
-                      ))}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-xs h-8 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50"
+                                onClick={() => handleDeleteAddress(addr.id)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
+                              </Button>
+                            </div>
+                          </motion.div>
+                        )
+                      })}
                     </motion.div>
                   )}
                 </CardContent>
