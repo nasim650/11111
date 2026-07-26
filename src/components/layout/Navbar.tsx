@@ -207,6 +207,12 @@ export default function Navbar() {
   const [showSearchDropdown, setShowSearchDropdown] = useState(false)
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
 
+  // Hydration guard: persisted store values (cart/wishlist) come from localStorage
+  // and differ between server (0) and client (persisted). Render 0 on first paint
+  // to keep SSR HTML identical to the first client render, then swap to real values.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
   const searchRef = useRef<HTMLDivElement>(null)
   const megaMenuTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const miniCartRef = useRef<HTMLDivElement>(null)
@@ -214,9 +220,9 @@ export default function Navbar() {
   const debounceRef = useRef<NodeJS.Timeout | null>(null)
   const categoryScrollRef = useRef<HTMLDivElement>(null)
 
-  const itemCount = totalItems()
-  const wishlistCount = wishlistItems.length
-  const cartSubtotal = subtotal()
+  const itemCount = mounted ? totalItems() : 0
+  const wishlistCount = mounted ? wishlistItems.length : 0
+  const cartSubtotal = mounted ? subtotal() : 0
   const siteName = siteConfig?.siteName || 'Khati Khadyo'
 
   // ── Announcement promos ──
