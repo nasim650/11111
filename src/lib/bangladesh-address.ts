@@ -13,6 +13,7 @@ export interface SmartAddressData {
   division: string
   district: string
   upazila: string
+  postalCode?: string
   unionOrArea?: string
   addressDetail: string // House/Road/Flat OR Village/Para/Bari
   landmark?: string
@@ -30,6 +31,7 @@ export function packSmartAddress(data: SmartAddressData) {
     altPhone: data.altPhone || '',
     division: data.division || '',
     upazila: data.upazila || '',
+    postalCode: data.postalCode || '',
     unionOrArea: data.unionOrArea || '',
     addressDetail: data.addressDetail || '',
     landmark: data.landmark || '',
@@ -42,6 +44,7 @@ export function packSmartAddress(data: SmartAddressData) {
     data.addressDetail,
     data.unionOrArea ? `Area/Union: ${data.unionOrArea}` : '',
     data.upazila ? `Upazila: ${data.upazila}` : '',
+    data.postalCode ? `Postal Code: ${data.postalCode}` : '',
     data.landmark ? `Landmark: ${data.landmark}` : '',
     data.deliveryNote ? `Note: ${data.deliveryNote}` : '',
     data.altPhone ? `Alt Phone: ${data.altPhone}` : '',
@@ -54,7 +57,7 @@ export function packSmartAddress(data: SmartAddressData) {
     address: fullAddressLine,
     city: data.upazila || data.district,
     district: data.district,
-    postalCode: data.label || 'Home',
+    postalCode: data.postalCode || data.label || 'Home',
     isDefault: data.isDefault ?? false,
   }
 }
@@ -72,6 +75,7 @@ export function unpackSmartAddress(rawAddress: any): SmartAddressData {
       division: 'Dhaka',
       district: 'Dhaka',
       upazila: 'Mirpur',
+      postalCode: '',
       addressDetail: '',
       label: 'Home',
     }
@@ -98,11 +102,12 @@ export function unpackSmartAddress(rawAddress: any): SmartAddressData {
         division: cleanDivision(meta.division),
         district: district || 'Dhaka',
         upazila: meta.upazila || city || 'Mirpur',
+        postalCode: meta.postalCode || (/^\d{4}$/.test(rawAddress.postalCode) ? rawAddress.postalCode : ''),
         unionOrArea: meta.unionOrArea || '',
         addressDetail: meta.addressDetail || parts[0].split(' | ')[0] || '',
         landmark: meta.landmark || '',
         deliveryNote: meta.deliveryNote || '',
-        label: meta.label || postalCodeLabel || 'Home',
+        label: meta.label || (postalCodeLabel && !/^\d{4}$/.test(postalCodeLabel) ? postalCodeLabel : 'Home'),
         isDefault: rawAddress.isDefault ?? false,
       }
     } catch {
@@ -119,8 +124,9 @@ export function unpackSmartAddress(rawAddress: any): SmartAddressData {
     division: cleanDivision(rawAddress.division || 'Dhaka'),
     district,
     upazila: city || 'Mirpur',
+    postalCode: /^\d{4}$/.test(postalCodeLabel) ? postalCodeLabel : '',
     addressDetail: firstLine,
-    label: postalCodeLabel || 'Home',
+    label: postalCodeLabel && !/^\d{4}$/.test(postalCodeLabel) ? postalCodeLabel : 'Home',
     isDefault: rawAddress.isDefault ?? false,
   }
 }

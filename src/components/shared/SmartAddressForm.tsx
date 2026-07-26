@@ -19,7 +19,6 @@ import {
 import {
   BD_DIVISIONS,
   getDistrictsForDivision,
-  getUpazilasForDistrict,
 } from '@/lib/bangladesh-locations'
 import { SmartAddressData } from '@/lib/bangladesh-address'
 
@@ -148,7 +147,8 @@ export default function SmartAddressForm({
       email: initialValues?.email || '',
       division: (initialValues?.division || 'Dhaka').replace(/\s*Division$/, '').trim(),
       district: initialValues?.district || 'Dhaka',
-      upazila: initialValues?.upazila || 'Mirpur',
+      upazila: initialValues?.upazila || '',
+      postalCode: initialValues?.postalCode || '',
       unionOrArea: initialValues?.unionOrArea || '',
       addressDetail: initialValues?.addressDetail || '',
       landmark: initialValues?.landmark || '',
@@ -174,9 +174,8 @@ export default function SmartAddressForm({
   const [showPreview, setShowPreview] = useState(true)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  // Derived cascading location options
+  // Derived districts options
   const districts = getDistrictsForDivision(formData.division)
-  const upazilas = getUpazilasForDistrict(formData.district)
 
   // Auto-save draft in localStorage for unfinished address entries
   useEffect(() => {
@@ -190,23 +189,17 @@ export default function SmartAddressForm({
   const handleDivisionChange = (division: string) => {
     const list = getDistrictsForDivision(division)
     const newDistrict = list[0] || 'Dhaka'
-    const upList = getUpazilasForDistrict(newDistrict)
-    const newUpazila = upList[0] || 'Mirpur'
     setFormData((prev) => ({
       ...prev,
       division,
       district: newDistrict,
-      upazila: newUpazila,
     }))
   }
 
   const handleDistrictChange = (district: string) => {
-    const upList = getUpazilasForDistrict(district)
-    const newUpazila = upList[0] || 'Mirpur'
     setFormData((prev) => ({
       ...prev,
       district,
-      upazila: newUpazila,
     }))
   }
 
@@ -223,7 +216,12 @@ export default function SmartAddressForm({
     }
     if (!formData.division) errs.division = 'Please select your division'
     if (!formData.district) errs.district = 'Please select your district'
-    if (!formData.upazila) errs.upazila = 'Please select your upazila or city'
+    if (!formData.upazila.trim()) errs.upazila = 'Please enter your Upazila or Thana'
+    if (!formData.postalCode?.trim()) {
+      errs.postalCode = 'Please enter your postal code'
+    } else if (!/^\d{4}$/.test(formData.postalCode.trim())) {
+      errs.postalCode = 'Please enter a valid 4-digit postal code (e.g. 1207)'
+    }
     if (!formData.addressDetail.trim()) errs.addressDetail = 'Please enter your detailed address'
 
     setErrors(errs)
@@ -326,8 +324,8 @@ export default function SmartAddressForm({
         </div>
       </div>
 
-      {/* Location Dropdowns */}
-      <div className="grid sm:grid-cols-3 gap-3 pt-1 border-t">
+      {/* Location Fields */}
+      <div className="grid sm:grid-cols-2 gap-3 pt-1 border-t">
         {/* Division Dropdown */}
         <div>
           <Label className="text-xs font-medium mb-1 block">Division *</Label>
@@ -357,15 +355,29 @@ export default function SmartAddressForm({
           error={errors.district}
         />
 
-        {/* Upazila / City Searchable Dropdown */}
-        <SearchableSelect
-          label="Upazila / City *"
-          value={formData.upazila}
-          onChange={(val) => setFormData({ ...formData, upazila: val })}
-          options={upazilas}
-          placeholder="Select Upazila / City"
-          error={errors.upazila}
-        />
+        {/* Upazila / Thana (Free Text Input) */}
+        <div>
+          <Label className="text-xs font-medium mb-1 block">Upazila / Thana *</Label>
+          <Input
+            placeholder="Enter your Upazila or Thana"
+            value={formData.upazila}
+            onChange={(e) => setFormData({ ...formData, upazila: e.target.value })}
+            className={`h-10 text-sm rounded-xl ${errors.upazila ? 'border-red-500' : ''}`}
+          />
+          {errors.upazila && <p className="text-[11px] text-red-500 mt-1">{errors.upazila}</p>}
+        </div>
+
+        {/* Postal Code * (Restored) */}
+        <div>
+          <Label className="text-xs font-medium mb-1 block">Postal Code *</Label>
+          <Input
+            placeholder="e.g. 1207"
+            value={formData.postalCode || ''}
+            onChange={(e) => setFormData({ ...formData, postalCode: e.target.value })}
+            className={`h-10 text-sm rounded-xl ${errors.postalCode ? 'border-red-500' : ''}`}
+          />
+          {errors.postalCode && <p className="text-[11px] text-red-500 mt-1">{errors.postalCode}</p>}
+        </div>
       </div>
 
       {/* Area / Union / Ward */}
@@ -487,7 +499,7 @@ export default function SmartAddressForm({
                 <p className="text-primary font-semibold">📞 {formData.phone || '01XXXXXXXXX'} {formData.altPhone ? `(Alt: ${formData.altPhone})` : ''}</p>
                 <p className="text-muted-foreground">{formData.addressDetail || 'House, Road, Village or Landmark'}</p>
                 <p className="text-muted-foreground">
-                  {formData.unionOrArea ? `${formData.unionOrArea}, ` : ''}{formData.upazila}, {formData.district}, {formData.division}
+                  {formData.unionOrArea ? `${formData.unionOrArea}, ` : ''}{formData.upazila || 'Upazila'}, {formData.district}, {formData.division}{formData.postalCode ? ` - ${formData.postalCode}` : ''}
                 </p>
                 {formData.landmark && <p className="text-amber-700 font-semibold">📍 Landmark: {formData.landmark}</p>}
                 {formData.deliveryNote && <p className="text-emerald-700 italic">📝 Note: {formData.deliveryNote}</p>}
