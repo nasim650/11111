@@ -1811,40 +1811,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-stone-50/30 text-foreground">
-      {/* ── 1. Announcement Bar ── */}
-      <AnnouncementBar siteConfig={siteConfig} />
-
-      {/* ── 2. Search Bar ── */}
-      <div className="bg-gradient-to-b from-emerald-50/40 to-transparent py-6 md:py-8">
-        <div className="container mx-auto px-4 max-w-2xl">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              const form = e.target as HTMLFormElement
-              const input = form.querySelector('input') as HTMLInputElement
-              if (input.value.trim()) handleSearchSubmit(input.value)
-            }}
-            className="flex gap-2"
-          >
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-emerald-500" />
-              <Input
-                placeholder="Search for authentic Bangladeshi food products..."
-                className="pl-11 h-12 bg-white shadow-md border-emerald-200/50 focus:border-emerald-400 rounded-full text-sm"
-              />
-            </div>
-            <Button
-              type="submit"
-              size="lg"
-              className="h-12 px-6 shadow-md bg-emerald-700 hover:bg-emerald-800 rounded-full text-white font-bold"
-            >
-              Search
-            </Button>
-          </form>
-        </div>
-      </div>
-
-      {/* ── 3. Large Hero Banner Carousel ── */}
+      {/* ── 1. Hero Banner Carousel ── */}
       <HeroBannerCarousel banners={heroBanners} navigate={navigate} />
 
       {/* ── 4. Featured Categories (Large Premium Cards, Bengali Primary) ── */}

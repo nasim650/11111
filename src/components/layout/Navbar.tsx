@@ -651,15 +651,15 @@ export default function Navbar() {
                 backgroundImage: 'repeating-linear-gradient(120deg, transparent, transparent 40px, rgba(255,255,255,0.3) 40px, rgba(255,255,255,0.3) 42px)',
               }} />
               <div className="container mx-auto flex items-center justify-between px-4 py-1.5 text-xs relative">
-                {/* Scrolling promo text */}
-                <div className="flex-1 overflow-hidden relative">
-                  <div className="flex items-center gap-10 animate-marquee whitespace-nowrap">
-                    {[...promoTexts, ...promoTexts].map((text, idx) => (
-                      <span key={idx} className="inline-flex items-center gap-1.5 text-[11px] font-medium tracking-wide">
-                        {text}
-                      </span>
-                    ))}
-                  </div>
+                {/* Single clean static announcement */}
+                <div className="flex-1 flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium tracking-wide">
+                    <Truck className="size-3.5 text-amber-300" />
+                    Free Delivery on orders above ৳1,500
+                    <span className="text-amber-300 font-bold mx-1.5">|</span>
+                    <Sparkles className="size-3.5 text-amber-300" />
+                    Use Code: <span className="font-bold text-amber-300">KHATI20</span> for 20% OFF
+                  </span>
                 </div>
 
                 {/* Right: Contact info + Language + Close */}
