@@ -658,25 +658,25 @@ function CategorySection({ categories, navigate }: {
             </div>
           </AnimatedSection>
         ) : (
-          // Scrollable Category Row (>6 categories)
+          // Scrollable Category Row (>6 categories) matching Reference Image 2
           <div className="relative">
-            {/* Mobile scroll indicators */}
+            {/* Navigation arrow matching reference image 2 */}
             {canScrollLeft && (
               <button
                 onClick={() => handleScroll('left')}
-                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 shadow-lg rounded-full p-2 hover:bg-white transition-all -translate-x-1 hidden sm:block"
+                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 size-9 rounded-full bg-amber-500 hover:bg-amber-600 text-white shadow-lg flex items-center justify-center transition-all -translate-x-3 hidden sm:flex"
                 aria-label="Scroll left"
               >
-                <ChevronLeft className="h-5 w-5 text-emerald-700" />
+                <ChevronLeft className="h-5 w-5 text-white" />
               </button>
             )}
             {canScrollRight && (
               <button
                 onClick={() => handleScroll('right')}
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 shadow-lg rounded-full p-2 hover:bg-white transition-all translate-x-1 hidden sm:block"
+                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 size-9 rounded-full bg-amber-500 hover:bg-amber-600 text-white shadow-lg flex items-center justify-center transition-all translate-x-3 hidden sm:flex"
                 aria-label="Scroll right"
               >
-                <ChevronRight className="h-5 w-5 text-emerald-700" />
+                <ChevronRight className="h-5 w-5 text-white" />
               </button>
             )}
 
@@ -1032,49 +1032,141 @@ function FlashSaleSection({ products, navigate, siteConfig }: {
   )
 }
 
-// ── Best Sellers Section ──
+// ── Top Selling Products Section (Matching Reference Image 1) ──
 function BestSellersSection({ products, navigate }: {
   products: Product[]
   navigate: (page: PageName, params?: Record<string, unknown>) => void
 }) {
+  const addToCart = useAppStore((s) => s.addToCart)
+  const [loadingId, setLoadingId] = useState<string | null>(null)
+
   if (products.length === 0) return null
 
   return (
-    <AnimatedSection className="py-10 md:py-14 bg-gradient-to-b from-teal-50/50 via-white to-white">
+    <AnimatedSection className="py-10 md:py-14 bg-[#FAF8F5] dark:bg-stone-950/40">
       <div className="container mx-auto px-4">
-        <div className="flex items-end justify-between mb-6 md:mb-8">
-          <div>
-            <div className="inline-flex items-center gap-2 text-teal-600 mb-1.5">
-              <TrendingUp className="h-4 w-4" />
-              <span className="text-xs font-semibold uppercase tracking-wider">Top Rated</span>
-            </div>
-            <h2 className="text-2xl md:text-3xl font-bold">Best Sellers</h2>
-            <p className="text-sm text-muted-foreground mt-1">Most-loved products by our customers</p>
-            {/* Decorative teal underline */}
-            <div className="mt-2 h-1 w-16 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400" />
-          </div>
-          <Button
-            variant="ghost"
-            className="hidden sm:flex items-center gap-1 text-teal-700 hover:text-teal-800 hover:bg-teal-50 rounded-full"
-            onClick={() => navigate('products')}
-          >
-            View All <ArrowRight className="h-4 w-4" />
-          </Button>
+        <div className="text-center mb-8">
+          <h2 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-tight">
+            Top Selling Products
+          </h2>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5">
-          {products.map((p) => (
-            <ProductCard key={p.id} product={p} />
-          ))}
-        </div>
-        {/* Mobile View All */}
-        <div className="mt-6 text-center sm:hidden">
-          <Button
-            variant="outline"
-            className="gap-2 border-teal-300 text-teal-700 hover:bg-teal-50 hover:text-teal-800 rounded-full px-6"
-            onClick={() => navigate('products')}
-          >
-            View All Best Sellers <ArrowRight className="h-4 w-4" />
-          </Button>
+
+        {/* 2-Column Grid of Horizontal Featured Cards (Reference Image 1) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
+          {products.slice(0, 4).map((p) => {
+            const hasDiscount = p.discountPrice != null && p.discountPrice < p.price
+            const effectivePrice = hasDiscount ? p.discountPrice! : p.price
+            const savingsAmount = hasDiscount ? p.price - p.discountPrice! : 0
+            const imageUrl = p.images?.[0]?.url || '/placeholder.png'
+            const outOfStock = p.stock <= 0
+
+            return (
+              <motion.div
+                key={p.id}
+                whileHover={{ y: -3 }}
+                className="relative bg-white dark:bg-card rounded-2xl p-4 shadow-sm border border-stone-200/80 dark:border-border/60 flex flex-col sm:flex-row items-center gap-4 transition-all hover:shadow-md cursor-pointer group"
+                onClick={() => navigate('product-detail', { id: p.id })}
+              >
+                {/* Top-Right Badge: Best Selling */}
+                <div className="absolute top-3 right-3 z-10">
+                  <span className="inline-flex items-center gap-1 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-sm">
+                    🔥 Best Selling
+                  </span>
+                </div>
+
+                {/* Left: Product Image */}
+                <div className="relative size-36 sm:size-40 shrink-0 bg-slate-50 dark:bg-slate-900/40 rounded-xl overflow-hidden p-2">
+                  <Image
+                    src={imageUrl}
+                    alt={p.name}
+                    fill
+                    className="object-contain p-1 transition-transform duration-500 group-hover:scale-105"
+                    sizes="160px"
+                  />
+                </div>
+
+                {/* Right: Info + Price + Dual Buttons */}
+                <div className="flex-1 min-w-0 space-y-2 text-left w-full">
+                  <h3 className="font-bold text-base md:text-lg text-foreground line-clamp-1 group-hover:text-amber-600 transition-colors">
+                    {p.name}
+                  </h3>
+
+                  {/* Price & Savings Badge */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xl font-extrabold text-amber-600">
+                      ৳{effectivePrice.toLocaleString()}
+                    </span>
+                    {hasDiscount && (
+                      <span className="text-sm text-muted-foreground line-through decoration-red-400">
+                        ৳{p.price.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                  {hasDiscount && (
+                    <span className="inline-block px-2.5 py-0.5 rounded-md bg-emerald-500 text-white text-[10px] font-bold">
+                      Save ৳{savingsAmount.toLocaleString()}
+                    </span>
+                  )}
+
+                  {/* Dual Action Buttons */}
+                  <div className="flex items-center gap-2 pt-2" onClick={(e) => e.stopPropagation()}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={outOfStock || loadingId === p.id}
+                      className="h-9 px-3 text-xs font-bold rounded-xl border-amber-500 text-amber-600 hover:bg-amber-50 gap-1.5 flex-1"
+                      onClick={async () => {
+                        setLoadingId(p.id)
+                        try {
+                          await addToCart({
+                            productId: p.id,
+                            productName: p.name,
+                            price: p.price,
+                            discountPrice: p.discountPrice,
+                            quantity: 1,
+                            unit: p.unit,
+                            image: imageUrl,
+                            stock: p.stock,
+                          })
+                        } finally {
+                          setLoadingId(null)
+                        }
+                      }}
+                    >
+                      <ShoppingCart className="size-3.5 text-amber-500" />
+                      Add To Cart
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={outOfStock || loadingId === p.id}
+                      className="h-9 px-4 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-600 text-white shadow-sm gap-1.5 flex-1"
+                      onClick={async () => {
+                        setLoadingId(p.id)
+                        try {
+                          await addToCart({
+                            productId: p.id,
+                            productName: p.name,
+                            price: p.price,
+                            discountPrice: p.discountPrice,
+                            quantity: 1,
+                            unit: p.unit,
+                            image: imageUrl,
+                            stock: p.stock,
+                          })
+                          navigate('checkout')
+                        } finally {
+                          setLoadingId(null)
+                        }
+                      }}
+                    >
+                      <ShoppingCart className="size-3.5" />
+                      Buy now
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            )
+          })}
         </div>
       </div>
     </AnimatedSection>

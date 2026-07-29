@@ -362,35 +362,35 @@ export default function ProductCard({ product }: ProductCardProps) {
           )}
 
           {/* Price with savings */}
-          <div className="space-y-0.5">
+          <div className="space-y-1">
             <div className="flex items-baseline gap-1.5 flex-wrap">
-              <span className="text-lg font-bold text-emerald-600">
+              <span className="text-lg font-extrabold text-amber-600">
                 {formatPrice(effectivePrice)}
               </span>
               {hasDiscount && (
-                <span className="text-sm text-muted-foreground line-through decoration-red-400/70">
+                <span className="text-xs text-muted-foreground line-through decoration-red-400">
                   {formatPrice(product.price)}
                 </span>
               )}
               <span className="text-xs text-muted-foreground">/{product.unit}</span>
             </div>
             {hasDiscount && (
-              <p className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
-                <span className="inline-flex items-center justify-center h-4 px-1 rounded bg-emerald-100 text-emerald-700 text-[10px] font-bold">
+              <div className="flex items-center gap-1">
+                <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold">
                   Save {formatPrice(savingsAmount)}
                 </span>
-              </p>
+              </div>
             )}
           </div>
 
           {/* Stock Indicator Text */}
           {!outOfStock && (
-            <div className="flex items-center justify-between">
-              <span className={`text-[10px] font-medium ${lowStock ? 'text-red-500 animate-pulse' : 'text-muted-foreground'}`}>
+            <div className="flex items-center justify-between text-[10px] pt-0.5">
+              <span className={`font-medium ${lowStock ? 'text-red-500 animate-pulse font-semibold' : 'text-muted-foreground'}`}>
                 {lowStock ? `Only ${product.stock} left!` : 'In Stock'}
               </span>
               {lowStock && (
-                <span className="text-[10px] text-orange-500 font-semibold">
+                <span className="text-orange-500 font-semibold">
                   Hurry up!
                 </span>
               )}
@@ -399,39 +399,31 @@ export default function ProductCard({ product }: ProductCardProps) {
         </CardContent>
       </div>
 
-      {/* Permanently Visible Add to Cart Button — Never Hidden, Never Moved */}
-      <div className="p-3 pt-0 mt-auto">
+      {/* Action Buttons — Add To Cart + Buy Now matching reference design */}
+      <div className="p-3 pt-0 mt-auto flex items-center gap-2">
         <Button
-          className="w-full h-10 text-sm font-semibold rounded-xl transition-colors bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm hover:shadow"
+          variant="outline"
+          className="flex-1 h-9 text-xs font-semibold rounded-xl border-amber-500 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-all gap-1 px-2"
           size="sm"
           disabled={outOfStock || loading}
           onClick={handleAddToCart}
         >
-          <AnimatePresence mode="wait">
-            {addedToCart ? (
-              <motion.span
-                key="added"
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                exit={{ scale: 0 }}
-                className="flex items-center justify-center gap-1.5"
-              >
-                <Check className="h-4 w-4" />
-                Added to Cart!
-              </motion.span>
-            ) : (
-              <motion.span
-                key="default"
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                exit={{ scale: 0 }}
-                className="flex items-center justify-center gap-1.5"
-              >
-                <ShoppingCart className="h-4 w-4" />
-                {loading ? 'Adding...' : outOfStock ? 'Out of Stock' : 'Add to Cart'}
-              </motion.span>
-            )}
-          </AnimatePresence>
+          <ShoppingCart className="h-3.5 w-3.5 text-amber-500" />
+          {addedToCart ? 'Added!' : 'Add To Cart'}
+        </Button>
+        <Button
+          className="flex-1 h-9 text-xs font-semibold rounded-xl bg-amber-500 hover:bg-amber-600 text-white shadow-sm transition-all gap-1 px-2"
+          size="sm"
+          disabled={outOfStock || loading}
+          onClick={async (e) => {
+            e.stopPropagation()
+            if (outOfStock) return
+            await handleAddToCart(e)
+            navigate('checkout')
+          }}
+        >
+          <ShoppingCart className="h-3.5 w-3.5" />
+          Buy now
         </Button>
       </div>
     </Card>
