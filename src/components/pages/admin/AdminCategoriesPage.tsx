@@ -449,6 +449,18 @@ export default function AdminCategoriesPage() {
                 rows={3}
               />
             </div>
+            {/* Asset Standard Recommendation Callout */}
+            <div className="rounded-xl border border-amber-200 bg-amber-50/60 dark:bg-amber-950/20 p-3 text-xs space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-amber-900 dark:text-amber-300">
+                <span>💡 Category Asset Standard</span>
+              </div>
+              <p className="text-[11px] text-amber-800/90 dark:text-amber-200/80">
+                <span className="font-semibold">Recommended:</span> 800 × 800 px (1:1 Square) for Category Cards | 1200 × 400 px (3:1) for Category Banners | Preferred: WebP, PNG, JPG.
+                <br />
+                Images are automatically normalized and centered on fixed 1:1 canvas containers to prevent stretching.
+              </p>
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label>Image</Label>

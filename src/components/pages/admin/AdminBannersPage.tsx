@@ -290,6 +290,18 @@ export default function AdminBannersPage() {
               <Label>Description</Label>
               <Textarea value={editing?.description ?? ''} onChange={(e) => setEditing((prev) => ({ ...prev, description: e.target.value }) as Partial<Banner>)} rows={3} />
             </div>
+            {/* Asset Standard Recommendation Callout */}
+            <div className="rounded-xl border border-amber-200 bg-amber-50/60 dark:bg-amber-950/20 p-3 text-xs space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-amber-900 dark:text-amber-300">
+                <span>💡 Banner Asset Standard</span>
+              </div>
+              <p className="text-[11px] text-amber-800/90 dark:text-amber-200/80">
+                <span className="font-semibold">Desktop Banner:</span> 1920 × 600 px (16:5 ratio) | <span className="font-semibold">Mobile Banner:</span> 800 × 800 px (1:1 ratio) | Preferred: WebP, PNG, JPG.
+                <br />
+                High-resolution images of any file size are accepted and automatically optimized for fast storefront loading.
+              </p>
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Desktop Image</Label>

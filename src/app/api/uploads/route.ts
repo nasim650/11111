@@ -7,8 +7,8 @@ import { csrfGuard, rateLimitOrResponse, requireAdmin } from '@/lib/security'
 import { createAuditLog } from '@/lib/audit'
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
-const MAX_FILES = 5
+const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB — Smart auto-optimization supports high-res DSLR uploads
+const MAX_FILES = 10
 const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
 
 function sanitizeFilename(name: string): string {

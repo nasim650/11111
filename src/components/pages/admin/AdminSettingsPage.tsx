@@ -529,6 +529,18 @@ export default function AdminSettingsPage() {
                 <Label>Description</Label>
                 <Textarea value={config.description} onChange={(e) => updateConfig({ description: e.target.value })} rows={3} />
               </div>
+              {/* Asset Standard Recommendation Callout */}
+              <div className="rounded-xl border border-amber-200 bg-amber-50/60 dark:bg-amber-950/20 p-3 text-xs space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-amber-900 dark:text-amber-300">
+                  <span>💡 Logo & Favicon Asset Standard</span>
+                </div>
+                <p className="text-[11px] text-amber-800/90 dark:text-amber-200/80">
+                  <span className="font-semibold">Logo:</span> 600 × 200 px (3:1 Landscape) Transparent PNG/SVG | <span className="font-semibold">Favicon:</span> 512 × 512 px (1:1 Square) PNG/ICO.
+                  <br />
+                  Assets are losslessly scaled and served with retina resolution support across all browser themes.
+                </p>
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Logo</Label>

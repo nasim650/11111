@@ -54,6 +54,7 @@ import {
   X,
   MoreHorizontal,
   Package,
+  Sparkles,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -990,6 +991,23 @@ export default function AdminProductsPage() {
             </TabsContent>
 
             <TabsContent value="images" className="space-y-4 mt-4">
+              {/* Asset Standard Recommendation Callout */}
+              <div className="rounded-xl border border-amber-200 bg-amber-50/60 dark:bg-amber-950/20 p-3.5 text-xs space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-amber-900 dark:text-amber-300">
+                  <Sparkles className="size-3.5 text-amber-600" />
+                  <span>Asset Standard Recommendations (Product Images)</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-amber-800/90 dark:text-amber-200/80 pt-1">
+                  <div><span className="font-semibold">Recommended Size:</span> 1200 × 1200 px</div>
+                  <div><span className="font-semibold">Aspect Ratio:</span> 1:1 (Square)</div>
+                  <div><span className="font-semibold">Preferred Format:</span> WebP, PNG, JPG</div>
+                  <div><span className="font-semibold">Auto-Optimize:</span> Enabled (No size limit)</div>
+                </div>
+                <p className="text-[11px] text-amber-700/70 dark:text-amber-400/70 pt-0.5">
+                  High-resolution DSLR photos of any file size are accepted and will be automatically optimized for fast storefront loading without quality loss.
+                </p>
+              </div>
+
               <div className="space-y-2">
                 <Label>Product Images</Label>
                 <div className="border-2 border-dashed rounded-lg p-6 text-center">

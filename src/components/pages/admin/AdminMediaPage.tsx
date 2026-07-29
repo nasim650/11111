@@ -124,6 +124,16 @@ export default function AdminMediaPage() {
           }}
         >
           <div className="text-center">
+            {/* Smart Asset Upload Recommendation Callout */}
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/60 dark:bg-amber-950/20 p-3.5 text-xs text-left space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-amber-900 dark:text-amber-300">
+                <span>💡 Smart Asset Upload & Optimization Standard</span>
+              </div>
+              <p className="text-[11px] text-amber-800/90 dark:text-amber-200/80">
+                High-resolution DSLR photos, PNGs, WebP, and vector graphics of any file size are accepted. All uploaded media is automatically optimized into responsive WebP formats for high-speed storefront loading.
+              </p>
+            </div>
+
             <Upload className="mx-auto size-8 text-muted-foreground mb-2" />
             <p className="text-sm text-muted-foreground mb-2">
               Drag & drop files here, or click to upload
