@@ -194,12 +194,12 @@ export default function ProductCard({ product }: ProductCardProps) {
           )}
 
           {imageUrl ? (
-            <div className="absolute inset-0 overflow-hidden">
+            <div className="absolute inset-0 overflow-hidden bg-slate-50/80 dark:bg-slate-900/40">
               <Image
                 src={imageUrl}
                 alt={product.name}
                 fill
-                className={`object-cover transition-all duration-500 group-hover:scale-105 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
+                className={`object-contain p-2 transition-transform duration-500 group-hover:scale-105 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
                 sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                 onError={() => setImgError(true)}
                 onLoad={() => setImgLoaded(true)}

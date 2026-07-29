@@ -1015,51 +1015,17 @@ function FlashSaleSection({ products, navigate, siteConfig }: {
           className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
-          {products.slice(0, 8).map((product, idx) => {
-            const hasDiscount = product.discountPrice != null && product.discountPrice < product.price
-            const discountPercent = hasDiscount
-              ? Math.round(((product.price - product.discountPrice!) / product.price) * 100)
-              : 0
-            const soldCount = Math.floor(Math.random() * 70 + 30) // Simulated sold percentage
-            return (
-              <motion.div
-                key={product.id}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: idx * 0.08, duration: 0.4 }}
-                className="min-w-[200px] sm:min-w-[220px] snap-start"
-              >
-                <div className="relative bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow group">
-                  {/* Discount Badge */}
-                  {discountPercent > 20 && (
-                    <div className="absolute top-2 left-2 z-20">
-                      <div className="bg-amber-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
-                        {discountPercent}% off
-                      </div>
-                    </div>
-                  )}
-                  <div className="min-w-[200px] sm:min-w-[220px]">
-                    <ProductCard product={product} />
-                  </div>
-                  {/* Progress bar showing items sold */}
-                  <div className="px-3 pb-3">
-                    <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
-                      <span>Sold: {soldCount}%</span>
-                      <span className="text-muted-foreground">In demand</span>
-                    </div>
-                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${soldCount}%` }}
-                        transition={{ delay: 0.5 + idx * 0.1, duration: 0.8 }}
-                        className="h-full bg-gradient-to-r from-amber-400 to-red-500 rounded-full"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )
-          })}
+          {products.slice(0, 8).map((product, idx) => (
+            <motion.div
+              key={product.id}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: idx * 0.08, duration: 0.4 }}
+              className="min-w-[210px] sm:min-w-[230px] md:min-w-[250px] snap-start flex-shrink-0 flex flex-col"
+            >
+              <ProductCard product={product} />
+            </motion.div>
+          ))}
         </div>
       </div>
     </section>
