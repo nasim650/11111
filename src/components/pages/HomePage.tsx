@@ -513,193 +513,65 @@ function HeroBannerCarousel({ banners, navigate }: {
   )
 }
 
-// ── Category Section ──
+// ── Category Section (Compact & Product-Focused) ──
 function CategorySection({ categories, navigate }: {
   categories: Category[]
   navigate: (page: PageName, params?: Record<string, unknown>) => void
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const [canScrollLeft, setCanScrollLeft] = useState(false)
-  const [canScrollRight, setCanScrollRight] = useState(true)
-
-  const checkScroll = useCallback(() => {
-    if (!scrollRef.current) return
-    const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current
-    setCanScrollLeft(scrollLeft > 5)
-    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 5)
-  }, [])
-
-  useEffect(() => {
-    checkScroll()
-    const el = scrollRef.current
-    if (el) el.addEventListener('scroll', checkScroll, { passive: true })
-    return () => { if (el) el.removeEventListener('scroll', checkScroll) }
-  }, [checkScroll])
-
-  const handleScroll = (direction: 'left' | 'right') => {
-    if (!scrollRef.current) return
-    scrollRef.current.scrollBy({
-      left: direction === 'left' ? -300 : 300,
-      behavior: 'smooth',
-    })
-  }
-
   if (categories.length === 0) return null
 
-  // Grid layout when ≤6 categories, horizontal scroll otherwise
-  const useGridLayout = categories.length <= 6
-  const visibleCategories = useGridLayout ? categories : categories.slice(0, 12)
-
-  // Shared card renderer — large card in grid mode, compact in scroll mode
-  const renderCard = (cat: Category, idx: number) =>
-    useGridLayout ? (
-      <motion.button
-        key={cat.id}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: idx * 0.05, duration: 0.4 }}
-        className="group flex flex-col items-center text-center p-3 rounded-2xl hover:bg-emerald-50/80 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 w-full"
-        onClick={() => navigate('products', { category: cat.slug })}
-      >
-        <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-100 to-teal-50 shadow-md group-hover:shadow-xl group-hover:shadow-emerald-500/20 transition-all duration-500 ring-2 ring-transparent group-hover:ring-emerald-400/60">
-          {cat.image ? (
-            <Image
-              src={cat.image}
-              alt={cat.name}
-              fill
-              className="object-cover transition-transform duration-500 group-hover:scale-125"
-              sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full text-3xl">
-              🍽️
-            </div>
-          )}
-          {/* Emerald glow overlay on hover */}
-          <div className="absolute inset-0 bg-emerald-500/0 group-hover:bg-emerald-500/10 transition-all duration-500 rounded-2xl" />
-        </div>
-        <h3 className="font-semibold text-sm mt-3 text-center line-clamp-1 group-hover:text-emerald-700 transition-colors duration-300">
-          {cat.name}
-        </h3>
-        {(bengaliCategoryNames[cat.name] || cat.bengaliName) && (
-          <p className="text-[11px] text-emerald-600/60 text-center -mt-0.5 font-medium">
-            {bengaliCategoryNames[cat.name] || cat.bengaliName}
-          </p>
-        )}
-        <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700/80 group-hover:text-emerald-700 transition-colors">
-          Shop Now
-          <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
-        </span>
-      </motion.button>
-    ) : (
-      <motion.button
-        key={cat.id}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: idx * 0.05, duration: 0.4 }}
-        className="group flex flex-col items-center gap-2.5 p-3 rounded-2xl hover:bg-emerald-50/80 transition-all duration-300 snap-start shrink-0 w-[100px] md:w-[120px]"
-        onClick={() => navigate('products', { category: cat.slug })}
-      >
-        <div className="relative h-20 w-20 md:h-24 md:w-24 rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-100 to-teal-50 shadow-md group-hover:shadow-xl group-hover:shadow-emerald-500/20 transition-all duration-500 ring-2 ring-transparent group-hover:ring-emerald-400/60 group-hover:scale-110">
-          {cat.image ? (
-            <Image
-              src={cat.image}
-              alt={cat.name}
-              fill
-              className="object-cover transition-transform duration-500 group-hover:scale-125"
-              sizes="96px"
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full text-3xl">
-              🍽️
-            </div>
-          )}
-          {/* Emerald glow overlay on hover */}
-          <div className="absolute inset-0 bg-emerald-500/0 group-hover:bg-emerald-500/10 transition-all duration-500 rounded-2xl" />
-        </div>
-        <h3 className="font-semibold text-xs md:text-sm text-center line-clamp-1 group-hover:text-emerald-700 transition-colors duration-300 tracking-tight">
-          {cat.name}
-        </h3>
-        {(bengaliCategoryNames[cat.name] || cat.bengaliName) && (
-          <p className="text-[10px] text-emerald-600/50 text-center -mt-1 font-medium">
-            {bengaliCategoryNames[cat.name] || cat.bengaliName}
-          </p>
-        )}
-      </motion.button>
-    )
+  const displayCategories = categories.slice(0, 10)
 
   return (
-    <section className="py-14 bg-gradient-to-b from-emerald-50/60 via-white to-white relative">
-      {/* Decorative top border */}
-      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-600 via-teal-500 to-emerald-600" />
-
+    <section className="py-4 md:py-6 bg-[#FAF8F5] dark:bg-stone-950/30">
       <div className="container mx-auto px-4">
-        {/* Section Header */}
-        <AnimatedSection>
-          <div className="text-center mb-10">
-            <div className="inline-flex items-center gap-2 text-amber-600 mb-2">
-              <Sparkles className="h-5 w-5" />
-              <span className="text-sm font-semibold uppercase tracking-wider">Explore</span>
-              <div className="h-[2px] w-8 bg-amber-600/30" />
-            </div>
-            <h2 className="text-2xl md:text-3xl font-bold">Shop by Category</h2>
-            <p className="text-sm text-emerald-700/60 font-medium mt-1">ক্যাটাগরি অনুযায়ী কিনুন</p>
-            <p className="text-muted-foreground mt-2 max-w-md mx-auto text-sm">
-              Discover our authentic Bangladeshi food categories, sourced directly from trusted producers
-            </p>
-          </div>
-        </AnimatedSection>
-
-        {useGridLayout ? (
-          // Grid layout for ≤6 categories — larger, more visually appealing cards
-          <AnimatedSection delay={0.1}>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {visibleCategories.map((cat, idx) => renderCard(cat, idx))}
-            </div>
-          </AnimatedSection>
-        ) : (
-          // Scrollable Category Row (>6 categories) matching Reference Image 2
-          <div className="relative">
-            {/* Navigation arrow matching reference image 2 */}
-            {canScrollLeft && (
-              <button
-                onClick={() => handleScroll('left')}
-                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 size-9 rounded-full bg-amber-500 hover:bg-amber-600 text-white shadow-lg flex items-center justify-center transition-all -translate-x-3 hidden sm:flex"
-                aria-label="Scroll left"
-              >
-                <ChevronLeft className="h-5 w-5 text-white" />
-              </button>
-            )}
-            {canScrollRight && (
-              <button
-                onClick={() => handleScroll('right')}
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 size-9 rounded-full bg-amber-500 hover:bg-amber-600 text-white shadow-lg flex items-center justify-center transition-all translate-x-3 hidden sm:flex"
-                aria-label="Scroll right"
-              >
-                <ChevronRight className="h-5 w-5 text-white" />
-              </button>
-            )}
-
-            <div
-              ref={scrollRef}
-              className="flex gap-5 md:gap-6 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory px-2"
-              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-            >
-              {visibleCategories.map((cat, idx) => renderCard(cat, idx))}
-            </div>
-          </div>
-        )}
-
-        {/* View All Button */}
-        <div className="text-center mt-8">
-          <Button
-            variant="outline"
+        {/* Compact Header: Left "Categories", Right "View All →" */}
+        <div className="flex items-center justify-between mb-3 md:mb-4">
+          <h2 className="text-lg md:text-xl font-bold tracking-tight text-foreground">
+            Categories
+          </h2>
+          <button
             onClick={() => navigate('products')}
-            className="gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 rounded-full px-6"
+            className="text-xs md:text-sm font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 transition-colors"
           >
-            View All Categories
-            <ArrowRight className="h-4 w-4" />
-          </Button>
+            View All <ArrowRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        {/* Normalized Responsive Grid: 4 cols on mobile, 6 on tablet, 8-10 on desktop */}
+        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2.5 sm:gap-3.5">
+          {displayCategories.map((cat, idx) => (
+            <motion.button
+              key={cat.id}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.03, duration: 0.3 }}
+              className="group bg-white dark:bg-card border border-stone-200/70 dark:border-border/60 rounded-2xl p-2 sm:p-2.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex flex-col items-center cursor-pointer w-full"
+              onClick={() => navigate('products', { category: cat.slug })}
+            >
+              {/* Normalized Fixed Image Canvas */}
+              <div className="relative aspect-square w-full rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-900/40 p-2 mb-1.5 flex items-center justify-center">
+                {cat.image ? (
+                  <Image
+                    src={cat.image}
+                    alt={cat.name}
+                    fill
+                    className="object-contain p-1 transition-transform duration-300 group-hover:scale-105"
+                    sizes="120px"
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full text-2xl">
+                    🍽️
+                  </div>
+                )}
+              </div>
+
+              {/* 1-Line Clean Category Title */}
+              <h3 className="font-bold text-xs text-center line-clamp-1 text-foreground group-hover:text-amber-600 transition-colors w-full">
+                {cat.name}
+              </h3>
+            </motion.button>
+          ))}
         </div>
       </div>
     </section>
