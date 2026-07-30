@@ -101,7 +101,10 @@ export default function AdminFlashSalePage() {
         key: 'flash_sale',
         value: JSON.stringify({
           ...config,
-          endDate: new Date(config.endDate).toISOString()
+          endDate: (() => {
+            const date = new Date(config.endDate)
+            return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString()
+          })()
         }),
         group: 'marketing',
         label: 'Flash Sale Configuration',
