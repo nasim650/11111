@@ -2,12 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { Heart, ShoppingCart, Eye, Star, Package, Check, GitCompare, MapPin, Loader2, Sparkles } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { Heart, ShoppingCart, Eye, Star, Package, Loader2 } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
 import { useAppStore, type CartItem, type WishlistItem } from '@/lib/store'
 import { formatPrice, safeNum } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -39,37 +37,29 @@ interface ProductCardProps {
 // ── Shimmer Skeleton ──
 export function ProductCardSkeleton() {
   return (
-    <Card className="overflow-hidden border-border/50 rounded-xl">
-      <div className="relative aspect-square bg-muted/30 shimmer" />
+    <Card className="overflow-hidden border-stone-200 rounded-2xl bg-white">
+      <div className="relative aspect-square bg-stone-100 animate-pulse rounded-t-2xl" />
       <CardContent className="p-3 space-y-2">
-        <div className="h-3 w-16 shimmer rounded" />
-        <div className="h-4 w-full shimmer rounded" />
-        <div className="h-4 w-3/4 shimmer rounded" />
-        <div className="flex gap-1">
-          {[1,2,3,4,5].map(i => (
-            <div key={i} className="h-3 w-3 shimmer rounded-full" />
-          ))}
-        </div>
-        <div className="h-5 w-20 shimmer rounded" />
-        <div className="h-10 w-full shimmer rounded-lg mt-2" />
+        <div className="h-3 w-16 bg-stone-100 animate-pulse rounded" />
+        <div className="h-4 w-full bg-stone-100 animate-pulse rounded" />
+        <div className="h-4 w-2/3 bg-stone-100 animate-pulse rounded" />
+        <div className="h-5 w-20 bg-stone-100 animate-pulse rounded" />
+        <div className="h-9 w-full bg-stone-100 animate-pulse rounded-xl mt-1" />
       </CardContent>
     </Card>
   )
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
-  const { navigate, addToCart, isInWishlist, toggleWishlist, openQuickView, isInCompare, addToCompare, removeFromCompare } =
+  const { navigate, addToCart, isInWishlist, toggleWishlist, openQuickView } =
     useAppStore()
   const [loading, setLoading] = useState(false)
   const [addedToCart, setAddedToCart] = useState(false)
   const [imgError, setImgError] = useState(false)
   const [imgLoaded, setImgLoaded] = useState(false)
-  const [compareChecked, setCompareChecked] = useState(product?.id ? isInCompare(product.id) : false)
-  const [isHovered, setIsHovered] = useState(false)
   const addedTimerRef = useRef<NodeJS.Timeout | null>(null)
   const wishlisted = product?.id ? isInWishlist(product.id) : false
 
-  // Cleanup timer
   useEffect(() => {
     return () => {
       if (addedTimerRef.current) clearTimeout(addedTimerRef.current)
@@ -86,23 +76,13 @@ export default function ProductCard({ product }: ProductCardProps) {
     product.discountPrice != null ? product.discountPrice : price
   const hasDiscount =
     product.discountPrice != null && product.discountPrice < price
-  const discountPercent = hasDiscount && price > 0
-    ? Math.round(((price - product.discountPrice!) / price) * 100)
-    : 0
-
-  // Stock status
+  const discountPercent =
+    hasDiscount && price > 0
+      ? Math.round(((price - product.discountPrice!) / price) * 100)
+      : 0
   const outOfStock = stock <= 0
-  const lowStock = stock > 0 && stock < 10
-  const stockPercentage = Math.min((stock / 50) * 100, 100)
-  const stockColor = stock <= 5 ? 'bg-red-500' : stock <= 15 ? 'bg-amber-500' : 'bg-emerald-500'
-
-  // Origin
-  const isBangladeshi = !product.origin || product.origin === 'Bangladesh' || product.origin === 'BD'
-
-  // Savings amount
   const pVal = safeNum(product.price)
   const dpVal = product.discountPrice != null ? safeNum(product.discountPrice) : null
-  const savingsAmount = hasDiscount && dpVal != null ? Math.max(0, pVal - dpVal) : 0
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -158,274 +138,173 @@ export default function ProductCard({ product }: ProductCardProps) {
     openQuickView(product.id)
   }
 
-  const handleCompare = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (compareChecked) {
-      removeFromCompare(product.id)
-      setCompareChecked(false)
-      toast.success('Removed from comparison', { icon: '🔄' })
-    } else {
-      const compareCount = useAppStore.getState().compareProducts.length
-      if (compareCount >= 4) {
-        toast.error('You can compare up to 4 products at a time', { icon: '⚠️' })
-        return
-      }
-      addToCompare(product.id)
-      setCompareChecked(true)
-      toast.success('Added to comparison', {
-        icon: '⚖️',
-        description: `${compareCount + 1}/4 products selected. ${compareCount + 1 >= 2 ? 'Click "Compare Now" to compare!' : 'Add 1 more to start comparing.'}`,
-      })
-    }
-  }
+  // Single badge priority: discount > bestSeller > newArrival
+  const badge = hasDiscount
+    ? { label: `-${discountPercent}%`, style: 'bg-red-500 text-white' }
+    : product.isBestSeller
+    ? { label: 'Best Selling', style: 'bg-amber-500 text-white' }
+    : product.isNewArrival
+    ? { label: 'New', style: 'bg-emerald-600 text-white' }
+    : null
 
   return (
     <Card
-      className="group cursor-pointer overflow-hidden border-border/60 rounded-xl bg-white transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/10 hover:border-emerald-300 hover:-translate-y-1 flex flex-col justify-between h-full"
+      className="group cursor-pointer overflow-hidden border border-stone-200 rounded-2xl bg-white transition-all duration-200 hover:shadow-md hover:border-stone-300 flex flex-col h-full"
       onClick={() => navigate('product-detail', { id: product.id })}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
-      <div>
-        <div className="relative aspect-square overflow-hidden bg-muted/30 rounded-t-xl">
-          {/* Shimmer loading effect for images */}
-          {imageUrl && !imgLoaded && (
-            <div className="absolute inset-0 shimmer" />
-          )}
+      {/* Image Area */}
+      <div className="relative aspect-square w-full overflow-hidden bg-stone-50 rounded-t-2xl shrink-0">
+        {/* Shimmer */}
+        {imageUrl && !imgLoaded && (
+          <div className="absolute inset-0 bg-stone-100 animate-pulse" />
+        )}
 
-          {imageUrl ? (
-            <div className="absolute inset-0 overflow-hidden bg-slate-50/80 dark:bg-slate-900/40">
-              <Image
-                src={imageUrl}
-                alt={product.name}
-                fill
-                className={`object-contain p-2 transition-transform duration-500 group-hover:scale-105 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
-                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                onError={() => setImgError(true)}
-                onLoad={() => setImgLoaded(true)}
-              />
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-full bg-gradient-to-br from-primary/10 to-primary/5">
-              <Package className="h-12 w-12 text-primary/30" />
-            </div>
-          )}
-
-          {/* Badges - Top Left */}
-          <div className="absolute top-2 left-2 flex flex-col gap-1.5 z-10 pointer-events-none">
-            {hasDiscount && (
-              <div
-                className="h-9 w-9 rounded-full flex items-center justify-center shadow-md bg-gradient-to-br from-red-500 to-rose-600 shadow-red-500/30"
-                aria-label={`Discount ${discountPercent}%`}
-              >
-                <span className="text-white text-[10px] font-extrabold leading-none">
-                  -{discountPercent}%
-                </span>
-              </div>
-            )}
-            {product.isNewArrival && (
-              <Badge className="bg-emerald-500 text-white text-[10px] px-2 shadow-sm font-bold tracking-wide">
-                NEW
-              </Badge>
-            )}
-            {product.isBestSeller && !product.isNewArrival && (
-              <Badge className="bg-amber-500 text-white text-[10px] px-2 shadow-sm font-bold tracking-wide">
-                HOT 🔥
-              </Badge>
-            )}
-            {lowStock && !outOfStock && (
-              <Badge className="bg-orange-500/90 text-white text-[10px] px-1.5 py-0 shadow-sm animate-pulse">
-                Low Stock
-              </Badge>
-            )}
+        {imageUrl ? (
+          <Image
+            src={imageUrl}
+            alt={product.name}
+            fill
+            className={`object-contain p-3 transition-transform duration-300 group-hover:scale-105 ${
+              imgLoaded ? 'opacity-100' : 'opacity-0'
+            }`}
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            onError={() => setImgError(true)}
+            onLoad={() => setImgLoaded(true)}
+          />
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <Package className="h-10 w-10 text-stone-300" />
           </div>
+        )}
 
-          {/* Floating Quick Action Buttons - Top Right (Absolute Positioning, No Reflow) */}
-          <div className="absolute top-2 right-2 flex flex-col gap-1.5 z-20">
-            {/* Wishlist Button: Always accessible on touch/mobile, slides in cleanly on desktop */}
+        {/* Single Badge — Top Left */}
+        {badge && (
+          <span
+            className={`absolute top-2 left-2 z-10 text-[11px] font-bold px-2 py-0.5 rounded-lg shadow-sm ${badge.style}`}
+          >
+            {badge.label}
+          </span>
+        )}
+
+        {/* Floating Action Buttons — Top Right */}
+        <div className="absolute top-2 right-2 flex flex-col gap-1.5 z-20">
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={handleWishlist}
+            className={`h-7 w-7 rounded-full flex items-center justify-center shadow-sm transition-all duration-200 ${
+              wishlisted
+                ? 'bg-red-500 text-white'
+                : 'bg-white/90 text-slate-500 hover:text-red-500 sm:opacity-0 group-hover:opacity-100'
+            }`}
+            aria-label={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
+          >
+            <Heart className={`h-3.5 w-3.5 ${wishlisted ? 'fill-white text-white' : ''}`} />
+          </motion.button>
+
+          {!outOfStock && (
             <motion.button
-              whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
-              onClick={handleWishlist}
-              className={`h-8 w-8 rounded-full flex items-center justify-center shadow-md backdrop-blur-sm transition-all duration-300 ${
-                wishlisted
-                  ? 'bg-red-500 text-white opacity-100'
-                  : 'bg-white/95 text-gray-700 hover:bg-white hover:text-red-500 sm:opacity-0 sm:translate-x-2 group-hover:opacity-100 group-hover:translate-x-0'
-              }`}
-              aria-label={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
+              onClick={handleQuickView}
+              className="h-7 w-7 rounded-full bg-white/90 flex items-center justify-center shadow-sm text-slate-500 hover:text-emerald-700 sm:opacity-0 group-hover:opacity-100 transition-all duration-200"
+              aria-label="Quick view"
             >
-              <Heart className={`h-4 w-4 transition-colors ${wishlisted ? 'fill-white text-white' : ''}`} />
+              <Eye className="h-3.5 w-3.5" />
             </motion.button>
-
-            {/* Quick View Button */}
-            {!outOfStock && (
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={handleQuickView}
-                className="h-8 w-8 rounded-full bg-white/95 backdrop-blur-sm flex items-center justify-center shadow-md text-gray-700 hover:bg-white hover:text-emerald-700 sm:opacity-0 sm:translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300"
-                aria-label="Quick view"
-              >
-                <Eye className="h-4 w-4" />
-              </motion.button>
-            )}
-
-            {/* Compare Button */}
-            {!outOfStock && (
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={handleCompare}
-                className={`h-8 w-8 rounded-full flex items-center justify-center shadow-md backdrop-blur-sm transition-all duration-300 ${
-                  compareChecked
-                    ? 'bg-emerald-600 text-white opacity-100'
-                    : 'bg-white/95 text-gray-700 hover:bg-white hover:text-emerald-700 sm:opacity-0 sm:translate-x-2 group-hover:opacity-100 group-hover:translate-x-0'
-                }`}
-                aria-label={compareChecked ? 'Remove from comparison' : 'Compare'}
-              >
-                <GitCompare className="h-4 w-4" />
-              </motion.button>
-            )}
-          </div>
-
-          {/* Out of stock overlay */}
-          {outOfStock && (
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] flex items-center justify-center z-20">
-              <Badge variant="secondary" className="text-xs bg-white/95 text-gray-800 font-bold px-4 py-1 shadow-xl">
-                Out of Stock
-              </Badge>
-            </div>
           )}
         </div>
 
-        {/* Stock Progress Bar - directly under image */}
-        {!outOfStock && (
-          <div className="h-1 bg-muted">
-            <div
-              className={`h-full ${stockColor} transition-all duration-500`}
-              style={{ width: `${stockPercentage}%` }}
-            />
+        {/* Out of stock overlay */}
+        {outOfStock && (
+          <div className="absolute inset-0 bg-white/70 backdrop-blur-[1px] flex items-center justify-center z-20">
+            <span className="text-xs font-bold text-slate-600 bg-white px-3 py-1 rounded-full shadow-sm border border-stone-200">
+              Out of Stock
+            </span>
           </div>
         )}
-        {outOfStock && (
-          <div className="h-1 bg-red-200" />
-        )}
+      </div>
 
-        <CardContent className="p-3 space-y-1.5">
+      {/* Card Content */}
+      <CardContent className="p-3 flex-1 flex flex-col justify-between gap-2">
+        <div className="space-y-0.5">
           {/* Category */}
           {product.category && (
-            <p className="text-xs text-muted-foreground truncate">
+            <p className="text-[11px] text-slate-400 truncate">
               {product.category.name}
             </p>
           )}
 
-          {/* Name */}
-          <h3 className="font-medium text-sm line-clamp-2 leading-tight min-h-[2.5rem] group-hover:text-emerald-700 transition-colors duration-200">
+          {/* Product Name */}
+          <h3 className="font-semibold text-sm text-slate-800 line-clamp-2 leading-snug group-hover:text-emerald-700 transition-colors duration-200">
             {product.name}
           </h3>
+        </div>
 
-          {/* Rating */}
-          {(product.averageRating != null && product.averageRating > 0) ? (
+        <div className="space-y-2">
+          {/* Rating — only if exists */}
+          {product.averageRating != null && product.averageRating > 0 && (
             <div className="flex items-center gap-1">
               <div className="flex">
-                {Array.from({ length: 5 }).map((_, i) => {
-                  const fill = product.averageRating! - i
-                  return (
-                    <Star
-                      key={i}
-                      className={`h-3 w-3 ${
-                        i < Math.round(product.averageRating!)
-                          ? 'fill-amber-400 text-amber-400'
-                          : fill > 0 && fill < 1
-                          ? 'fill-amber-400/50 text-amber-400'
-                          : 'text-gray-200'
-                      }`}
-                    />
-                  )
-                })}
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Star
+                    key={i}
+                    className={`h-3 w-3 ${
+                      i < Math.round(product.averageRating!)
+                        ? 'fill-amber-400 text-amber-400'
+                        : 'text-stone-200'
+                    }`}
+                  />
+                ))}
               </div>
-              <span className="text-xs text-amber-600 font-semibold">{product.averageRating!.toFixed(1)}</span>
-              {product.reviewCount != null && product.reviewCount > 0 && (
-                <span className="text-xs text-muted-foreground">
-                  ({product.reviewCount})
-                </span>
-              )}
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5">
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-semibold border-emerald-300 text-emerald-700 bg-emerald-50/60">
-                <Sparkles className="h-2.5 w-2.5 mr-0.5" />
-                New
-              </Badge>
-              <span className="text-[10px] text-muted-foreground">No reviews yet</span>
+              <span className="text-[11px] text-slate-500 font-medium">
+                {product.averageRating.toFixed(1)}
+                {product.reviewCount && product.reviewCount > 0
+                  ? ` (${product.reviewCount})`
+                  : ''}
+              </span>
             </div>
           )}
 
-          {/* Price with savings */}
-          <div className="space-y-1">
+          {/* Price */}
+          <div>
             <div className="flex items-baseline gap-1.5 flex-wrap">
-              <span className="text-lg font-extrabold text-amber-600">
+              <span className="text-base font-bold text-amber-600">
                 {formatPrice(effectivePrice)}
               </span>
               {hasDiscount && (
-                <span className="text-xs text-muted-foreground line-through decoration-red-400">
-                  {formatPrice(product.price)}
+                <span className="text-xs text-slate-400 line-through">
+                  {formatPrice(price)}
                 </span>
               )}
-              <span className="text-xs text-muted-foreground">/{product.unit}</span>
+              <span className="text-[11px] text-slate-400">/{product.unit}</span>
             </div>
-            {hasDiscount && (
-              <div className="flex items-center gap-1">
-                <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold">
-                  Save {formatPrice(savingsAmount)}
-                </span>
-              </div>
+            {hasDiscount && dpVal != null && (
+              <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md">
+                Save {formatPrice(Math.max(0, pVal - dpVal))}
+              </span>
             )}
           </div>
 
-          {/* Stock Indicator Text */}
-          {!outOfStock && (
-            <div className="flex items-center justify-between text-[10px] pt-0.5">
-              <span className={`font-medium ${lowStock ? 'text-red-500 animate-pulse font-semibold' : 'text-muted-foreground'}`}>
-                {lowStock ? `Only ${product.stock} left!` : 'In Stock'}
-              </span>
-              {lowStock && (
-                <span className="text-orange-500 font-semibold">
-                  Hurry up!
-                </span>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </div>
-
-      {/* Action Buttons — Add To Cart + Buy Now matching reference design */}
-      <div className="p-3 pt-0 mt-auto flex items-center gap-2">
-        <Button
-          variant="outline"
-          className="flex-1 h-9 text-xs font-semibold rounded-xl border-amber-500 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-all gap-1 px-2"
-          size="sm"
-          disabled={outOfStock || loading}
-          onClick={handleAddToCart}
-        >
-          <ShoppingCart className="h-3.5 w-3.5 text-amber-500" />
-          {addedToCart ? 'Added!' : 'Add To Cart'}
-        </Button>
-        <Button
-          className="flex-1 h-9 text-xs font-semibold rounded-xl bg-amber-500 hover:bg-amber-600 text-white shadow-sm transition-all gap-1 px-2"
-          size="sm"
-          disabled={outOfStock || loading}
-          onClick={async (e) => {
-            e.stopPropagation()
-            if (outOfStock) return
-            await handleAddToCart(e)
-            navigate('checkout')
-          }}
-        >
-          <ShoppingCart className="h-3.5 w-3.5" />
-          Buy now
-        </Button>
-      </div>
+          {/* Add to Cart Button */}
+          <Button
+            className={`w-full h-9 text-xs font-semibold rounded-xl gap-1.5 transition-all ${
+              outOfStock
+                ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
+                : addedToCart
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                : 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm'
+            }`}
+            disabled={outOfStock || loading}
+            onClick={handleAddToCart}
+          >
+            {loading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <ShoppingCart className="h-3.5 w-3.5" />
+            )}
+            {loading ? 'Adding…' : addedToCart ? '✓ Added' : outOfStock ? 'Out of Stock' : 'Add to Cart'}
+          </Button>
+        </div>
+      </CardContent>
     </Card>
   )
 }

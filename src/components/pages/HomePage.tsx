@@ -1,11 +1,10 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import Image from 'next/image'
 import {
   ChevronLeft,
   ChevronRight,
-  Search,
   ShieldCheck,
   Truck,
   RefreshCw,
@@ -20,12 +19,11 @@ import {
   Flame,
   Gift,
   GripHorizontal,
-  TrendingUp,
   ShoppingCart,
   Loader2,
   Check,
 } from 'lucide-react'
-import { motion, AnimatePresence, useInView } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -100,93 +98,70 @@ function AnimatedSection({ children, className, delay = 0, style }: {
   style?: React.CSSProperties
 }) {
   const ref = useRef<HTMLDivElement>(null)
-  const isInView = useInView(ref, { once: true, margin: '-50px' })
 
   return (
-    <motion.div
+    <div
       ref={ref}
-      initial={{ opacity: 0, y: 40 }}
-      animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 40 }}
-      transition={{ duration: 0.6, delay, ease: 'easeOut' }}
       className={className}
       style={style}
     >
       {children}
-    </motion.div>
-  )
-}
-
-// ── Flip Digit Component ──
-function FlipDigit({ value, label }: { value: string; label: string }) {
-  return (
-    <div className="flex flex-col items-center">
-      <div className="relative overflow-hidden rounded-lg">
-        <div className="bg-white text-red-600 px-2.5 py-1.5 min-w-[40px] text-center font-bold text-xl tabular-nums shadow-md">
-          {value}
-        </div>
-        {/* Flip effect overlay */}
-        <motion.div
-          key={value}
-          initial={{ rotateX: -90, opacity: 0.5 }}
-          animate={{ rotateX: 0, opacity: 0 }}
-          transition={{ duration: 0.3, ease: 'easeOut' }}
-          className="absolute inset-0 bg-white/60 origin-top"
-        />
-      </div>
-      <span className="text-[9px] text-white/70 mt-0.5 font-medium">{label}</span>
     </div>
   )
 }
 
-// ── Flash Sale Countdown ──
+// ── Unified Section Header ──
+function SectionHeader({
+  title,
+  onViewAll,
+}: {
+  title: string
+  onViewAll?: () => void
+}) {
+  return (
+    <div className="flex items-center justify-between mb-4">
+      <h2 className="text-base font-bold text-slate-900 tracking-tight">
+        {title}
+      </h2>
+      {onViewAll && (
+        <button
+          onClick={onViewAll}
+          className="text-xs font-semibold text-amber-600 hover:text-amber-700 flex items-center gap-0.5 transition-colors"
+        >
+          View All <ArrowRight className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ── Compact Flash Sale Countdown ──
 function FlashSaleCountdown() {
   const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 })
 
   useEffect(() => {
-    const getTargetTime = () => {
-      const now = new Date()
-      const end = new Date(now)
-      end.setHours(23, 59, 59, 999)
-      return end.getTime()
-    }
-
     const updateCountdown = () => {
-      const target = getTargetTime()
-      const now = Date.now()
-      const diff = Math.max(target - now, 0)
-
+      const now = new Date()
+      const end = new Date()
+      end.setHours(23, 59, 59, 999)
+      const diff = Math.max(end.getTime() - now.getTime(), 0)
       setTimeLeft({
         hours: Math.floor(diff / (1000 * 60 * 60)),
         minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
         seconds: Math.floor((diff % (1000 * 60)) / 1000),
       })
     }
-
     updateCountdown()
     const timer = setInterval(updateCountdown, 1000)
     return () => clearInterval(timer)
   }, [])
 
   const pad = (n: number) => n.toString().padStart(2, '0')
-  const isEndingSoon = timeLeft.hours === 0 && timeLeft.minutes < 60
 
   return (
-    <div className="flex items-center gap-2">
-      {isEndingSoon && (
-        <span
-          className="text-[10px] font-medium bg-white/15 text-white px-2 py-0.5 rounded-full mr-1"
-        >
-          Ending soon
-        </span>
-      )}
-      <div className="flex items-center gap-1">
-        <FlipDigit value={pad(timeLeft.hours)} label="ঘণ্টা" />
-        <span className="text-white font-bold text-xl mx-0.5 animate-pulse">:</span>
-        <FlipDigit value={pad(timeLeft.minutes)} label="মিনিট" />
-        <span className="text-white font-bold text-xl mx-0.5 animate-pulse">:</span>
-        <FlipDigit value={pad(timeLeft.seconds)} label="সেকেন্ড" />
-      </div>
-    </div>
+    <span className="font-mono text-sm font-bold text-white tabular-nums">
+      {pad(timeLeft.hours)}:{pad(timeLeft.minutes)}:{pad(timeLeft.seconds)}
+    </span>
   )
 }
 
@@ -845,58 +820,39 @@ function FlashSaleSection({ products, navigate, siteConfig }: {
   const flashSaleSubtitle = siteConfig?.flashSaleSubtitle || 'Today'
 
   return (
-    <section className="py-8 bg-gradient-to-br from-emerald-950 via-emerald-900 to-emerald-950 text-white relative overflow-hidden border-y border-emerald-800/60 shadow-2xl">
-      {/* Subtle gold glow accents */}
-      <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-
-      <div className="container mx-auto px-4 relative z-10">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 pb-4 border-b border-emerald-800/60">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
-              <Flame className="h-5 w-5 text-amber-400" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl md:text-2xl font-bold tracking-tight text-white">{flashSaleTitle}</h2>
-                <Badge className="bg-amber-400 text-emerald-950 font-bold text-xs px-2.5 py-0.5">
-                  {flashSaleSubtitle}
-                </Badge>
-              </div>
-              <p className="text-xs text-emerald-200/70 mt-0.5">Limited stock deals at discounted prices</p>
+    <section className="py-4 bg-emerald-900 text-white relative overflow-hidden">
+      <div className="container mx-auto px-4">
+        {/* Compact single-row header */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Flame className="h-4 w-4 text-amber-400" />
+            <h2 className="text-sm font-bold text-white">{flashSaleTitle}</h2>
+            <div className="flex items-center gap-1 bg-white/10 rounded-full px-2 py-0.5">
+              <Clock className="h-3 w-3 text-amber-300" />
+              <FlashSaleCountdown />
             </div>
           </div>
-          <div className="flex items-center gap-3 bg-emerald-900/60 backdrop-blur-md border border-emerald-700/50 rounded-2xl px-4 py-2">
-            <Clock className="h-4 w-4 text-amber-400" />
-            <span className="text-xs text-emerald-100 font-medium">Offer ends in:</span>
-            <FlashSaleCountdown />
-          </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            className="bg-amber-400 hover:bg-amber-500 text-emerald-950 font-bold rounded-full shadow-lg gap-1 px-5"
+          <button
             onClick={() => navigate('products')}
+            className="text-xs font-semibold text-amber-400 hover:text-amber-300 flex items-center gap-0.5"
           >
-            View All Deals <ArrowRight className="h-4 w-4 ml-1" />
-          </Button>
+            View All <ArrowRight className="h-3.5 w-3.5" />
+          </button>
         </div>
 
-        {/* Product cards with deal styling */}
+        {/* Horizontal scroll product cards */}
         <div
           ref={scrollRef}
-          className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory"
+          className="flex gap-3 overflow-x-auto pb-3 snap-x snap-mandatory"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
-          {products.slice(0, 8).map((product, idx) => (
-            <motion.div
+          {products.slice(0, 8).map((product) => (
+            <div
               key={product.id}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: idx * 0.08, duration: 0.4 }}
-              className="min-w-[210px] sm:min-w-[230px] md:min-w-[250px] snap-start flex-shrink-0 flex flex-col"
+              className="min-w-[155px] sm:min-w-[175px] snap-start flex-shrink-0"
             >
               <ProductCard product={product} />
-            </motion.div>
+            </div>
           ))}
         </div>
       </div>
@@ -915,13 +871,9 @@ function BestSellersSection({ products, navigate }: {
   if (products.length === 0) return null
 
   return (
-    <AnimatedSection className="py-10 md:py-14 bg-[#FAF8F5] dark:bg-stone-950/40">
+    <AnimatedSection className="py-6 md:py-8 bg-stone-50">
       <div className="container mx-auto px-4">
-        <div className="text-center mb-8">
-          <h2 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-tight">
-            Top Selling Products
-          </h2>
-        </div>
+        <SectionHeader title="Top Selling" onViewAll={() => navigate('products')} />
 
         {/* 2-Column Grid of Horizontal Featured Cards (Reference Image 1) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
@@ -1053,41 +1005,13 @@ function NewArrivalsSection({ products, navigate }: {
   if (products.length === 0) return null
 
   return (
-    <AnimatedSection className="py-10 md:py-14 bg-muted/30">
+    <AnimatedSection className="py-6 md:py-8 bg-white">
       <div className="container mx-auto px-4">
-        <div className="flex items-end justify-between mb-6 md:mb-8">
-          <div>
-            <div className="inline-flex items-center gap-2 text-amber-600 mb-1.5">
-              <Sparkles className="h-4 w-4" />
-              <span className="text-xs font-semibold uppercase tracking-wider">Just Arrived</span>
-            </div>
-            <h2 className="text-2xl md:text-3xl font-bold">New Arrivals</h2>
-            <p className="text-sm text-muted-foreground mt-1">Latest additions to our authentic collection</p>
-            {/* Decorative accent line */}
-            <div className="mt-2 h-1 w-16 rounded-full bg-gradient-to-r from-amber-500 to-amber-400" />
-          </div>
-          <Button
-            variant="ghost"
-            className="hidden sm:flex items-center gap-1 text-amber-700 hover:text-amber-800 hover:bg-amber-50 rounded-full"
-            onClick={() => navigate('products')}
-          >
-            View All <ArrowRight className="h-4 w-4" />
-          </Button>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5">
+        <SectionHeader title="New Arrivals" onViewAll={() => navigate('products')} />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {products.map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}
-        </div>
-        {/* Mobile View All */}
-        <div className="mt-6 text-center sm:hidden">
-          <Button
-            variant="outline"
-            className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800 rounded-full px-6"
-            onClick={() => navigate('products')}
-          >
-            View All New Arrivals <ArrowRight className="h-4 w-4" />
-          </Button>
         </div>
       </div>
     </AnimatedSection>
@@ -1105,41 +1029,13 @@ function RecentlyViewedSection({ products, navigate }: {
   if (products.length === 0) return null
 
   return (
-    <AnimatedSection className="py-10 md:py-14 bg-gradient-to-b from-slate-50/60 via-white to-white">
+    <AnimatedSection className="py-6 md:py-8 bg-stone-50">
       <div className="container mx-auto px-4">
-        <div className="flex items-end justify-between mb-6 md:mb-8">
-          <div>
-            <div className="inline-flex items-center gap-2 text-slate-500 mb-1.5">
-              <Clock className="h-4 w-4" />
-              <span className="text-xs font-semibold uppercase tracking-wider">Recently Viewed</span>
-            </div>
-            <h2 className="text-2xl md:text-3xl font-bold">Recently Viewed</h2>
-            <p className="text-sm text-muted-foreground mt-1">Pick up where you left off</p>
-            {/* Decorative slate underline */}
-            <div className="mt-2 h-1 w-16 rounded-full bg-gradient-to-r from-slate-400 to-slate-300" />
-          </div>
-          <Button
-            variant="ghost"
-            className="hidden sm:flex items-center gap-1 text-slate-600 hover:text-slate-700 hover:bg-slate-100 rounded-full"
-            onClick={() => navigate('products')}
-          >
-            View All <ArrowRight className="h-4 w-4" />
-          </Button>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5">
+        <SectionHeader title="Recently Viewed" onViewAll={() => navigate('products')} />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {products.map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}
-        </div>
-        {/* Mobile View All */}
-        <div className="mt-6 text-center sm:hidden">
-          <Button
-            variant="outline"
-            className="gap-2 border-slate-300 text-slate-600 hover:bg-slate-50 hover:text-slate-700 rounded-full px-6"
-            onClick={() => navigate('products')}
-          >
-            View All Recently Viewed <ArrowRight className="h-4 w-4" />
-          </Button>
         </div>
       </div>
     </AnimatedSection>
@@ -1187,7 +1083,7 @@ function TrustSection() {
   }
 
   return (
-    <section className="py-14 bg-white relative">
+    <section className="py-8 bg-white relative">
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-200 to-transparent" />
       <div className="container mx-auto px-4">
         <AnimatedSection>
@@ -1363,7 +1259,7 @@ function SeasonalCollectionSection({ navigate }: { navigate: (page: PageName, pa
   ]
 
   return (
-    <AnimatedSection className="py-12 md:py-16 bg-white border-t border-emerald-100/50">
+    <AnimatedSection className="py-8 bg-white border-t border-stone-100">
       <div className="container mx-auto px-4">
         <div className="text-center max-w-2xl mx-auto mb-10">
           <Badge className="bg-amber-100 text-amber-800 border-amber-200 mb-2 font-semibold">
@@ -1433,7 +1329,7 @@ function CustomerReviewsSection() {
   ]
 
   return (
-    <AnimatedSection className="py-12 md:py-16 bg-gradient-to-b from-stone-50 to-white">
+    <AnimatedSection className="py-8 bg-stone-50">
       <div className="container mx-auto px-4">
         <div className="text-center max-w-xl mx-auto mb-10">
           <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 mb-2 font-semibold">
@@ -1500,7 +1396,7 @@ function FAQSection() {
   ]
 
   return (
-    <AnimatedSection className="py-12 md:py-16 bg-white border-t border-stone-100">
+    <AnimatedSection className="py-8 bg-white border-t border-stone-100">
       <div className="container mx-auto px-4 max-w-3xl">
         <div className="text-center mb-10">
           <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 mb-2 font-semibold">
@@ -1567,7 +1463,7 @@ function NewsletterSection() {
   }
 
   return (
-    <section className="py-12 bg-gradient-to-r from-emerald-900 via-emerald-800 to-emerald-900 text-white relative overflow-hidden">
+    <section className="py-8 bg-emerald-900 text-white relative overflow-hidden">
       <div className="container mx-auto px-4 max-w-4xl text-center relative z-10">
         <Sparkles className="h-8 w-8 text-amber-400 mx-auto mb-3" />
         <h2 className="text-2xl md:text-3xl font-extrabold mb-2">
@@ -1740,7 +1636,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50/30 text-foreground">
+    <div className="min-h-screen bg-white text-foreground">
       {/* ── 1. Hero Banner Carousel ── */}
       <HeroBannerCarousel banners={heroBanners} navigate={navigate} />
 
@@ -1752,27 +1648,10 @@ export default function HomePage() {
 
       {/* ── 6. Featured Products ── */}
       {featuredProducts.length > 0 && (
-        <AnimatedSection className="py-10 md:py-14">
+        <AnimatedSection className="py-6 md:py-8 bg-white">
           <div className="container mx-auto px-4">
-            <div className="flex items-end justify-between mb-6 md:mb-8">
-              <div>
-                <div className="inline-flex items-center gap-2 text-emerald-600 mb-1.5">
-                  <Star className="h-4 w-4" />
-                  <span className="text-xs font-semibold uppercase tracking-wider">Handpicked</span>
-                </div>
-                <h2 className="text-2xl md:text-3xl font-bold">Featured Products</h2>
-                <p className="text-sm text-muted-foreground mt-1">Premium picks our customers love</p>
-                <div className="mt-2 h-1 w-16 rounded-full bg-gradient-to-r from-emerald-500 to-teal-400" />
-              </div>
-              <Button
-                variant="ghost"
-                className="hidden sm:flex items-center gap-1 text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 rounded-full"
-                onClick={() => navigate('products')}
-              >
-                View All <ArrowRight className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5">
+            <SectionHeader title="Featured Products" onViewAll={() => navigate('products')} />
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               {featuredProducts.map((p: Product) => (
                 <ProductCard key={p.id} product={p} />
               ))}
