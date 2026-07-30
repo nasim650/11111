@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Toaster } from "@/components/ui/toaster";
+import { Toaster } from "@/components/ui/sonner";
 
 const geistSans = { variable: "font-sans" };
 const geistMono = { variable: "font-mono" };
@@ -55,7 +55,13 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
         {children}
-        <Toaster />
+        <Toaster 
+          position="top-right" 
+          richColors={true}
+          closeButton={true}
+          duration={3500}
+          expand={true}
+        />
       </body>
     </html>
   );
