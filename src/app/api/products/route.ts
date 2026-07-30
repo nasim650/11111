@@ -13,8 +13,19 @@ async function fetchProductsData(url: URL, request: NextRequest) {
   const search = url.searchParams.get('search')
   const minPrice = url.searchParams.get('minPrice')
   const maxPrice = url.searchParams.get('maxPrice')
-  const sort = url.searchParams.get('sort') || 'createdAt'
-  const order = url.searchParams.get('order') || 'desc'
+  const sortRaw = url.searchParams.get('sort') || 'createdAt'
+  const orderRaw = url.searchParams.get('order') || 'desc'
+  
+  let prismaOrderBy: Record<string, string> = { createdAt: 'desc' }
+  if (sortRaw === 'price_asc') prismaOrderBy = { price: 'asc' }
+  else if (sortRaw === 'price_desc') prismaOrderBy = { price: 'desc' }
+  else if (sortRaw === 'newest') prismaOrderBy = { createdAt: 'desc' }
+  else if (sortRaw === 'best_selling') prismaOrderBy = { isBestSeller: 'desc' }
+  else if (sortRaw === 'createdAt') prismaOrderBy = { createdAt: orderRaw }
+  else if (sortRaw === 'price') prismaOrderBy = { price: orderRaw }
+  else if (sortRaw === 'rating' || sortRaw === 'relevance') {
+    prismaOrderBy = { createdAt: 'desc' }
+  }
   const status = url.searchParams.get('status')
   const isFeatured = url.searchParams.get('isFeatured')
   const isBestSeller = url.searchParams.get('isBestSeller')
@@ -115,7 +126,8 @@ async function fetchProductsData(url: URL, request: NextRequest) {
   let products: any[] = []
   let total = 0
 
-  if (needsOriginPostFetch || minRating !== null || (minDiscount !== null && parseFloat(minDiscount) > 0) || search) {
+  const needsJSSort = sortRaw === 'rating' || (sortRaw === 'relevance' && search);
+  if (needsOriginPostFetch || minRating !== null || (minDiscount !== null && parseFloat(minDiscount) > 0) || search || needsJSSort) {
     const allProducts = await db.product.findMany({
       where,
       include: {
@@ -124,7 +136,7 @@ async function fetchProductsData(url: URL, request: NextRequest) {
         subcategory: true,
         reviews: { where: { isApproved: true }, select: { rating: true } },
       },
-      orderBy: { [sort]: order },
+      orderBy: prismaOrderBy,
     })
 
     let filtered = allProducts
@@ -160,6 +172,14 @@ async function fetchProductsData(url: URL, request: NextRequest) {
       })
     }
 
+    if (sortRaw === 'rating') {
+      filtered.sort((a, b) => {
+        const avgA = a.reviews.length ? a.reviews.reduce((sum: number, r: {rating: number}) => sum + r.rating, 0) / a.reviews.length : 0
+        const avgB = b.reviews.length ? b.reviews.reduce((sum: number, r: {rating: number}) => sum + r.rating, 0) / b.reviews.length : 0
+        return avgB - avgA
+      })
+    }
+
     total = filtered.length
     products = filtered.slice(skip, skip + limit)
   } else {
@@ -172,7 +192,7 @@ async function fetchProductsData(url: URL, request: NextRequest) {
           subcategory: true,
           reviews: { where: { isApproved: true }, select: { rating: true } },
         },
-        orderBy: { [sort]: order },
+        orderBy: prismaOrderBy,
         skip,
         take: limit,
       }),
