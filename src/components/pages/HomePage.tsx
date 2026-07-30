@@ -1651,7 +1651,9 @@ export default function HomePage() {
       <CategorySection categories={categories} navigate={navigate} />
 
       {/* ── 5. Flash Sale (Elegantly Redesigned Dark Forest Theme) ── */}
-      <FlashSaleSection products={flashSaleProducts.length > 0 ? flashSaleProducts : discountProducts} navigate={navigate} siteConfig={siteConfig} />
+      {flashSaleProducts.length > 0 && (
+        <FlashSaleSection products={flashSaleProducts} navigate={navigate} siteConfig={siteConfig} />
+      )}
 
       {/* ── 6. Featured Products ── */}
       {featuredProducts.length > 0 && (
