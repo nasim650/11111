@@ -17,9 +17,8 @@ interface Product {
   price: number
   salePrice?: number
   discountPrice?: number
-  images: string[]
-  category: string
-  isFlashSale?: boolean
+  images: { url: string }[]
+  category: { name: string; slug: string }
 }
 import { ArrowUp, ArrowDown, Save, Loader2, Search } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -155,7 +154,7 @@ export default function AdminFlashSalePage() {
 
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    p.category?.toLowerCase().includes(searchQuery.toLowerCase())
+    p.category?.name?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   const selectedProducts = config.productIds
@@ -250,7 +249,7 @@ export default function AdminFlashSalePage() {
                     <div key={product.id} className="flex items-center justify-between bg-muted/50 p-2 rounded-md border">
                       <div className="flex items-center gap-3 overflow-hidden">
                         <img 
-                          src={product.images[0] || '/placeholder.png'} 
+                          src={product.images?.[0]?.url || '/placeholder.png'} 
                           alt={product.name}
                           className="h-10 w-10 object-cover rounded bg-white"
                         />
@@ -315,13 +314,13 @@ export default function AdminFlashSalePage() {
                       >
                         <Checkbox checked={isSelected} onCheckedChange={() => toggleProduct(product.id)} />
                         <img 
-                          src={product.images[0] || '/placeholder.png'} 
+                          src={product.images?.[0]?.url || '/placeholder.png'} 
                           alt={product.name}
                           className="h-10 w-10 object-cover rounded bg-white"
                         />
                         <div className="flex-1 overflow-hidden">
                           <p className="text-sm font-medium truncate">{product.name}</p>
-                          <p className="text-xs text-muted-foreground">{product.category}</p>
+                          <p className="text-xs text-muted-foreground">{product.category?.name}</p>
                         </div>
                         {isSelected && (
                           <Badge variant="default" className="text-[10px]">Selected</Badge>
