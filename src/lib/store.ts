@@ -85,7 +85,7 @@ export interface User {
 }
 
 export interface SiteConfig {
-  flash_sale?: string;
+
   siteName: string
   tagline: string
   description: string
@@ -120,10 +120,9 @@ export interface SiteConfig {
   freeDeliveryEnabled: boolean
   freeDeliveryMinAmount: number
   freeDeliveryMessage: string
-  flashSaleEnabled: boolean
-  flashSaleTitle: string
-  flashSaleSubtitle: string
+
   homepagePromoText: string
+  flash_sale?: string // Raw JSON config from AdminFlashSalePage
 }
 
 // ─── Helper: Session ID ──────────────────────────────────────────────────────
@@ -286,9 +285,7 @@ const defaultSiteConfig: SiteConfig = {
   freeDeliveryEnabled: true,
   freeDeliveryMinAmount: 1500,
   freeDeliveryMessage: 'Free Delivery on Orders Above ৳1,500',
-  flashSaleEnabled: true,
-  flashSaleTitle: 'Flash Sale',
-  flashSaleSubtitle: 'Today',
+
   homepagePromoText: '100% Authentic Bangladeshi Products',
 }
 
@@ -1011,10 +1008,9 @@ export const useAppStore = create<AppStore>()(
             freeDeliveryEnabled: configMap.free_delivery_enabled === undefined ? defaultSiteConfig.freeDeliveryEnabled : configMap.free_delivery_enabled === 'true',
             freeDeliveryMinAmount: Number(configMap.free_delivery_min_amount) || defaultSiteConfig.freeDeliveryMinAmount,
             freeDeliveryMessage: configMap.free_delivery_message || defaultSiteConfig.freeDeliveryMessage,
-            flashSaleEnabled: configMap.flash_sale_enabled === undefined ? defaultSiteConfig.flashSaleEnabled : configMap.flash_sale_enabled === 'true',
-            flashSaleTitle: configMap.flash_sale_title || defaultSiteConfig.flashSaleTitle,
-            flashSaleSubtitle: configMap.flash_sale_subtitle || defaultSiteConfig.flashSaleSubtitle,
+
             homepagePromoText: configMap.homepage_promo_text || defaultSiteConfig.homepagePromoText,
+            flash_sale: configMap.flash_sale, // Raw JSON config from AdminFlashSalePage
           }
 
           set({ siteConfig, siteConfigLoading: false })

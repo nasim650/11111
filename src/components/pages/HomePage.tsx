@@ -72,7 +72,7 @@ interface Product {
   isNewArrival?: boolean
   isBestSeller?: boolean
   isFeatured?: boolean
-  isFlashSale?: boolean
+
   shortDescription?: string
 }
 
@@ -1642,8 +1642,8 @@ export default function HomePage() {
         }
       } catch (e) {}
     } else {
-      // Fallback if no config exists
-      flashSaleProds = allFetchedProducts.filter((p) => p.isFlashSale);
+      // No legacy fallback
+      flashSaleProds = [];
     }
     setFlashSaleProducts(flashSaleProds);
   }, [allFetchedProducts, siteConfig?.flash_sale]);

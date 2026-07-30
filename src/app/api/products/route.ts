@@ -264,7 +264,7 @@ export async function POST(request: NextRequest) {
     const {
       name, slug, shortDescription, description, price, discountPrice,
       unit, stock, categoryId, subcategoryId, isFeatured, isBestSeller,
-      isNewArrival, isFlashSale, status, images, tags, specifications,
+      isNewArrival, status, images, tags, specifications,
       origin, qualityNote, ingredients, storageInstruction, deliveryNote,
       metaTitle, metaDescription, metaKeywords,
     } = body

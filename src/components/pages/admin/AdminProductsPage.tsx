@@ -84,7 +84,7 @@ interface Product {
   deliveryNote?: string
   status: string
   isFeatured: boolean
-  isFlashSale?: boolean
+
   isBestSeller: boolean
   isNewArrival: boolean
   tags?: string[] | string
@@ -122,7 +122,7 @@ const emptyProduct: Partial<Product> = {
   deliveryNote: '',
   status: 'active',
   isFeatured: false,
-  isFlashSale: false,
+
   isBestSeller: false,
   isNewArrival: false,
   tags: [],
@@ -549,12 +549,7 @@ export default function AdminProductsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {product.isFlashSale && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200">
-                              <Flame className="w-3 h-3" />
-                              Flash
-                            </span>
-                          )}
+
                           {product.isFeatured && (
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
                               <Star className="w-3 h-3" />
@@ -829,18 +824,6 @@ export default function AdminProductsPage() {
                     }
                   />
                   <Label>Featured</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={editingProduct?.isFlashSale ?? false}
-                    onCheckedChange={(checked) =>
-                      setEditingProduct((prev) => ({
-                        ...prev,
-                        isFlashSale: checked,
-                      }) as Partial<Product>)
-                    }
-                  />
-                  <Label>Flash Sale</Label>
                 </div>
                 <div className="flex items-center gap-2">
                   <Switch

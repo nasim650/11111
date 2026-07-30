@@ -172,7 +172,7 @@ export default function Home() {
     return (
       <div className="min-h-screen">
         <Suspense fallback={<PageLoader />}>
-          {currentPage === 'admin-flash-sale' ? <AdminFlashSalePage /> : <AdminDashboardPage />}
+          <AdminDashboardPage />
         </Suspense>
         <QuickViewModal />
         <OrderTrackingModal />

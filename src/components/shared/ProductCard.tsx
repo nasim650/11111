@@ -25,7 +25,7 @@ interface Product {
   isNewArrival?: boolean
   isBestSeller?: boolean
   isFeatured?: boolean
-  isFlashSale?: boolean
+
   shortDescription?: string
   averageRating?: number
   reviewCount?: number
@@ -150,8 +150,6 @@ export default function ProductCard({ product }: ProductCardProps) {
     ? { label: 'Best Selling', style: 'bg-amber-500 text-white' }
     : product.isNewArrival
     ? { label: 'New', style: 'bg-emerald-600 text-white' }
-    : product.isFlashSale
-    ? { label: 'Flash Sale', style: 'bg-red-600 text-white' }
     : null
 
   return (

@@ -46,7 +46,7 @@ interface Product {
   isNewArrival?: boolean
   isBestSeller?: boolean
   isFeatured?: boolean
-  isFlashSale?: boolean
+
   avgRating?: number
   reviewCount?: number
   discountPercentage?: number

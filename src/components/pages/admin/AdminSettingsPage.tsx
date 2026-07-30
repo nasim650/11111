@@ -95,9 +95,7 @@ interface SiteConfig {
   freeDeliveryEnabled?: boolean
   freeDeliveryMinAmount?: number
   freeDeliveryMessage?: string
-  flashSaleEnabled?: boolean
-  flashSaleTitle?: string
-  flashSaleSubtitle?: string
+
   homepagePromoText?: string
 }
 
@@ -162,9 +160,7 @@ const defaultConfig: SiteConfig = {
   freeDeliveryEnabled: true,
   freeDeliveryMinAmount: 1500,
   freeDeliveryMessage: 'Free Delivery on Orders Above ৳1,500',
-  flashSaleEnabled: true,
-  flashSaleTitle: 'Flash Sale',
-  flashSaleSubtitle: 'Today',
+
   homepagePromoText: '100% Authentic Bangladeshi Products',
 }
 
@@ -259,9 +255,7 @@ export default function AdminSettingsPage() {
           freeDeliveryEnabled: mapped.free_delivery_enabled === undefined ? defaultConfig.freeDeliveryEnabled : mapped.free_delivery_enabled === 'true',
           freeDeliveryMinAmount: Number(mapped.free_delivery_min_amount) || defaultConfig.freeDeliveryMinAmount,
           freeDeliveryMessage: mapped.free_delivery_message || defaultConfig.freeDeliveryMessage,
-          flashSaleEnabled: mapped.flash_sale_enabled === undefined ? defaultConfig.flashSaleEnabled : mapped.flash_sale_enabled === 'true',
-          flashSaleTitle: mapped.flash_sale_title || defaultConfig.flashSaleTitle,
-          flashSaleSubtitle: mapped.flash_sale_subtitle || defaultConfig.flashSaleSubtitle,
+
           homepagePromoText: mapped.homepage_promo_text || defaultConfig.homepagePromoText,
         })
       }
@@ -353,9 +347,7 @@ export default function AdminSettingsPage() {
         { key: 'free_delivery_enabled', value: String(config.freeDeliveryEnabled ?? true), type: 'boolean', group: 'homepage', label: 'Free Delivery Enabled' },
         { key: 'free_delivery_min_amount', value: String(config.freeDeliveryMinAmount ?? 1500), type: 'number', group: 'homepage', label: 'Free Delivery Min Amount' },
         { key: 'free_delivery_message', value: config.freeDeliveryMessage || '', type: 'text', group: 'homepage', label: 'Free Delivery Message' },
-        { key: 'flash_sale_enabled', value: String(config.flashSaleEnabled ?? true), type: 'boolean', group: 'homepage', label: 'Flash Sale Enabled' },
-        { key: 'flash_sale_title', value: config.flashSaleTitle || '', type: 'text', group: 'homepage', label: 'Flash Sale Title' },
-        { key: 'flash_sale_subtitle', value: config.flashSaleSubtitle || '', type: 'text', group: 'homepage', label: 'Flash Sale Subtitle' },
+
         { key: 'homepage_promo_text', value: config.homepagePromoText || '', type: 'text', group: 'homepage', label: 'Homepage Promo Text' },
       ]
 
@@ -1210,44 +1202,7 @@ export default function AdminSettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Flash Sale */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Flash Sale</CardTitle>
-              <CardDescription>Control the Flash Sale section heading shown on the homepage.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Enable Flash Sale Section</Label>
-                  <p className="text-xs text-muted-foreground">Show or hide the Flash Sale section.</p>
-                </div>
-                <Switch
-                  checked={config.flashSaleEnabled ?? true}
-                  onCheckedChange={(v) => updateConfig({ flashSaleEnabled: v })}
-                />
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Flash Sale Title</Label>
-                  <Input
-                    value={config.flashSaleTitle ?? ''}
-                    onChange={(e) => updateConfig({ flashSaleTitle: e.target.value })}
-                    placeholder="Flash Sale"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Flash Sale Subtitle (Badge)</Label>
-                  <Input
-                    value={config.flashSaleSubtitle ?? ''}
-                    onChange={(e) => updateConfig({ flashSaleSubtitle: e.target.value })}
-                    placeholder="Today"
-                  />
-                  <p className="text-xs text-muted-foreground">Short label shown next to the title (e.g. “Today”).</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+
 
           {/* Homepage Promo Text */}
           <Card>
