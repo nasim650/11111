@@ -57,8 +57,16 @@ export default function ProductCard({ product }: ProductCardProps) {
   const [addedToCart, setAddedToCart] = useState(false)
   const [imgError, setImgError] = useState(false)
   const [imgLoaded, setImgLoaded] = useState(false)
+  const [isOverflowing, setIsOverflowing] = useState(false)
+  const titleRef = useRef<HTMLHeadingElement>(null)
   const addedTimerRef = useRef<NodeJS.Timeout | null>(null)
   const wishlisted = product?.id ? isInWishlist(product.id) : false
+
+  useEffect(() => {
+    if (titleRef.current) {
+      setIsOverflowing(titleRef.current.scrollWidth > titleRef.current.clientWidth)
+    }
+  }, [product?.name])
 
   useEffect(() => {
     return () => {
@@ -152,96 +160,98 @@ export default function ProductCard({ product }: ProductCardProps) {
       className="group cursor-pointer overflow-hidden border border-stone-200/60 rounded-xl bg-white transition-all duration-300 hover:shadow-lg hover:border-stone-300/80 flex flex-col h-full"
       onClick={() => navigate('product-detail', { id: product.id })}
     >
-      {/* Image Area — fixed responsive heights, contain to prevent stretching */}
-      <div className="relative h-[140px] md:h-[180px] lg:h-[220px] w-full overflow-hidden bg-stone-50 rounded-t-xl shrink-0 flex items-center justify-center">
-        {/* Shimmer */}
-        {imageUrl && !imgLoaded && (
-          <div className="absolute inset-0 bg-stone-100 animate-pulse" />
-        )}
+      {/* ── HERO BOX (Fixed Template) ── */}
+      <div className="flex flex-col bg-stone-50 rounded-t-xl shrink-0 overflow-hidden relative">
+        {/* Fixed Image Container (No top padding, natural alignment) */}
+        <div className="relative h-[150px] md:h-[180px] lg:h-[220px] w-full flex items-center justify-center shrink-0">
+          {imageUrl && !imgLoaded && (
+            <div className="absolute inset-0 bg-stone-100 animate-pulse" />
+          )}
 
-        {imageUrl ? (
-          <Image
-            src={imageUrl}
-            alt={product.name}
-            fill
-            className={`object-contain object-center p-2 transition-transform duration-300 group-hover:scale-105 ${
-              imgLoaded ? 'opacity-100' : 'opacity-0'
-            }`}
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            onError={() => setImgError(true)}
-            onLoad={() => setImgLoaded(true)}
-          />
-        ) : (
-          <div className="flex items-center justify-center h-full w-full">
+          {imageUrl ? (
+            <Image
+              src={imageUrl}
+              alt={product.name}
+              fill
+              className={`object-contain object-center transition-transform duration-300 group-hover:scale-105 ${
+                imgLoaded ? 'opacity-100' : 'opacity-0'
+              }`}
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+              onError={() => setImgError(true)}
+              onLoad={() => setImgLoaded(true)}
+            />
+          ) : (
             <Package className="h-10 w-10 text-stone-300" />
-          </div>
-        )}
+          )}
 
-        {/* Single Badge — Top Left */}
-        {badge && (
-          <span
-            className={`absolute top-2.5 left-2.5 z-10 text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm ${badge.style}`}
-          >
-            {badge.label}
-          </span>
-        )}
+          {/* Badges and Overlays */}
+          {badge && (
+            <span className={`absolute top-2.5 left-2.5 z-10 text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm ${badge.style}`}>
+              {badge.label}
+            </span>
+          )}
 
-        {/* Floating Action Buttons — Top Right */}
-        <div className="absolute top-2.5 right-2.5 flex flex-col gap-2 z-20">
-          <motion.button
-            whileTap={{ scale: 0.9 }}
-            onClick={handleWishlist}
-            className={`h-8 w-8 rounded-full flex items-center justify-center shadow-sm transition-all duration-200 ${
-              wishlisted
-                ? 'bg-red-500 text-white'
-                : 'bg-white/90 text-slate-500 hover:text-red-500 md:opacity-0 md:group-hover:opacity-100'
-            }`}
-            aria-label={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
-          >
-            <Heart className={`h-4 w-4 ${wishlisted ? 'fill-white text-white' : ''}`} />
-          </motion.button>
-
-          {!outOfStock && (
+          <div className="absolute top-2.5 right-2.5 flex flex-col gap-2 z-20">
             <motion.button
               whileTap={{ scale: 0.9 }}
-              onClick={handleQuickView}
-              className="h-8 w-8 rounded-full bg-white/90 flex items-center justify-center shadow-sm text-slate-500 hover:text-emerald-700 md:opacity-0 md:group-hover:opacity-100 transition-all duration-200"
-              aria-label="Quick view"
+              onClick={handleWishlist}
+              className={`h-8 w-8 rounded-full flex items-center justify-center shadow-sm transition-all duration-200 ${
+                wishlisted ? 'bg-red-500 text-white' : 'bg-white/90 text-slate-500 hover:text-red-500 md:opacity-0 md:group-hover:opacity-100'
+              }`}
+              aria-label="Wishlist"
             >
-              <Eye className="h-4 w-4" />
+              <Heart className={`h-4 w-4 ${wishlisted ? 'fill-white text-white' : ''}`} />
             </motion.button>
+            {!outOfStock && (
+              <motion.button
+                whileTap={{ scale: 0.9 }}
+                onClick={handleQuickView}
+                className="h-8 w-8 rounded-full bg-white/90 flex items-center justify-center shadow-sm text-slate-500 hover:text-emerald-700 md:opacity-0 md:group-hover:opacity-100 transition-all duration-200"
+                aria-label="Quick view"
+              >
+                <Eye className="h-4 w-4" />
+              </motion.button>
+            )}
+          </div>
+
+          {outOfStock && (
+            <div className="absolute inset-0 bg-white/70 backdrop-blur-[1px] flex items-center justify-center z-20">
+              <span className="text-xs font-bold text-slate-600 bg-white px-3 py-1 rounded-full shadow-sm border border-stone-200">Out of Stock</span>
+            </div>
           )}
         </div>
 
-        {/* Out of stock overlay */}
-        {outOfStock && (
-          <div className="absolute inset-0 bg-white/70 backdrop-blur-[1px] flex items-center justify-center z-20">
-            <span className="text-xs font-bold text-slate-600 bg-white px-3 py-1 rounded-full shadow-sm border border-stone-200">
-              Out of Stock
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Card Content — fixed heights and flex-1 spacer for perfect alignment */}
-      <CardContent className="p-3 md:p-4 flex flex-col flex-1 gap-0">
-        <div className="flex flex-col mb-2">
-          {/* Category - fixed height */}
-          <div className="h-4 mb-1">
+        {/* Hero Box Content Order: Category -> Title */}
+        <div className="px-3 md:px-4 pt-2 pb-3 flex flex-col gap-1.5 shrink-0 bg-stone-50">
+          {/* Category Label (Fixed Height) */}
+          <div className="h-4 w-full flex items-center shrink-0">
             {product.category && (
-              <p className="text-xs text-slate-500 font-medium truncate">
+              <p className="text-[11px] md:text-xs text-slate-500 font-medium truncate w-full">
                 {product.category.name}
               </p>
             )}
           </div>
 
-          {/* Product Name - fixed height for 2 lines */}
-          <div className="h-10 md:h-12 overflow-hidden">
-            <h3 className="font-bold text-sm md:text-base text-slate-800 line-clamp-2 leading-snug group-hover:text-emerald-700 transition-colors duration-200">
+          {/* Product Title (Fixed Single Line) */}
+          <div className="h-5 md:h-6 w-full relative flex items-center shrink-0 overflow-hidden group/title">
+            <h3 
+              ref={titleRef}
+              className={`font-bold text-sm md:text-base text-slate-800 whitespace-nowrap overflow-hidden transition-colors duration-200 group-hover:text-emerald-700 w-full ${
+                isOverflowing 
+                  ? 'overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] touch-pan-x'
+                  : 'text-ellipsis'
+              }`}
+            >
               {product.name}
             </h3>
           </div>
         </div>
+      </div>
+
+      {/* ── CARD CONTENT (Spacer + Price + Buttons) ── */}
+      <CardContent className="p-3 md:p-4 flex flex-col flex-1 bg-white">
+        {/* Flexible Spacer */}
+        <div className="flex-1" />
 
         {/* Rating — only if exists */}
         {product.averageRating != null && product.averageRating > 0 && (
@@ -264,38 +274,45 @@ export default function ProductCard({ product }: ProductCardProps) {
           </div>
         )}
 
-        <div className="mt-auto pt-2 flex flex-col gap-2.5">
-          {/* Price row */}
-          <div className="flex items-baseline gap-1.5 flex-wrap">
-            <span className="text-base md:text-lg font-extrabold text-amber-600">
-              {formatPrice(effectivePrice)}
-            </span>
-            {hasDiscount && (
-              <span className="text-xs md:text-sm text-slate-400 line-through">
-                {formatPrice(price)}
-              </span>
-            )}
-            <span className="text-xs font-medium text-slate-500 ml-1">/{product.unit}</span>
-          </div>
+        {/* Price Row (Fixed Height, Single Line) */}
+        <div className="h-6 flex items-center gap-1.5 whitespace-nowrap overflow-hidden shrink-0 mt-auto">
+          <span className="text-base md:text-lg font-extrabold text-amber-600">
+            {formatPrice(effectivePrice)}
+          </span>
+          <span className={`text-xs md:text-sm text-slate-400 line-through ${!hasDiscount ? 'invisible' : ''}`}>
+            {formatPrice(price)}
+          </span>
+          <span className={`text-xs font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md ml-auto shrink-0 ${!hasDiscount ? 'invisible' : ''}`}>
+            Save {formatPrice(Math.max(0, pVal - (dpVal || 0)))}
+          </span>
+        </div>
 
-          {/* Add to Cart Button */}
+        {/* Button Area */}
+        <div className="mt-3 flex items-center gap-2 shrink-0">
           <Button
-            className={`w-full h-10 text-sm font-bold rounded-xl gap-2 transition-all shadow-sm ${
-              outOfStock
-                ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
-                : addedToCart
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                : 'bg-amber-500 hover:bg-amber-600 text-white hover:shadow-md'
+            className={`flex-1 h-9 md:h-10 text-sm font-bold rounded-xl transition-all shadow-sm ${
+              outOfStock ? 'bg-stone-100 text-stone-400 cursor-not-allowed' : addedToCart ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-amber-500 hover:bg-amber-600 text-white'
             }`}
             disabled={outOfStock || loading}
             onClick={handleAddToCart}
           >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <ShoppingCart className="h-4 w-4" />
-            )}
-            {loading ? 'Adding…' : addedToCart ? 'Added to Cart' : outOfStock ? 'Out of Stock' : 'Add to Cart'}
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4 mr-1.5 md:mr-2" />}
+            <span className="md:hidden">{loading ? '...' : addedToCart ? '✓' : outOfStock ? 'Out' : 'Add'}</span>
+            <span className="hidden md:inline">{loading ? 'Adding…' : addedToCart ? 'Added' : outOfStock ? 'Out of Stock' : 'Add to Cart'}</span>
+          </Button>
+
+          {/* Buy Now - Desktop Only */}
+          <Button
+            className="hidden md:flex flex-1 h-10 text-sm font-bold rounded-xl transition-all shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white"
+            disabled={outOfStock || loading}
+            onClick={(e) => {
+              e.stopPropagation()
+              if (!outOfStock && !loading) {
+                handleAddToCart(e).then(() => navigate('checkout'))
+              }
+            }}
+          >
+            Buy Now
           </Button>
         </div>
       </CardContent>
