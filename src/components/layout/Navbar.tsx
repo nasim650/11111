@@ -179,8 +179,6 @@ export default function Navbar() {
     subtotal,
     removeFromCart,
     wishlistItems,
-    language,
-    setLanguage,
     isMobileMenuOpen,
     setMobileMenuOpen,
     toggleCart,
@@ -650,7 +648,7 @@ export default function Navbar() {
               <div className="absolute inset-0 opacity-[0.07]" style={{
                 backgroundImage: 'repeating-linear-gradient(120deg, transparent, transparent 40px, rgba(255,255,255,0.3) 40px, rgba(255,255,255,0.3) 42px)',
               }} />
-              <div className="container mx-auto flex items-center justify-between px-4 py-1.5 text-xs relative">
+              <div className="w-full max-w-[1600px] mx-auto flex items-center justify-between px-4 py-1.5 text-xs relative">
                 {/* Single clean static announcement */}
                 <div className="flex-1 flex items-center gap-2">
                   <span className="inline-flex items-center gap-1.5 text-xs font-medium tracking-wide">
@@ -682,15 +680,7 @@ export default function Navbar() {
                       <span className="text-[11px] font-medium">{siteConfig.email}</span>
                     </a>
                   )}
-                  <div className="w-px h-3.5 bg-white/30" />
-                  <button
-                    onClick={() => setLanguage(language === 'en' ? 'bn' : 'en')}
-                    className="flex items-center gap-1.5 hover:opacity-80 transition-opacity font-medium"
-                    aria-label="Toggle language"
-                  >
-                    <Globe className="size-3.5" />
-                    {language === 'en' ? 'বাংলা' : 'English'}
-                  </button>
+                  
                   <button
                     onClick={() => setTopBarVisible(false)}
                     className="hover:opacity-80 transition-opacity ml-1 p-0.5 rounded hover:bg-white/10"
@@ -718,7 +708,7 @@ export default function Navbar() {
           paddingTop: compactMode ? 0 : 0,
         }}
       >
-        <div className={`container mx-auto flex items-center justify-between px-4 gap-3 transition-all duration-300 ${
+        <div className={`w-full max-w-[1600px] mx-auto flex items-center justify-between px-4 gap-3 transition-all duration-300 ${
           compactMode ? 'py-1.5' : 'py-3'
         }`}>
           {/* ── Logo ── */}
@@ -1467,7 +1457,7 @@ export default function Navbar() {
           compactMode ? 'py-0' : 'py-0'
         }`}
       >
-        <div className="container mx-auto flex items-center px-4 gap-1">
+        <div className="w-full max-w-[1600px] mx-auto flex items-center px-4 gap-1">
           {/* All Categories Button */}
           <DropdownMenu open={categoriesOpen} onOpenChange={setCategoriesOpen}>
             <DropdownMenuTrigger asChild>
@@ -1585,7 +1575,7 @@ export default function Navbar() {
             onMouseEnter={handleMegaMenuEnter}
             onMouseLeave={handleMegaMenuLeave}
           >
-            <div className="container mx-auto py-6">
+            <div className="w-full max-w-[1600px] mx-auto py-6">
               <div className="grid grid-cols-4 gap-8">
                 {/* Category info */}
                 <div className="col-span-1">

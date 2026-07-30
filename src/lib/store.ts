@@ -181,12 +181,10 @@ export interface AppStore {
   isInWishlist: (productId: string) => boolean
 
   // ── UI ──
-  language: 'en' | 'bn'
   searchQuery: string
   selectedCategory: string
   isMobileMenuOpen: boolean
   isCartOpen: boolean
-  setLanguage: (language: 'en' | 'bn') => void
   setSearchQuery: (query: string) => void
   setSelectedCategory: (category: string) => void
   setMobileMenuOpen: (open: boolean) => void
@@ -784,13 +782,10 @@ export const useAppStore = create<AppStore>()(
       },
 
       // ── UI ────────────────────────────────────────────────────────────────
-      language: 'en' as const,
       searchQuery: '',
       selectedCategory: '',
       isMobileMenuOpen: false,
       isCartOpen: false,
-
-      setLanguage: (language) => set({ language }),
       setSearchQuery: (query) => set({ searchQuery: query }),
       setSelectedCategory: (category) => set({ selectedCategory: category }),
       setMobileMenuOpen: (open) => set({ isMobileMenuOpen: open }),
@@ -1076,7 +1071,6 @@ export const useAppStore = create<AppStore>()(
         currentPage: state.currentPage,
         pageParams: state.pageParams,
         selectedCategory: state.selectedCategory,
-        language: state.language,
         compareProducts: state.compareProducts,
         recentlyViewed: state.recentlyViewed,
         siteConfig: state.siteConfig,

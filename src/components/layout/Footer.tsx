@@ -52,7 +52,7 @@ interface CategoryItem {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Footer() {
-  const { siteConfig, navigate, language } = useAppStore()
+  const { siteConfig, navigate } = useAppStore()
 
   const [footerMenuItems, setFooterMenuItems] = useState<FooterMenuItem[]>([])
   const [categories, setCategories] = useState<CategoryItem[]>([])
@@ -175,7 +175,7 @@ export default function Footer() {
             <rect width="100%" height="100%" fill="url(#trust-pattern)" />
           </svg>
         </div>
-        <div className="container mx-auto px-4 py-6 relative z-10">
+        <div className="w-full max-w-[1600px] mx-auto px-4 py-6 relative z-10">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {trustBadges.map((badge, idx) => (
               <motion.div
@@ -213,7 +213,7 @@ export default function Footer() {
           </svg>
         </div>
 
-        <div className="container mx-auto px-4 py-16 relative z-10">
+        <div className="w-full max-w-[1600px] mx-auto px-4 py-16 relative z-10">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-12">
             {/* ── Column 1: About ── */}
             <div className="space-y-6">
@@ -243,7 +243,7 @@ export default function Footer() {
                 &ldquo;{tagline}&rdquo;
               </p>
               <p className="text-white/40 text-xs">
-                {language === 'bn' ? 'খাঁটি খাদ্য, খাঁটি স্বাদ' : 'খাঁটি খাদ্য, খাঁটি স্বাদ'}
+                খাঁটি খাদ্য, খাঁটি স্বাদ
               </p>
 
               {/* Social Links with Circle Backgrounds */}
@@ -271,7 +271,7 @@ export default function Footer() {
               <div>
                 <h4 className="font-semibold text-base text-white flex items-center gap-2.5 mb-1">
                   <div className="h-[3px] w-7 bg-amber-400 rounded-full" />
-                  {language === 'bn' ? 'দ্রুত লিঙ্ক' : 'Quick Links'}
+                  Quick Links
                 </h4>
                 <div className="h-px bg-gradient-to-r from-amber-400/30 via-amber-400/10 to-transparent" />
               </div>
@@ -313,7 +313,7 @@ export default function Footer() {
               <div>
                 <h4 className="font-semibold text-base text-white flex items-center gap-2.5 mb-1">
                   <div className="h-[3px] w-7 bg-amber-400 rounded-full" />
-                  {language === 'bn' ? 'ক্যাটাগরি' : 'Categories'}
+                  Categories
                 </h4>
                 <div className="h-px bg-gradient-to-r from-amber-400/30 via-amber-400/10 to-transparent" />
               </div>
@@ -359,7 +359,7 @@ export default function Footer() {
               <div>
                 <h4 className="font-semibold text-base text-white flex items-center gap-2.5 mb-1">
                   <div className="h-[3px] w-7 bg-amber-400 rounded-full" />
-                  {language === 'bn' ? 'যোগাযোগ' : 'Contact Us'}
+                  Contact Us
                 </h4>
                 <div className="h-px bg-gradient-to-r from-amber-400/30 via-amber-400/10 to-transparent" />
               </div>
@@ -403,7 +403,7 @@ export default function Footer() {
                     <Clock className="size-4 text-amber-400" />
                   </div>
                   <div>
-                    <p className="text-white/80 text-sm font-medium">{language === 'bn' ? 'ব্যবসায়িক সময়' : 'Business Hours'}</p>
+                    <p className="text-white/80 text-sm font-medium">Business Hours</p>
                     <p className="text-white/50 text-xs mt-0.5">Sat–Thu: 9AM – 9PM</p>
                     <p className="text-white/50 text-xs">Friday: Closed</p>
                   </div>
@@ -415,7 +415,7 @@ export default function Footer() {
                 <div className="absolute inset-0 flex items-center justify-center flex-col gap-1.5">
                   <MapPin className="size-6 text-amber-400/60 group-hover:text-amber-400 transition-colors" />
                   <span className="text-white/40 text-[11px] group-hover:text-white/60 transition-colors">
-                    {language === 'bn' ? 'মানচিত্রে দেখুন' : 'View on Map'}
+                    View on Map
                   </span>
                 </div>
                 {/* Decorative grid lines for map look */}
@@ -435,19 +435,19 @@ export default function Footer() {
 
       {/* ── Separator ── */}
       <div className="bg-emerald-950">
-        <div className="container mx-auto px-4">
+        <div className="w-full max-w-[1600px] mx-auto px-4">
           <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
         </div>
       </div>
 
       {/* ── Payment Methods & App Download Row ── */}
       <div className="bg-emerald-950">
-        <div className="container mx-auto px-4 py-8">
+        <div className="w-full max-w-[1600px] mx-auto px-4 py-8">
           <div className="flex flex-col lg:flex-row items-center justify-between gap-8">
             {/* Payment Methods */}
             <div className="flex flex-col items-center lg:items-start gap-3">
               <span className="text-white/40 text-xs font-medium uppercase tracking-wider">
-                {language === 'bn' ? 'পেমেন্ট পদ্ধতি' : 'Payment Methods'}
+                Payment Methods
               </span>
               <div className="flex flex-wrap items-center justify-center gap-2">
                 {paymentMethods.map((method) => (
@@ -466,7 +466,7 @@ export default function Footer() {
             <div className="hidden lg:flex items-center gap-6">
               <div className="flex flex-col items-center gap-2">
                 <span className="text-white/40 text-xs font-medium uppercase tracking-wider">
-                  {language === 'bn' ? 'অ্যাপ ডাউনলোড করুন' : 'Download Our App'}
+                  Download Our App
                 </span>
                 <div className="flex items-center gap-3">
                   {/* QR Code Placeholder */}
@@ -510,18 +510,18 @@ export default function Footer() {
 
       {/* ── Separator ── */}
       <div className="bg-emerald-950">
-        <div className="container mx-auto px-4">
+        <div className="w-full max-w-[1600px] mx-auto px-4">
           <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
         </div>
       </div>
 
       {/* ── Copyright Bar ── */}
       <div className="bg-emerald-950/80">
-        <div className="container mx-auto px-4 py-5">
+        <div className="w-full max-w-[1600px] mx-auto px-4 py-5">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
             {/* Copyright */}
             <p className="text-white/40 text-xs">
-              &copy; {currentYear} {siteName}. {language === 'bn' ? 'সর্বস্বত্ব সংরক্ষিত।' : 'All rights reserved.'}
+              &copy; {currentYear} {siteName}. All rights reserved.
             </p>
 
             {/* Policy Links */}
@@ -541,9 +541,9 @@ export default function Footer() {
 
             {/* Made in Bangladesh */}
             <p className="flex items-center gap-1.5 text-xs text-white/40">
-              {language === 'bn' ? 'বাংলাদেশে তৈরি' : 'Made with'}{' '}
+              Made with{' '}
               <Heart className="size-3 text-red-400 fill-red-400 inline animate-pulse" />{' '}
-              {language === 'bn' ? '' : 'in Bangladesh'}
+              in Bangladesh
             </p>
           </div>
         </div>
