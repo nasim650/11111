@@ -152,8 +152,8 @@ export default function ProductCard({ product }: ProductCardProps) {
       className="group cursor-pointer overflow-hidden border border-stone-200/60 rounded-xl bg-white transition-all duration-300 hover:shadow-lg hover:border-stone-300/80 flex flex-col h-full"
       onClick={() => navigate('product-detail', { id: product.id })}
     >
-      {/* Image Area — aspect-square, images fill cleanly */}
-      <div className="relative aspect-square w-full overflow-hidden bg-stone-50 rounded-t-xl shrink-0">
+      {/* Image Area — fixed responsive heights, contain to prevent stretching */}
+      <div className="relative h-[140px] md:h-[180px] lg:h-[220px] w-full overflow-hidden bg-stone-50 rounded-t-xl shrink-0 flex items-center justify-center">
         {/* Shimmer */}
         {imageUrl && !imgLoaded && (
           <div className="absolute inset-0 bg-stone-100 animate-pulse" />
@@ -164,7 +164,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             src={imageUrl}
             alt={product.name}
             fill
-            className={`object-cover transition-transform duration-300 group-hover:scale-105 ${
+            className={`object-contain object-center p-2 transition-transform duration-300 group-hover:scale-105 ${
               imgLoaded ? 'opacity-100' : 'opacity-0'
             }`}
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
@@ -172,7 +172,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             onLoad={() => setImgLoaded(true)}
           />
         ) : (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex items-center justify-center h-full w-full">
             <Package className="h-10 w-10 text-stone-300" />
           </div>
         )}
@@ -223,20 +223,25 @@ export default function ProductCard({ product }: ProductCardProps) {
         )}
       </div>
 
-      {/* Card Content — clean, readable typography */}
-      <CardContent className="p-3 md:p-4 flex flex-col gap-1.5 flex-1 justify-between">
-        <div className="flex flex-col gap-1">
-          {/* Category */}
-          {product.category && (
-            <p className="text-xs text-slate-500 font-medium truncate">
-              {product.category.name}
-            </p>
-          )}
+      {/* Card Content — fixed heights and flex-1 spacer for perfect alignment */}
+      <CardContent className="p-3 md:p-4 flex flex-col flex-1 gap-0">
+        <div className="flex flex-col mb-2">
+          {/* Category - fixed height */}
+          <div className="h-4 mb-1">
+            {product.category && (
+              <p className="text-xs text-slate-500 font-medium truncate">
+                {product.category.name}
+              </p>
+            )}
+          </div>
 
-          {/* Product Name */}
-          <h3 className="font-bold text-sm md:text-base text-slate-800 line-clamp-2 leading-snug group-hover:text-emerald-700 transition-colors duration-200">
-            {product.name}
-          </h3>
+          {/* Product Name - fixed height for 2 lines */}
+          <div className="h-10 md:h-12 overflow-hidden">
+            <h3 className="font-bold text-sm md:text-base text-slate-800 line-clamp-2 leading-snug group-hover:text-emerald-700 transition-colors duration-200">
+              {product.name}
+            </h3>
+          </div>
+        </div>
 
         {/* Rating — only if exists */}
         {product.averageRating != null && product.averageRating > 0 && (
@@ -258,8 +263,6 @@ export default function ProductCard({ product }: ProductCardProps) {
             </span>
           </div>
         )}
-
-        </div>
 
         <div className="mt-auto pt-2 flex flex-col gap-2.5">
           {/* Price row */}

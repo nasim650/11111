@@ -499,7 +499,7 @@ function CategorySection({ categories, navigate }: {
 
   return (
     <section className="py-4 md:py-6 bg-[#FAF8F5] dark:bg-stone-950/30">
-      <div className="container mx-auto px-4">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
         {/* Compact Header: Left "Categories", Right "View All →" */}
         <div className="flex items-center justify-between mb-3 md:mb-4">
           <h2 className="text-lg md:text-xl font-bold tracking-tight text-foreground">
@@ -631,7 +631,7 @@ function DealOfTheDaySection({ product, navigate }: {
 
   return (
     <section className="py-8 md:py-10 bg-white">
-      <div className="container mx-auto px-4">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
         <AnimatedSection>
           <div className="relative rounded-3xl overflow-hidden border-2 border-amber-200 bg-gradient-to-br from-amber-50 via-orange-50 to-amber-50 shadow-sm">
             {/* Decorative dotted pattern background */}
@@ -825,7 +825,7 @@ function FlashSaleSection({ products, navigate, siteConfig }: {
 
   return (
     <section className="py-4 bg-emerald-900 text-white relative overflow-hidden">
-      <div className="container mx-auto px-4">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
         {/* Compact single-row header */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -876,7 +876,7 @@ function BestSellersSection({ products, navigate }: {
 
   return (
     <AnimatedSection className="py-6 md:py-8 bg-stone-50">
-      <div className="container mx-auto px-4">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
         <SectionHeader title="Top Selling" onViewAll={() => navigate('products')} />
 
         {/* 2-Column Grid of Horizontal Featured Cards (Reference Image 1) */}
@@ -1010,9 +1010,9 @@ function NewArrivalsSection({ products, navigate }: {
 
   return (
     <AnimatedSection className="py-6 md:py-8 bg-white">
-      <div className="container mx-auto px-4">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
         <SectionHeader title="New Arrivals" onViewAll={() => navigate('products')} />
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6">
           {products.map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}
@@ -1034,9 +1034,9 @@ function RecentlyViewedSection({ products, navigate }: {
 
   return (
     <AnimatedSection className="py-6 md:py-8 bg-stone-50">
-      <div className="container mx-auto px-4">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
         <SectionHeader title="Recently Viewed" onViewAll={() => navigate('products')} />
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6">
           {products.map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}
@@ -1089,7 +1089,7 @@ function TrustSection() {
   return (
     <section className="py-8 bg-white relative">
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-200 to-transparent" />
-      <div className="container mx-auto px-4">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
         <AnimatedSection>
           <div className="text-center mb-10">
             <div className="inline-flex items-center gap-2 text-emerald-600 mb-2">
@@ -1102,7 +1102,7 @@ function TrustSection() {
           </div>
         </AnimatedSection>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
           {guarantees.map((item, idx) => {
             const Icon = item.icon
             const colors = colorMap[item.color]
@@ -1152,7 +1152,7 @@ function MobileAppCTA({ navigate }: {
         />
       </div>
 
-      <div className="container mx-auto px-4 relative z-10">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12">
           <div className="flex-1 text-center md:text-left">
             <div className="inline-flex items-center gap-2 text-amber-400 mb-3">
@@ -1264,7 +1264,7 @@ function SeasonalCollectionSection({ navigate }: { navigate: (page: PageName, pa
 
   return (
     <AnimatedSection className="py-8 bg-white border-t border-stone-100">
-      <div className="container mx-auto px-4">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-2xl mx-auto mb-10">
           <Badge className="bg-amber-100 text-amber-800 border-amber-200 mb-2 font-semibold">
             বাংলাদেশি বিশেষ কালেকশন
@@ -1334,7 +1334,7 @@ function CustomerReviewsSection() {
 
   return (
     <AnimatedSection className="py-8 bg-stone-50">
-      <div className="container mx-auto px-4">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-xl mx-auto mb-10">
           <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 mb-2 font-semibold">
             গ্রাহকদের সন্তুষ্টি
@@ -1401,7 +1401,7 @@ function FAQSection() {
 
   return (
     <AnimatedSection className="py-8 bg-white border-t border-stone-100">
-      <div className="container mx-auto px-4 max-w-3xl">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 max-w-3xl">
         <div className="text-center mb-10">
           <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 mb-2 font-semibold">
             সাধারণ প্রশ্ন উত্তর
@@ -1468,7 +1468,7 @@ function NewsletterSection() {
 
   return (
     <section className="py-8 bg-emerald-900 text-white relative overflow-hidden">
-      <div className="container mx-auto px-4 max-w-4xl text-center relative z-10">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 max-w-4xl text-center relative z-10">
         <Sparkles className="h-8 w-8 text-amber-400 mx-auto mb-3" />
         <h2 className="text-2xl md:text-3xl font-extrabold mb-2">
           বিশেষ অফার ও ডিসকাউন্ট পেতে সাবস্ক্রাইব করুন
@@ -1514,7 +1514,7 @@ function HomeLoadingSkeleton() {
       </div>
       {/* Category skeleton */}
       <div className="py-14">
-        <div className="container mx-auto px-4">
+        <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex gap-5 overflow-hidden">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="flex flex-col items-center gap-2 shrink-0">
@@ -1529,7 +1529,7 @@ function HomeLoadingSkeleton() {
       <Skeleton className="h-72 w-full rounded-none" />
       {/* Products skeleton */}
       <div className="py-14">
-        <div className="container mx-auto px-4">
+        <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-72 rounded-xl" />
@@ -1653,9 +1653,9 @@ export default function HomePage() {
       {/* ── 6. Featured Products ── */}
       {featuredProducts.length > 0 && (
         <AnimatedSection className="py-6 md:py-8 bg-white">
-          <div className="container mx-auto px-4">
+          <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
             <SectionHeader title="Featured Products" onViewAll={() => navigate('products')} />
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6">
               {featuredProducts.map((p: Product) => (
                 <ProductCard key={p.id} product={p} />
               ))}
