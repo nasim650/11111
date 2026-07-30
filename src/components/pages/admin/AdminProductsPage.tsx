@@ -55,6 +55,8 @@ import {
   MoreHorizontal,
   Package,
   Sparkles,
+  Flame,
+  Star
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -82,6 +84,7 @@ interface Product {
   deliveryNote?: string
   status: string
   isFeatured: boolean
+  isFlashSale?: boolean
   isBestSeller: boolean
   isNewArrival: boolean
   tags?: string[] | string
@@ -119,6 +122,7 @@ const emptyProduct: Partial<Product> = {
   deliveryNote: '',
   status: 'active',
   isFeatured: false,
+  isFlashSale: false,
   isBestSeller: false,
   isNewArrival: false,
   tags: [],
@@ -544,11 +548,18 @@ export default function AdminProductsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {product.isFlashSale && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200">
+                              <Flame className="w-3 h-3" />
+                              Flash
+                            </span>
+                          )}
                           {product.isFeatured && (
-                            <Badge variant="secondary" className="text-xs bg-blue-50 text-blue-700">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
+                              <Star className="w-3 h-3" />
                               Featured
-                            </Badge>
+                            </span>
                           )}
                           {product.isBestSeller && (
                             <Badge variant="secondary" className="text-xs bg-orange-50 text-orange-700">
@@ -806,7 +817,7 @@ export default function AdminProductsPage() {
                   }
                 />
               </div>
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-4">
                 <div className="flex items-center gap-2">
                   <Switch
                     checked={editingProduct?.isFeatured ?? false}
@@ -818,6 +829,18 @@ export default function AdminProductsPage() {
                     }
                   />
                   <Label>Featured</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={editingProduct?.isFlashSale ?? false}
+                    onCheckedChange={(checked) =>
+                      setEditingProduct((prev) => ({
+                        ...prev,
+                        isFlashSale: checked,
+                      }) as Partial<Product>)
+                    }
+                  />
+                  <Label>Flash Sale</Label>
                 </div>
                 <div className="flex items-center gap-2">
                   <Switch

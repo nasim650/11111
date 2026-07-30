@@ -72,6 +72,7 @@ interface Product {
   isNewArrival?: boolean
   isBestSeller?: boolean
   isFeatured?: boolean
+  isFlashSale?: boolean
   shortDescription?: string
 }
 
@@ -847,7 +848,7 @@ function FlashSaleSection({ products, navigate, siteConfig }: {
         {/* Horizontal scroll product cards */}
         <div
           ref={scrollRef}
-          className="flex gap-3 overflow-x-auto pb-3 snap-x snap-mandatory"
+          className="flex gap-3 overflow-x-auto pb-3 snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           {products.slice(0, 8).map((product) => (
@@ -1548,6 +1549,7 @@ export default function HomePage() {
   const [heroBanners, setHeroBanners] = useState<Banner[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [discountProducts, setDiscountProducts] = useState<Product[]>([])
+  const [flashSaleProducts, setFlashSaleProducts] = useState<Product[]>([])
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([])
   const [bestSellers, setBestSellers] = useState<Product[]>([])
   const [newArrivals, setNewArrivals] = useState<Product[]>([])
@@ -1577,6 +1579,7 @@ export default function HomePage() {
 
           setFeaturedProducts(allProds.filter((p) => p.isFeatured || p.status === 'active').slice(0, 8))
           setDiscountProducts(allProds.filter((p) => p.discountPrice != null && p.discountPrice < p.price))
+          setFlashSaleProducts(allProds.filter((p) => p.isFlashSale))
           setBestSellers(allProds.filter((p) => p.isBestSeller).slice(0, 8))
           setNewArrivals(allProds.filter((p) => p.isNewArrival).slice(0, 8))
         }
@@ -1648,7 +1651,7 @@ export default function HomePage() {
       <CategorySection categories={categories} navigate={navigate} />
 
       {/* ── 5. Flash Sale (Elegantly Redesigned Dark Forest Theme) ── */}
-      <FlashSaleSection products={discountProducts} navigate={navigate} siteConfig={siteConfig} />
+      <FlashSaleSection products={flashSaleProducts.length > 0 ? flashSaleProducts : discountProducts} navigate={navigate} siteConfig={siteConfig} />
 
       {/* ── 6. Featured Products ── */}
       {featuredProducts.length > 0 && (

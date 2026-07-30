@@ -25,6 +25,7 @@ interface Product {
   isNewArrival?: boolean
   isBestSeller?: boolean
   isFeatured?: boolean
+  isFlashSale?: boolean
   shortDescription?: string
   averageRating?: number
   reviewCount?: number
@@ -163,7 +164,7 @@ export default function ProductCard({ product }: ProductCardProps) {
       {/* ── HERO BOX (Fixed Template) ── */}
       <div className="flex flex-col bg-stone-50 rounded-t-xl shrink-0 overflow-hidden relative">
         {/* Fixed Image Container (No top padding, natural alignment) */}
-        <div className="relative h-[150px] md:h-[180px] lg:h-[220px] w-full flex items-center justify-center shrink-0">
+        <div className="relative aspect-square w-full flex items-center justify-center shrink-0">
           {imageUrl && !imgLoaded && (
             <div className="absolute inset-0 bg-stone-100 animate-pulse" />
           )}
@@ -173,7 +174,7 @@ export default function ProductCard({ product }: ProductCardProps) {
               src={imageUrl}
               alt={product.name}
               fill
-              className={`object-contain object-center transition-transform duration-300 group-hover:scale-105 ${
+              className={`object-cover object-center transition-transform duration-300 group-hover:scale-105 ${
                 imgLoaded ? 'opacity-100' : 'opacity-0'
               }`}
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"

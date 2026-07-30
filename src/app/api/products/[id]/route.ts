@@ -151,6 +151,7 @@ export async function PUT(
     if (body.isFeatured !== undefined) data.isFeatured = body.isFeatured
     if (body.isBestSeller !== undefined) data.isBestSeller = body.isBestSeller
     if (body.isNewArrival !== undefined) data.isNewArrival = body.isNewArrival
+    if (body.isFlashSale !== undefined) data.isFlashSale = body.isFlashSale
 
     const existingImages = body.images !== undefined
       ? await db.productImage.findMany({ where: { productId: id }, select: { url: true } })

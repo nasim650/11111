@@ -113,6 +113,7 @@ model Product {
   isFeatured          Boolean   @default(false)
   isBestSeller        Boolean   @default(false)
   isNewArrival        Boolean   @default(false)
+  isFlashSale         Boolean   @default(false)
   tags                String?   // comma-separated tags
   specifications      String?   // JSON string for key-value specs
   createdAt           DateTime  @default(now())
