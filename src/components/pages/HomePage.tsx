@@ -305,7 +305,7 @@ function HeroBannerCarousel({ banners, navigate }: {
 
   return (
     <div
-      className="relative h-64 sm:h-80 md:h-[440px] lg:h-[520px] overflow-hidden bg-muted"
+      className="relative h-52 sm:h-72 md:h-[400px] lg:h-[480px] overflow-hidden bg-muted"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
@@ -340,14 +340,14 @@ function HeroBannerCarousel({ banners, navigate }: {
               {/* Subtle emerald tint */}
               <div className="absolute inset-0 bg-emerald-900/10" />
               {/* Content */}
-              <div className="absolute inset-0 flex items-center">
-                <div className="p-6 md:p-12 lg:p-16 max-w-2xl">
+              <div className="absolute inset-0 flex items-end pb-8">
+                <div className="px-4 md:px-12 lg:px-16 max-w-full sm:max-w-2xl pr-12 sm:pr-0">
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2, duration: 0.5 }}
                   >
-                    <h1 className="text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-extrabold text-white mb-3 leading-tight drop-shadow-lg">
+                    <h1 className="text-lg sm:text-3xl md:text-5xl font-extrabold text-white mb-2 leading-tight drop-shadow-lg line-clamp-2">
                       {banners[currentBanner].title}
                     </h1>
                   </motion.div>
@@ -356,7 +356,7 @@ function HeroBannerCarousel({ banners, navigate }: {
                       initial={{ opacity: 0, y: 15 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.35, duration: 0.5 }}
-                      className="text-sm sm:text-lg md:text-xl text-white/90 mb-6 drop-shadow max-w-lg"
+                      className="text-xs sm:text-base md:text-xl text-white/90 mb-4 drop-shadow max-w-lg line-clamp-2"
                     >
                       {banners[currentBanner].subtitle}
                     </motion.p>
@@ -368,8 +368,8 @@ function HeroBannerCarousel({ banners, navigate }: {
                       transition={{ delay: 0.5, duration: 0.5 }}
                     >
                       <Button
-                        size="lg"
-                        className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold px-8 h-12 text-base shadow-lg hover:shadow-xl transition-all hover:scale-105 rounded-full"
+                        size="sm"
+                        className="bg-amber-500 hover:bg-amber-600 text-white font-semibold px-5 h-10 sm:h-12 text-sm shadow-lg rounded-full"
                         onClick={() => {
                           const banner = banners[currentBanner]
                           if (banner.ctaLink) {
@@ -384,7 +384,7 @@ function HeroBannerCarousel({ banners, navigate }: {
                         }}
                       >
                         {banners[currentBanner].ctaText}
-                        <ArrowRight className="h-5 w-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                        <ArrowRight className="h-4 w-4 ml-1" />
                       </Button>
                     </motion.div>
                   )}
@@ -531,11 +531,15 @@ function CategorySection({ categories, navigate }: {
                     src={cat.image}
                     alt={cat.name}
                     fill
-                    className="object-contain p-1 transition-transform duration-300 group-hover:scale-105"
-                    sizes="120px"
+                    className="object-cover transition-transform duration-300 group-hover:scale-105"
+                    sizes="80px"
+                    onError={(e) => {
+                      const t = e.currentTarget as HTMLImageElement
+                      t.style.display = 'none'
+                    }}
                   />
                 ) : (
-                  <div className="flex items-center justify-center h-full text-2xl">
+                  <div className="flex items-center justify-center h-full w-full bg-emerald-100 text-2xl rounded-xl">
                     🍽️
                   </div>
                 )}

@@ -152,8 +152,8 @@ export default function ProductCard({ product }: ProductCardProps) {
       className="group cursor-pointer overflow-hidden border border-stone-200 rounded-2xl bg-white transition-all duration-200 hover:shadow-md hover:border-stone-300 flex flex-col h-full"
       onClick={() => navigate('product-detail', { id: product.id })}
     >
-      {/* Image Area */}
-      <div className="relative aspect-square w-full overflow-hidden bg-stone-50 rounded-t-2xl shrink-0">
+      {/* Image Area — fixed height, images fill cleanly */}
+      <div className="relative h-36 w-full overflow-hidden bg-stone-100 rounded-t-2xl shrink-0">
         {/* Shimmer */}
         {imageUrl && !imgLoaded && (
           <div className="absolute inset-0 bg-stone-100 animate-pulse" />
@@ -164,7 +164,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             src={imageUrl}
             alt={product.name}
             fill
-            className={`object-contain p-3 transition-transform duration-300 group-hover:scale-105 ${
+            className={`object-cover transition-transform duration-300 group-hover:scale-105 ${
               imgLoaded ? 'opacity-100' : 'opacity-0'
             }`}
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
@@ -223,87 +223,80 @@ export default function ProductCard({ product }: ProductCardProps) {
         )}
       </div>
 
-      {/* Card Content */}
-      <CardContent className="p-3 flex-1 flex flex-col justify-between gap-2">
-        <div className="space-y-0.5">
-          {/* Category */}
-          {product.category && (
-            <p className="text-[11px] text-slate-400 truncate">
-              {product.category.name}
-            </p>
-          )}
+      {/* Card Content — single flat flow, no justify-between gap */}
+      <CardContent className="p-2.5 flex flex-col gap-1">
+        {/* Category */}
+        {product.category && (
+          <p className="text-[10px] text-slate-400 truncate leading-none">
+            {product.category.name}
+          </p>
+        )}
 
-          {/* Product Name */}
-          <h3 className="font-semibold text-sm text-slate-800 line-clamp-2 leading-snug group-hover:text-emerald-700 transition-colors duration-200">
-            {product.name}
-          </h3>
-        </div>
+        {/* Product Name */}
+        <h3 className="font-semibold text-xs text-slate-800 line-clamp-2 leading-snug group-hover:text-emerald-700 transition-colors duration-200">
+          {product.name}
+        </h3>
 
-        <div className="space-y-2">
-          {/* Rating — only if exists */}
-          {product.averageRating != null && product.averageRating > 0 && (
-            <div className="flex items-center gap-1">
-              <div className="flex">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Star
-                    key={i}
-                    className={`h-3 w-3 ${
-                      i < Math.round(product.averageRating!)
-                        ? 'fill-amber-400 text-amber-400'
-                        : 'text-stone-200'
-                    }`}
-                  />
-                ))}
-              </div>
-              <span className="text-[11px] text-slate-500 font-medium">
-                {product.averageRating.toFixed(1)}
-                {product.reviewCount && product.reviewCount > 0
-                  ? ` (${product.reviewCount})`
-                  : ''}
-              </span>
+        {/* Rating — only if exists */}
+        {product.averageRating != null && product.averageRating > 0 && (
+          <div className="flex items-center gap-1">
+            <div className="flex">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Star
+                  key={i}
+                  className={`h-2.5 w-2.5 ${
+                    i < Math.round(product.averageRating!)
+                      ? 'fill-amber-400 text-amber-400'
+                      : 'text-stone-200'
+                  }`}
+                />
+              ))}
             </div>
-          )}
-
-          {/* Price */}
-          <div>
-            <div className="flex items-baseline gap-1.5 flex-wrap">
-              <span className="text-base font-bold text-amber-600">
-                {formatPrice(effectivePrice)}
-              </span>
-              {hasDiscount && (
-                <span className="text-xs text-slate-400 line-through">
-                  {formatPrice(price)}
-                </span>
-              )}
-              <span className="text-[11px] text-slate-400">/{product.unit}</span>
-            </div>
-            {hasDiscount && dpVal != null && (
-              <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md">
-                Save {formatPrice(Math.max(0, pVal - dpVal))}
-              </span>
-            )}
+            <span className="text-[10px] text-slate-500">
+              {product.averageRating.toFixed(1)}
+            </span>
           </div>
+        )}
 
-          {/* Add to Cart Button */}
-          <Button
-            className={`w-full h-9 text-xs font-semibold rounded-xl gap-1.5 transition-all ${
-              outOfStock
-                ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
-                : addedToCart
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                : 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm'
-            }`}
-            disabled={outOfStock || loading}
-            onClick={handleAddToCart}
-          >
-            {loading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <ShoppingCart className="h-3.5 w-3.5" />
-            )}
-            {loading ? 'Adding…' : addedToCart ? '✓ Added' : outOfStock ? 'Out of Stock' : 'Add to Cart'}
-          </Button>
+        {/* Price row */}
+        <div className="flex items-baseline gap-1 flex-wrap">
+          <span className="text-sm font-bold text-amber-600">
+            {formatPrice(effectivePrice)}
+          </span>
+          {hasDiscount && (
+            <span className="text-[11px] text-slate-400 line-through">
+              {formatPrice(price)}
+            </span>
+          )}
+          <span className="text-[10px] text-slate-400">/{product.unit}</span>
         </div>
+
+        {/* Save badge */}
+        {hasDiscount && dpVal != null && (
+          <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md self-start">
+            Save {formatPrice(Math.max(0, pVal - dpVal))}
+          </span>
+        )}
+
+        {/* Add to Cart Button */}
+        <Button
+          className={`w-full h-8 text-[11px] font-semibold rounded-lg gap-1 mt-1 transition-all ${
+            outOfStock
+              ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
+              : addedToCart
+              ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+              : 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm'
+          }`}
+          disabled={outOfStock || loading}
+          onClick={handleAddToCart}
+        >
+          {loading ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <ShoppingCart className="h-3 w-3" />
+          )}
+          {loading ? 'Adding…' : addedToCart ? '✓ Added' : outOfStock ? 'Out of Stock' : 'Add to Cart'}
+        </Button>
       </CardContent>
     </Card>
   )
