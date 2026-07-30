@@ -37,7 +37,7 @@ import {
   ArrowLeft,
   ChevronDown,
   Mail,
-} from 'lucide-react'
+Flame,} from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,6 +57,7 @@ import AdminSettingsPage from './admin/AdminSettingsPage'
 import AdminMediaPage from './admin/AdminMediaPage'
 import AdminPaymentsPage from './admin/AdminPaymentsPage'
 import AdminContactMessagesPage from './admin/AdminContactMessagesPage'
+import AdminFlashSalePage from './admin/AdminFlashSalePage'
 
 interface NavItem {
   label: string
@@ -75,6 +76,7 @@ const mainNav: NavItem[] = [
   { label: 'Customers', page: 'admin-customers', icon: Users },
   { label: 'Reviews', page: 'admin-reviews', icon: Star },
   { label: 'Coupons', page: 'admin-coupons', icon: Ticket },
+  { label: 'Flash Sale', page: 'admin-flash-sale', icon: Flame },
   { label: 'Policy Pages', page: 'admin-policy-pages', icon: FileText },
   { label: 'Media Library', page: 'admin-media', icon: Camera },
   { label: 'Messages', page: 'admin-contact-messages', icon: Mail },
@@ -101,6 +103,8 @@ function renderPage(page: PageName) {
       return <AdminReviewsPage />
     case 'admin-coupons':
       return <AdminCouponsPage />
+    case 'admin-flash-sale':
+      return <AdminFlashSalePage />
     case 'admin-policy-pages':
       return <AdminPolicyPagesPage />
     case 'admin-settings':

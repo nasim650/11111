@@ -30,6 +30,7 @@ const PolicyPage = lazy(() => import('@/components/pages/PolicyPage'))
 
 // Lazy-loaded Admin Pages (heavy deps loaded on demand)
 const AdminDashboardPage = lazy(() => import('@/components/pages/AdminDashboardPage'))
+const AdminFlashSalePage = lazy(() => import('@/components/pages/admin/AdminFlashSalePage'))
 
 // Layout
 import Navbar from '@/components/layout/Navbar'
@@ -53,6 +54,7 @@ const PageLoader = () => (
 
 const adminPages = new Set<PageName>([
   'admin-dashboard',
+  'admin-flash-sale',
   'admin-products',
   'admin-orders',
   'admin-payments',
@@ -170,7 +172,7 @@ export default function Home() {
     return (
       <div className="min-h-screen">
         <Suspense fallback={<PageLoader />}>
-          <AdminDashboardPage />
+          {currentPage === 'admin-flash-sale' ? <AdminFlashSalePage /> : <AdminDashboardPage />}
         </Suspense>
         <QuickViewModal />
         <OrderTrackingModal />

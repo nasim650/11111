@@ -137,14 +137,14 @@ function SectionHeader({
 }
 
 // ── Compact Flash Sale Countdown ──
-function FlashSaleCountdown() {
+function FlashSaleCountdown({ endDate }: { endDate?: string }) {
   const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 })
 
   useEffect(() => {
     const updateCountdown = () => {
       const now = new Date()
-      const end = new Date()
-      end.setHours(23, 59, 59, 999)
+      const end = endDate ? new Date(endDate) : new Date()
+      if (!endDate) end.setHours(23, 59, 59, 999)
       const diff = Math.max(end.getTime() - now.getTime(), 0)
       setTimeLeft({
         hours: Math.floor(diff / (1000 * 60 * 60)),
@@ -812,17 +812,24 @@ function DealOfTheDaySection({ product, navigate }: {
 // ── Flash Sale Section ──
 function FlashSaleSection({ products, navigate, siteConfig }: {
   products: Product[]
-  navigate: (page: PageName, params?: Record<string, unknown>) => void
+  navigate: (page: import('@/lib/store').PageName, params?: Record<string, unknown>) => void
   siteConfig: import('@/lib/store').SiteConfig | null
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Round 3E: admin-controlled enable/disable + title/subtitle (with safe fallbacks)
-  if (siteConfig && siteConfig.flashSaleEnabled === false) return null
-  if (products.length === 0) return null
+  let flashConfig = { enabled: true, title: 'Flash Sale', subtitle: 'Today', endDate: '' }
+  if (siteConfig?.flash_sale) {
+    try {
+      flashConfig = { ...flashConfig, ...JSON.parse(siteConfig.flash_sale) }
+    } catch(e) {}
+  }
 
-  const flashSaleTitle = siteConfig?.flashSaleTitle || 'Flash Sale'
-  const flashSaleSubtitle = siteConfig?.flashSaleSubtitle || 'Today'
+  if (!flashConfig.enabled) return null
+  if (products.length === 0) return null
+  if (flashConfig.endDate && new Date(flashConfig.endDate) < new Date()) return null
+
+  const flashSaleTitle = flashConfig.title
+  const flashSaleSubtitle = flashConfig.subtitle
 
   return (
     <section className="py-4 bg-emerald-900 text-white relative overflow-hidden">
@@ -834,7 +841,7 @@ function FlashSaleSection({ products, navigate, siteConfig }: {
             <h2 className="text-sm font-bold text-white">{flashSaleTitle}</h2>
             <div className="flex items-center gap-1 bg-white/10 rounded-full px-2 py-0.5">
               <Clock className="h-3 w-3 text-amber-300" />
-              <FlashSaleCountdown />
+              <FlashSaleCountdown endDate={flashConfig.endDate} />
             </div>
           </div>
           <button
@@ -1544,6 +1551,7 @@ function HomeLoadingSkeleton() {
 
 // ── Main Component ──
 export default function HomePage() {
+  const [allFetchedProducts, setAllFetchedProducts] = useState<Product[]>([])
   const { navigate, setSearchQuery, siteConfig } = useAppStore()
   const recentlyViewed = useAppStore((s) => s.recentlyViewed || [])
   const [heroBanners, setHeroBanners] = useState<Banner[]>([])
@@ -1576,10 +1584,11 @@ export default function HomePage() {
         if (prodsRes.ok) {
           const pData = await prodsRes.json()
           const allProds = extractItems<Product>(pData)
+          setAllFetchedProducts(allProds)
 
           setFeaturedProducts(allProds.filter((p) => p.isFeatured || p.status === 'active').slice(0, 8))
           setDiscountProducts(allProds.filter((p) => p.discountPrice != null && p.discountPrice < p.price))
-          setFlashSaleProducts(allProds.filter((p) => p.isFlashSale))
+          // setFlashSaleProducts handled in separate effect
           setBestSellers(allProds.filter((p) => p.isBestSeller).slice(0, 8))
           setNewArrivals(allProds.filter((p) => p.isNewArrival).slice(0, 8))
         }
@@ -1618,6 +1627,26 @@ export default function HomePage() {
       cancelled = true
     }
   }, [recentlyViewed])
+
+  useEffect(() => {
+    if (allFetchedProducts.length === 0) return;
+    
+    let flashSaleProds: Product[] = [];
+    if (siteConfig?.flash_sale) {
+      try {
+        const flashConfig = JSON.parse(siteConfig.flash_sale);
+        if (flashConfig.enabled && flashConfig.productIds?.length > 0) {
+          flashSaleProds = flashConfig.productIds
+            .map((id: string) => allFetchedProducts.find(p => p.id === id))
+            .filter(Boolean) as Product[];
+        }
+      } catch (e) {}
+    } else {
+      // Fallback if no config exists
+      flashSaleProds = allFetchedProducts.filter((p) => p.isFlashSale);
+    }
+    setFlashSaleProducts(flashSaleProds);
+  }, [allFetchedProducts, siteConfig?.flash_sale]);
 
   const handleSearchSubmit = (query: string) => {
     setSearchQuery(query)

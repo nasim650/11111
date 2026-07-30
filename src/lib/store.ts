@@ -5,6 +5,7 @@ import { extractItems } from '@/lib/api'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type PageName =
+  | 'admin-flash-sale'
   | 'home'
   | 'products'
   | 'product-detail'
@@ -84,6 +85,7 @@ export interface User {
 }
 
 export interface SiteConfig {
+  flash_sale?: string;
   siteName: string
   tagline: string
   description: string
