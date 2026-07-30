@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserRoleFromRequest, isAdmin, slugify, getPaginationParams, paginatedResponse } from '@/lib/utils'
-import { cache } from '@/lib/cache'
+import { getCachedData, invalidateCache } from '@/lib/cache'
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,33 +13,34 @@ export async function GET(request: NextRequest) {
 
     // Build cache key from query params
     const cacheKey = `categories:${isActive || ''}:${showInMenu || ''}:${search || ''}:${page}:${limit}`
-    const cached = cache.get<unknown>(cacheKey)
-    if (cached) {
-      return NextResponse.json(cached)
-    }
+    
 
     const where: Record<string, unknown> = {}
     if (isActive !== null) where.isActive = isActive === 'true'
     if (showInMenu !== null) where.showInMenu = showInMenu === 'true'
     if (search) where.name = { contains: search }
 
-    const [categories, total] = await Promise.all([
-      db.category.findMany({
-        where,
-        include: { subcategories: { where: { isActive: true }, orderBy: { sortOrder: 'asc' } } },
-        orderBy: { sortOrder: 'asc' },
-        skip,
-        take: limit,
-      }),
-      db.category.count({ where }),
-    ])
+    const [categories, total] = await getCachedData(
+      { key: cacheKey, tags: ['categories'], revalidate: 600 },
+      async () => {
+        return Promise.all([
+          db.category.findMany({
+            where,
+            include: { subcategories: { where: { isActive: true }, orderBy: { sortOrder: 'asc' } } },
+            orderBy: { sortOrder: 'asc' },
+            skip,
+            take: limit,
+          }),
+          db.category.count({ where }),
+        ])
+      }
+    )
 
     const responseData = {
       success: true,
       data: paginatedResponse(categories, total, page, limit),
     }
-    cache.set(cacheKey, responseData, 10 * 60 * 1000) // 10 min TTL
-    return NextResponse.json(responseData)
+        return NextResponse.json(responseData)
   } catch (error) {
     console.error('Get categories error:', error)
     return NextResponse.json(
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Invalidate categories cache on mutation
-    cache.invalidatePattern('categories')
+    await invalidateCache(['categories'], ['categories'])
 
     return NextResponse.json({ success: true, data: category }, { status: 201 })
   } catch (error) {

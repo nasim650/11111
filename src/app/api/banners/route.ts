@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCachedData, invalidateCache } from '@/lib/cache'
 import { getUserRoleFromRequest, isAdmin, getPaginationParams, paginatedResponse } from '@/lib/utils'
 
 export async function GET(request: NextRequest) {
@@ -96,6 +97,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    await invalidateCache(['banners'], ['banners'])
     return NextResponse.json({ success: true, data: banner }, { status: 201 })
   } catch (error) {
     console.error('Create banner error:', error)

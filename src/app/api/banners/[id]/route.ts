@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCachedData, invalidateCache } from '@/lib/cache'
 import { getUserRoleFromRequest, isAdmin } from '@/lib/utils'
 import { deleteManagedMedia } from '@/lib/media'
 
@@ -18,6 +19,7 @@ export async function GET(
       )
     }
 
+    await invalidateCache(['banners'], ['banners']);
     return NextResponse.json({ success: true, data: banner })
   } catch (error) {
     console.error('Get banner error:', error)
@@ -59,6 +61,7 @@ export async function PUT(
 
     const banner = await db.banner.update({ where: { id }, data })
 
+    await invalidateCache(['banners'], ['banners']);
     return NextResponse.json({ success: true, data: banner })
   } catch (error) {
     console.error('Update banner error:', error)
@@ -90,6 +93,7 @@ export async function DELETE(
     await db.banner.delete({ where: { id } })
     await deleteManagedMedia([banner?.desktopImage, banner?.mobileImage])
 
+    await invalidateCache(['banners'], ['banners']);
     return NextResponse.json({ success: true, data: null })
   } catch (error) {
     console.error('Delete banner error:', error)

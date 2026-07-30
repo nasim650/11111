@@ -160,7 +160,7 @@ export default function ProductCard({ product }: ProductCardProps) {
       onClick={() => navigate('product-detail', { id: product.id })}
     >
       {/* ── 1. HERO BOX (Image Only) ── */}
-      <div className="relative aspect-square w-full bg-stone-50 flex items-center justify-center shrink-0 overflow-hidden rounded-t-xl">
+      <div className="relative aspect-[4/3] w-full bg-stone-50 flex items-center justify-center shrink-0 overflow-hidden rounded-t-xl">
         {imageUrl && !imgLoaded && (
           <div className="absolute inset-0 bg-stone-100 animate-pulse" />
         )}
@@ -183,47 +183,47 @@ export default function ProductCard({ product }: ProductCardProps) {
 
         {/* Badges */}
         {badge && (
-          <span className={`absolute top-2 left-2 z-10 text-[10px] font-bold px-2 py-0.5 rounded shadow-sm ${badge.style}`}>
+          <span className={`absolute top-1.5 left-1.5 z-10 text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm ${badge.style}`}>
             {badge.label}
           </span>
         )}
 
         {/* Hover Actions */}
-        <div className="absolute top-2 right-2 flex flex-col gap-1.5 z-20">
+        <div className="absolute top-1.5 right-1.5 flex flex-col gap-1 z-20">
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={handleWishlist}
-            className={`h-7 w-7 rounded-full flex items-center justify-center shadow-sm transition-all duration-200 ${
+            className={`h-6 w-6 rounded-full flex items-center justify-center shadow-sm transition-all duration-200 ${
               wishlisted ? 'bg-red-500 text-white' : 'bg-white/90 text-slate-500 hover:text-red-500 md:opacity-0 md:group-hover/card:opacity-100'
             }`}
           >
-            <Heart className={`h-3.5 w-3.5 ${wishlisted ? 'fill-white text-white' : ''}`} />
+            <Heart className={`h-3 w-3 ${wishlisted ? 'fill-white text-white' : ''}`} />
           </motion.button>
           {!outOfStock && (
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={handleQuickView}
-              className="h-7 w-7 rounded-full bg-white/90 flex items-center justify-center shadow-sm text-slate-500 hover:text-emerald-700 md:opacity-0 md:group-hover/card:opacity-100 transition-all duration-200"
+              className="h-6 w-6 rounded-full bg-white/90 flex items-center justify-center shadow-sm text-slate-500 hover:text-emerald-700 md:opacity-0 md:group-hover/card:opacity-100 transition-all duration-200"
             >
-              <Eye className="h-3.5 w-3.5" />
+              <Eye className="h-3 w-3" />
             </motion.button>
           )}
         </div>
 
         {outOfStock && (
           <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] flex items-center justify-center z-20">
-            <span className="text-[11px] font-bold text-slate-600 bg-white px-3 py-1 rounded-full shadow-sm border border-stone-200">Out of Stock</span>
+            <span className="text-[10px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-full shadow-sm border border-stone-200">Out of Stock</span>
           </div>
         )}
       </div>
 
       {/* ── 2. CARD CONTENT (Compact Information Layout) ── */}
-      <CardContent className="p-3 flex flex-col flex-1 bg-white justify-between gap-1.5">
+      <CardContent className="p-2.5 flex flex-col flex-1 bg-white justify-between gap-1">
         
-        <div className="flex flex-col gap-1 w-full shrink-0">
+        <div className="flex flex-col w-full shrink-0">
           {/* Category */}
-          <div className="h-3.5 flex items-center w-full">
-            <span className="text-[10px] text-slate-400 font-semibold truncate uppercase tracking-wider w-full text-left">
+          <div className="flex items-center w-full mb-0.5">
+            <span className="text-[9px] text-slate-400 font-semibold truncate uppercase tracking-wider w-full text-left leading-none">
               {product.category?.name || 'Uncategorized'}
             </span>
           </div>
@@ -231,7 +231,7 @@ export default function ProductCard({ product }: ProductCardProps) {
           {/* Product Title with Marquee Animation */}
           <div 
             ref={titleContainerRef}
-            className="relative h-5 flex items-center w-full overflow-hidden shrink-0 group/title text-slate-800 font-bold text-sm transition-colors group-hover/card:text-emerald-700"
+            className="relative h-4 flex items-center w-full overflow-hidden shrink-0 group/title text-slate-800 font-bold text-xs md:text-sm transition-colors group-hover/card:text-emerald-700"
           >
             <motion.span
               ref={titleTextRef}
@@ -258,10 +258,10 @@ export default function ProductCard({ product }: ProductCardProps) {
         {/* Flexible Spacer */}
         <div className="flex-1" />
 
-        <div className="flex flex-col gap-2 w-full shrink-0">
+        <div className="flex flex-col gap-1.5 w-full shrink-0">
           {/* ── PRICE ROW ── */}
-          <div className="h-5 flex items-center gap-1.5 w-full whitespace-nowrap overflow-hidden">
-            <span className="text-sm md:text-base font-extrabold text-amber-600">
+          <div className="flex items-end gap-1.5 w-full whitespace-nowrap overflow-hidden leading-none">
+            <span className="text-sm md:text-base font-extrabold text-amber-600 leading-none">
               {formatPrice(effectivePrice)}
             </span>
             <span className={`text-[10px] md:text-xs text-slate-400 line-through ${!hasDiscount ? 'invisible' : ''}`}>
@@ -273,23 +273,23 @@ export default function ProductCard({ product }: ProductCardProps) {
           </div>
 
           {/* ── BUTTONS ── */}
-          <div className="flex items-center gap-2 w-full box-border">
+          <div className="flex items-center gap-1.5 w-full box-border">
             <Button
-              className={`flex-1 min-w-0 h-8 px-2 text-xs font-bold rounded-lg shadow-sm transition-colors ${
+              className={`flex-1 min-w-0 h-7 px-2 text-[10px] md:text-xs font-bold rounded-md shadow-sm transition-colors ${
                 outOfStock ? 'bg-stone-100 text-stone-400 cursor-not-allowed' : addedToCart ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-amber-500 hover:bg-amber-600 text-white'
               }`}
               disabled={outOfStock || loading}
               onClick={handleAddToCart}
             >
               {loading ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" />
+                <Loader2 className="h-3 w-3 animate-spin mx-auto" />
               ) : addedToCart ? (
                 <span className="truncate w-full text-center">Added</span>
               ) : outOfStock ? (
                 <span className="truncate w-full text-center">Out of Stock</span>
               ) : (
                 <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
-                  <ShoppingCart className="h-3.5 w-3.5 shrink-0" />
+                  <ShoppingCart className="h-3 w-3 shrink-0" />
                   <span className="truncate">Add to Cart</span>
                 </div>
               )}
@@ -297,7 +297,7 @@ export default function ProductCard({ product }: ProductCardProps) {
 
             {/* Buy Now - Desktop Only, Equal Flex */}
             <Button
-              className="hidden md:flex flex-1 min-w-0 h-8 px-2 text-xs font-bold rounded-lg shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="hidden md:flex flex-1 min-w-0 h-7 px-2 text-[10px] md:text-xs font-bold rounded-md shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white"
               disabled={outOfStock || loading}
               onClick={(e) => {
                 e.stopPropagation()
@@ -307,7 +307,7 @@ export default function ProductCard({ product }: ProductCardProps) {
               }}
             >
               <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
-                <Zap className="h-3.5 w-3.5 shrink-0" />
+                <Zap className="h-3 w-3 shrink-0" />
                 <span className="truncate">Buy Now</span>
               </div>
             </Button>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCachedData, invalidateCache } from '@/lib/cache'
 import { getUserRoleFromRequest, isAdmin, slugify } from '@/lib/utils'
 import { deleteManagedMedia } from '@/lib/media'
 
@@ -13,20 +14,13 @@ export async function GET(
     const userId = url.searchParams.get('userId')
     const compareIds = url.searchParams.get('compareIds')
 
-    const product = await db.product.findUnique({
-      where: { id },
-      include: {
-        category: { select: { id: true, name: true, slug: true, image: true, icon: true } },
-        subcategory: { select: { id: true, name: true, slug: true, image: true } },
-        images: { orderBy: { sortOrder: 'asc' } },
-        videos: { orderBy: { sortOrder: 'asc' } },
-        reviews: {
-          where: { isApproved: true, isActive: true },
-          include: { user: { select: { id: true, name: true, avatar: true } } },
-          orderBy: { createdAt: 'desc' },
-        },
-      },
-    })
+    const product = await getCachedData(
+            { key: `product:${id}`, tags: ['products'], revalidate: 600 },
+            async () => db.product.findUnique({
+              where: { id },
+              include: { images: { orderBy: { sortOrder: 'asc' } }, category: true, subcategory: true, reviews: { where: { isApproved: true }, include: { user: { select: { name: true, avatar: true } } }, orderBy: { createdAt: 'desc' }, take: 5 } },
+            })
+          )
 
     if (!product) {
       return NextResponse.json(
@@ -86,6 +80,7 @@ export async function GET(
       orderBy: { createdAt: 'desc' },
     })
 
+    await invalidateCache(['products'], ['products']);
     return NextResponse.json({
       success: true,
       data: {
@@ -191,6 +186,7 @@ export async function PUT(
     const retainedUrls = new Set(product.images.map((image) => image.url))
     await deleteManagedMedia(existingImages.map((image) => image.url).filter((url) => !retainedUrls.has(url)))
 
+    await invalidateCache(['products'], ['products']);
     return NextResponse.json({ success: true, data: product })
   } catch (error) {
     console.error('Update product error:', error)
@@ -228,6 +224,7 @@ export async function DELETE(
       ...(product?.videos.flatMap((video) => [video.url, video.thumbnail]) ?? []),
     ])
 
+    await invalidateCache(['products'], ['products']);
     return NextResponse.json({ success: true, data: null })
   } catch (error) {
     console.error('Delete product error:', error)

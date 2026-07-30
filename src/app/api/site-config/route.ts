@@ -1,42 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserRoleFromRequest, isAdmin } from '@/lib/utils'
-import { cache } from '@/lib/cache'
+import { getCachedData, invalidateCache } from '@/lib/cache'
 
 const SENSITIVE_KEYS = ['smtp_host', 'smtp_port', 'smtp_user', 'smtp_from', 'smtp_pass', 'google_analytics_id']
 
 export async function GET(request: NextRequest) {
   try {
-    // Check if user is admin to determine cache key
     const role = await getUserRoleFromRequest(request)
     const isAdminUser = isAdmin(role)
     const cacheKey = `site-config:${isAdminUser ? 'admin' : 'public'}`
 
-    const cached = cache.get<unknown>(cacheKey)
-    if (cached) {
-      return NextResponse.json(cached)
-    }
+    const responseData = await getCachedData(
+      { key: cacheKey, tags: ['site-config'], revalidate: 3600 },
+      async () => {
+        const configs = await db.siteConfig.findMany({
+          orderBy: [{ group: 'asc' }, { key: 'asc' }],
+        })
 
-    const configs = await db.siteConfig.findMany({
-      orderBy: [{ group: 'asc' }, { key: 'asc' }],
-    })
+        if (isAdminUser) {
+          return { success: true, data: configs }
+        }
 
-    if (isAdminUser) {
-      const responseData = {
-        success: true,
-        data: configs,
+        const filteredConfigs = configs.filter(c => !SENSITIVE_KEYS.includes(c.key))
+        return { success: true, data: filteredConfigs }
       }
-      cache.set(cacheKey, responseData, 5 * 60 * 1000) // 5 min TTL
-      return NextResponse.json(responseData)
-    }
+    )
 
-    // For public access, filter out sensitive config
-    const filteredConfigs = configs.filter(c => !SENSITIVE_KEYS.includes(c.key))
-    const responseData = {
-      success: true,
-      data: filteredConfigs,
-    }
-    cache.set(cacheKey, responseData, 5 * 60 * 1000) // 5 min TTL
     return NextResponse.json(responseData)
   } catch (error) {
     console.error('Get site configs error:', error)
@@ -74,7 +64,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Invalidate site-config cache on mutation
-    cache.invalidatePattern('site-config')
+    await invalidateCache(['site-config:admin', 'site-config:public'], ['site-config'])
 
     return NextResponse.json({
       success: true,

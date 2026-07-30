@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCachedData, invalidateCache } from '@/lib/cache'
 import { getUserRoleFromRequest, isAdmin, slugify } from '@/lib/utils'
 import { deleteManagedMedia } from '@/lib/media'
 
@@ -21,6 +22,7 @@ export async function GET(
       )
     }
 
+    await invalidateCache(['categories'], ['categories']);
     return NextResponse.json({ success: true, data: category })
   } catch (error) {
     console.error('Get category error:', error)
@@ -65,6 +67,7 @@ export async function PUT(
 
     const category = await db.category.update({ where: { id }, data })
 
+    await invalidateCache(['categories'], ['categories']);
     return NextResponse.json({ success: true, data: category })
   } catch (error) {
     console.error('Update category error:', error)
@@ -106,6 +109,7 @@ export async function DELETE(
       ...(category?.subcategories.map((subcategory) => subcategory.image) ?? []),
     ])
 
+    await invalidateCache(['categories'], ['categories']);
     return NextResponse.json({ success: true, data: null })
   } catch (error) {
     console.error('Delete category error:', error)
