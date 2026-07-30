@@ -513,15 +513,15 @@ function CategorySection({ categories, navigate }: {
           </button>
         </div>
 
-        {/* Normalized Responsive Grid: 4 cols on mobile, 6 on tablet, 8-10 on desktop */}
-        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2.5 sm:gap-3.5">
+        {/* Responsive Horizontal Scroll on Mobile, Grid on Desktop */}
+        <div className="flex overflow-x-auto gap-3 pb-2 -mx-4 px-4 md:mx-0 md:px-0 md:grid md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 md:gap-3.5 snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           {displayCategories.map((cat, idx) => (
             <motion.button
               key={cat.id}
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.03, duration: 0.3 }}
-              className="group bg-white dark:bg-card border border-stone-200/70 dark:border-border/60 rounded-2xl p-2 sm:p-2.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex flex-col items-center cursor-pointer w-full"
+              className="group bg-white dark:bg-card border border-stone-200/70 dark:border-border/60 rounded-2xl p-2 sm:p-2.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex flex-col items-center cursor-pointer w-[76px] min-w-[76px] md:w-full shrink-0 snap-center"
               onClick={() => navigate('products', { category: cat.slug })}
             >
               {/* Normalized Fixed Image Canvas */}
