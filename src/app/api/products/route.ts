@@ -294,7 +294,6 @@ export async function POST(request: NextRequest) {
         isFeatured: isFeatured || false,
         isBestSeller: isBestSeller || false,
         isNewArrival: isNewArrival || false,
-        isFlashSale: isFlashSale || false,
         status: status || 'active',
         tags: Array.isArray(tags) ? tags.join(',') : tags,
         specifications: typeof specifications === 'object' ? JSON.stringify(specifications) : specifications,
