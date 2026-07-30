@@ -21,7 +21,8 @@ export async function createAuditLog(params: {
         ipAddress: params.ipAddress,
       },
     })
-  } catch {
+  } catch (err) {
     // Audit logging is best-effort — never fail the request because of it
+    console.warn('[AuditLog] Failed to record audit log entry:', err)
   }
 }

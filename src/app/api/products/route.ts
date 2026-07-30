@@ -236,7 +236,9 @@ async function fetchProductsData(url: URL, request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const url = new URL(request.url)
-    const cacheKey = `products:${url.search}`
+    const role = await getUserRoleFromRequest(request)
+    const isAdminUser = isAdmin(role)
+    const cacheKey = `products:${isAdminUser ? 'admin' : 'public'}:${url.search}`
 
     // Call layered fetcher
     const responseData = await getCachedData(

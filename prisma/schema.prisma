@@ -119,7 +119,7 @@ model Product {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  category       Category      @relation(fields: [categoryId], references: [id])
+  category       Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   subcategory    Subcategory?  @relation(fields: [subcategoryId], references: [id])
   images         ProductImage[]
   videos         ProductVideo[]
@@ -205,6 +205,8 @@ model HomepageSection {
   updatedAt   DateTime  @updatedAt
 
   category    Category? @relation(fields: [categoryId], references: [id])
+
+  @@index([isActive, sortOrder])
 }
 
 // ─── Menu Management ──────────────────────────────────────────────────────
@@ -315,7 +317,7 @@ model OrderItem {
   createdAt   DateTime @default(now())
 
   order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product     Product  @relation(fields: [productId], references: [id])
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
 
   @@index([orderId])
   @@index([productId])
@@ -410,6 +412,7 @@ model Coupon {
 
   @@index([code])
   @@index([isActive])
+  @@index([isActive, validFrom, validTo])
 }
 
 // ─── Contact Messages ──────────────────────────────────────────────────────
@@ -494,6 +497,9 @@ model AuditLog {
   newData     String?
   ipAddress   String?
   createdAt   DateTime @default(now())
+
+  @@index([module, createdAt])
+  @@index([adminId])
 }
 
 // ─── Testimonials (Dynamic Content) ───────────────────────────────────────
@@ -547,6 +553,8 @@ model StockNotification {
   product   Product  @relation(fields: [productId], references: [id])
 
   @@unique([productId, email])
+  @@index([notified])
+  @@index([productId, notified])
 }
 
 // ─── Partners (Dynamic Content) ───────────────────────────────────────────

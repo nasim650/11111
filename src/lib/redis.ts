@@ -6,23 +6,21 @@ const globalForRedis = globalThis as unknown as {
 
 // If no REDIS_URL is provided, we won't throw immediately, 
 // to allow graceful fallback when the cache is accessed.
-const redisUrl = process.env.REDIS_URL || '';
+const redisUrl = process.env.REDIS_URL;
 
-export const redis =
-  globalForRedis.redis ??
-  new Redis(redisUrl, {
-    // Retry strategy for graceful degradation
-    retryStrategy(times) {
-      // Don't retry more than 3 times to avoid hanging the app
-      if (times > 3) {
-        return null; // Stop retrying
-      }
-      return Math.min(times * 50, 2000);
-    },
-    maxRetriesPerRequest: 1,
-    lazyConnect: true, // Only connect when needed
-  });
+export const redis = redisUrl
+  ? (globalForRedis.redis ??
+      new Redis(redisUrl, {
+        retryStrategy(times) {
+          if (times > 3) return null;
+          return Math.min(times * 50, 2000);
+        },
+        maxRetriesPerRequest: 1,
+        lazyConnect: true,
+      }))
+  : null;
 
-if (process.env.NODE_ENV !== 'production') {
+if (process.env.NODE_ENV !== 'production' && redis) {
   globalForRedis.redis = redis;
 }
+

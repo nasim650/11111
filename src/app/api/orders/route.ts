@@ -123,11 +123,25 @@ export async function POST(request: NextRequest) {
       image: string | null
     }> = []
 
+    // Batch fetch products to avoid N+1 query and verify images server-side
+    const productIds = items.map((i) => i.productId)
+    const fetchedProducts = await db.product.findMany({
+      where: { id: { in: productIds } },
+      select: {
+        id: true,
+        name: true,
+        price: true,
+        discountPrice: true,
+        stock: true,
+        unit: true,
+        status: true,
+        images: { take: 1, orderBy: { sortOrder: 'asc' } },
+      },
+    })
+    const productMap = new Map(fetchedProducts.map((p) => [p.id, p]))
+
     for (const item of items) {
-      const product = await db.product.findUnique({
-        where: { id: item.productId },
-        select: { id: true, name: true, price: true, discountPrice: true, stock: true, unit: true, status: true }
-      })
+      const product = productMap.get(item.productId)
 
       if (!product || product.status !== 'active') {
         return NextResponse.json(
@@ -153,7 +167,7 @@ export async function POST(request: NextRequest) {
         quantity: item.quantity,
         unit: product.unit,
         price: itemPrice,
-        image: item.image,
+        image: product.images[0]?.url || item.image || null,
       })
     }
 
@@ -260,33 +274,33 @@ export async function POST(request: NextRequest) {
     }
 
     const orderNumber = generateOrderNumber()
+    const invoiceNumber = `INV-${orderNumber}`
 
     // Wrap order creation in transaction so stock deductions roll back on failure
     const order = await db.$transaction(async (tx) => {
-      // Deduct stock for each item
+      // Deduct stock atomically for each item
       for (const item of verifiedItems) {
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { stock: { decrement: item.quantity } }
+        const result = await tx.product.updateMany({
+          where: { id: item.productId, stock: { gte: item.quantity } },
+          data: { stock: { decrement: item.quantity } },
         })
+        if (result.count === 0) {
+          throw new Error(`Insufficient stock for ${item.productName}`)
+        }
       }
 
       // Increment coupon usage if applicable
       if (validatedCouponCode) {
-        const coupon = await tx.coupon.findFirst({
-          where: { code: validatedCouponCode, isActive: true }
+        await tx.coupon.updateMany({
+          where: { code: validatedCouponCode, isActive: true },
+          data: { usedCount: { increment: 1 } },
         })
-        if (coupon) {
-          await tx.coupon.update({
-            where: { id: coupon.id },
-            data: { usedCount: { increment: 1 } }
-          })
-        }
       }
 
       const order = await tx.order.create({
         data: {
           orderNumber,
+          invoiceNumber,
           userId: userId || null,
           guestName: guestName || (shippingAddress?.name as string) || null,
           guestPhone: guestPhone || (shippingAddress?.phone as string) || null,
@@ -389,17 +403,7 @@ export async function POST(request: NextRequest) {
       return order
     })
 
-    // ─── Assign invoice number after order creation ──────────────────────
-    // (PDF document generation removed — print system simplified for MVP)
-    try {
-      const invoiceNumber = `INV-${order.orderNumber}`
-      await db.order.update({
-        where: { id: order.id },
-        data: { invoiceNumber },
-      })
-    } catch (err) {
-      console.error('Invoice number assignment error (non-blocking):', err)
-    }
+
 
     return NextResponse.json({ success: true, data: order }, { status: 201 })
   } catch (error) {
