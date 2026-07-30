@@ -149,11 +149,11 @@ export default function ProductCard({ product }: ProductCardProps) {
 
   return (
     <Card
-      className="group cursor-pointer overflow-hidden border border-stone-200 rounded-2xl bg-white transition-all duration-200 hover:shadow-md hover:border-stone-300 flex flex-col h-full"
+      className="group cursor-pointer overflow-hidden border border-stone-200/60 rounded-xl bg-white transition-all duration-300 hover:shadow-lg hover:border-stone-300/80 flex flex-col h-full"
       onClick={() => navigate('product-detail', { id: product.id })}
     >
-      {/* Image Area — fixed height, images fill cleanly */}
-      <div className="relative h-36 w-full overflow-hidden bg-stone-100 rounded-t-2xl shrink-0">
+      {/* Image Area — aspect-square, images fill cleanly */}
+      <div className="relative aspect-square w-full overflow-hidden bg-stone-50 rounded-t-xl shrink-0">
         {/* Shimmer */}
         {imageUrl && !imgLoaded && (
           <div className="absolute inset-0 bg-stone-100 animate-pulse" />
@@ -180,35 +180,35 @@ export default function ProductCard({ product }: ProductCardProps) {
         {/* Single Badge — Top Left */}
         {badge && (
           <span
-            className={`absolute top-2 left-2 z-10 text-[11px] font-bold px-2 py-0.5 rounded-lg shadow-sm ${badge.style}`}
+            className={`absolute top-2.5 left-2.5 z-10 text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm ${badge.style}`}
           >
             {badge.label}
           </span>
         )}
 
         {/* Floating Action Buttons — Top Right */}
-        <div className="absolute top-2 right-2 flex flex-col gap-1.5 z-20">
+        <div className="absolute top-2.5 right-2.5 flex flex-col gap-2 z-20">
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={handleWishlist}
-            className={`h-7 w-7 rounded-full flex items-center justify-center shadow-sm transition-all duration-200 ${
+            className={`h-8 w-8 rounded-full flex items-center justify-center shadow-sm transition-all duration-200 ${
               wishlisted
                 ? 'bg-red-500 text-white'
-                : 'bg-white/90 text-slate-500 hover:text-red-500 sm:opacity-0 group-hover:opacity-100'
+                : 'bg-white/90 text-slate-500 hover:text-red-500 md:opacity-0 md:group-hover:opacity-100'
             }`}
             aria-label={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
           >
-            <Heart className={`h-3.5 w-3.5 ${wishlisted ? 'fill-white text-white' : ''}`} />
+            <Heart className={`h-4 w-4 ${wishlisted ? 'fill-white text-white' : ''}`} />
           </motion.button>
 
           {!outOfStock && (
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={handleQuickView}
-              className="h-7 w-7 rounded-full bg-white/90 flex items-center justify-center shadow-sm text-slate-500 hover:text-emerald-700 sm:opacity-0 group-hover:opacity-100 transition-all duration-200"
+              className="h-8 w-8 rounded-full bg-white/90 flex items-center justify-center shadow-sm text-slate-500 hover:text-emerald-700 md:opacity-0 md:group-hover:opacity-100 transition-all duration-200"
               aria-label="Quick view"
             >
-              <Eye className="h-3.5 w-3.5" />
+              <Eye className="h-4 w-4" />
             </motion.button>
           )}
         </div>
@@ -223,19 +223,20 @@ export default function ProductCard({ product }: ProductCardProps) {
         )}
       </div>
 
-      {/* Card Content — single flat flow, no justify-between gap */}
-      <CardContent className="p-2.5 flex flex-col gap-1">
-        {/* Category */}
-        {product.category && (
-          <p className="text-[10px] text-slate-400 truncate leading-none">
-            {product.category.name}
-          </p>
-        )}
+      {/* Card Content — clean, readable typography */}
+      <CardContent className="p-3 md:p-4 flex flex-col gap-1.5 flex-1 justify-between">
+        <div className="flex flex-col gap-1">
+          {/* Category */}
+          {product.category && (
+            <p className="text-xs text-slate-500 font-medium truncate">
+              {product.category.name}
+            </p>
+          )}
 
-        {/* Product Name */}
-        <h3 className="font-semibold text-xs text-slate-800 line-clamp-2 leading-snug group-hover:text-emerald-700 transition-colors duration-200">
-          {product.name}
-        </h3>
+          {/* Product Name */}
+          <h3 className="font-bold text-sm md:text-base text-slate-800 line-clamp-2 leading-snug group-hover:text-emerald-700 transition-colors duration-200">
+            {product.name}
+          </h3>
 
         {/* Rating — only if exists */}
         {product.averageRating != null && product.averageRating > 0 && (
@@ -258,45 +259,42 @@ export default function ProductCard({ product }: ProductCardProps) {
           </div>
         )}
 
-        {/* Price row */}
-        <div className="flex items-baseline gap-1 flex-wrap">
-          <span className="text-sm font-bold text-amber-600">
-            {formatPrice(effectivePrice)}
-          </span>
-          {hasDiscount && (
-            <span className="text-[11px] text-slate-400 line-through">
-              {formatPrice(price)}
-            </span>
-          )}
-          <span className="text-[10px] text-slate-400">/{product.unit}</span>
         </div>
 
-        {/* Save badge */}
-        {hasDiscount && dpVal != null && (
-          <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md self-start">
-            Save {formatPrice(Math.max(0, pVal - dpVal))}
-          </span>
-        )}
+        <div className="mt-auto pt-2 flex flex-col gap-2.5">
+          {/* Price row */}
+          <div className="flex items-baseline gap-1.5 flex-wrap">
+            <span className="text-base md:text-lg font-extrabold text-amber-600">
+              {formatPrice(effectivePrice)}
+            </span>
+            {hasDiscount && (
+              <span className="text-xs md:text-sm text-slate-400 line-through">
+                {formatPrice(price)}
+              </span>
+            )}
+            <span className="text-xs font-medium text-slate-500 ml-1">/{product.unit}</span>
+          </div>
 
-        {/* Add to Cart Button */}
-        <Button
-          className={`w-full h-8 text-[11px] font-semibold rounded-lg gap-1 mt-1 transition-all ${
-            outOfStock
-              ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
-              : addedToCart
-              ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-              : 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm'
-          }`}
-          disabled={outOfStock || loading}
-          onClick={handleAddToCart}
-        >
-          {loading ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <ShoppingCart className="h-3 w-3" />
-          )}
-          {loading ? 'Adding…' : addedToCart ? '✓ Added' : outOfStock ? 'Out of Stock' : 'Add to Cart'}
-        </Button>
+          {/* Add to Cart Button */}
+          <Button
+            className={`w-full h-10 text-sm font-bold rounded-xl gap-2 transition-all shadow-sm ${
+              outOfStock
+                ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
+                : addedToCart
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                : 'bg-amber-500 hover:bg-amber-600 text-white hover:shadow-md'
+            }`}
+            disabled={outOfStock || loading}
+            onClick={handleAddToCart}
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ShoppingCart className="h-4 w-4" />
+            )}
+            {loading ? 'Adding…' : addedToCart ? 'Added to Cart' : outOfStock ? 'Out of Stock' : 'Add to Cart'}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )
