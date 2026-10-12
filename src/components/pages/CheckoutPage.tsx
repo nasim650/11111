@@ -98,6 +98,13 @@ export default function CheckoutPage() {
   const standardShipping = siteConfig?.shippingCharge || 60
   const expressShipping = 120
   const freeThreshold = siteConfig?.freeShippingThreshold || 1500
+  const onlinePaymentEnabled = siteConfig?.enableOnlinePayment === true
+
+  useEffect(() => {
+    if (!onlinePaymentEnabled && paymentMethod === 'online') {
+      setPaymentMethod('cod')
+    }
+  }, [onlinePaymentEnabled, paymentMethod])
 
   let shipping = standardShipping
   if (sub >= freeThreshold) {
@@ -944,22 +951,24 @@ export default function CheckoutPage() {
                           </div>
                         </div>
 
-                        <div
-                          onClick={() => setPaymentMethod('online')}
-                          className={`rounded-xl p-4 border-2 cursor-pointer transition-all ${
-                            paymentMethod === 'online'
-                              ? 'border-primary bg-primary/5 shadow-sm'
-                              : 'border-border bg-card hover:border-primary/40'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <RadioGroupItem value="online" id="online" />
-                            <Label htmlFor="online" className="font-bold text-sm cursor-pointer flex items-center gap-2">
-                              <Wallet className="h-4 w-4 text-primary" />
-                              Online Payment
-                            </Label>
+                        {onlinePaymentEnabled && (
+                          <div
+                            onClick={() => setPaymentMethod('online')}
+                            className={`rounded-xl p-4 border-2 cursor-pointer transition-all ${
+                              paymentMethod === 'online'
+                                ? 'border-primary bg-primary/5 shadow-sm'
+                                : 'border-border bg-card hover:border-primary/40'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <RadioGroupItem value="online" id="online" />
+                              <Label htmlFor="online" className="font-bold text-sm cursor-pointer flex items-center gap-2">
+                                <Wallet className="h-4 w-4 text-primary" />
+                                Online Payment
+                              </Label>
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </RadioGroup>
                     </CardContent>
                   </Card>

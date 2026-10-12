@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserFromRequest } from '@/lib/utils'
+import { validateAddressParts, validationError } from '@/lib/validation'
 
 export async function GET(request: NextRequest) {
   try {
@@ -43,14 +44,20 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { userId, name, phone, address, city, district, postalCode, isDefault } = body
+    const { userId, isDefault } = body
 
-    if (!userId || !name || !phone || !address || !city) {
+    if (!userId || typeof userId !== 'string') {
       return NextResponse.json(
-        { success: false, error: 'userId, name, phone, address, and city are required' },
+        { success: false, error: 'User ID is required' },
         { status: 400 }
       )
     }
+
+    const parsedAddress = validateAddressParts(body)
+    if (!parsedAddress.ok) {
+      return NextResponse.json(validationError(parsedAddress.errors), { status: 400 })
+    }
+    const { name, phone, address, city, district, postalCode } = parsedAddress.data
 
     // Ownership check: verify userId matches authenticated user
     const authUser = await getUserFromRequest(request)

@@ -93,10 +93,11 @@ export async function getUserFromRequest(request: Request): Promise<{ userId: st
   const { db } = await import('@/lib/db')
   const user = await db.user.findUnique({
     where: { id: payload.userId },
-    select: { id: true, role: true }
+    select: { id: true, role: true, sessionVersion: true }
   })
 
-  return user ? { userId: user.id, role: user.role } : null
+  if (!user || user.sessionVersion !== payload.sessionVersion) return null
+  return { userId: user.id, role: user.role }
 }
 
 /**

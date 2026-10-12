@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
   try {
     // IP-based rate limiting: 3 messages per minute per IP
     const clientIp = getClientIp(request)
-    const ipRateLimitResult = rateLimit(`contact:${clientIp}`, 3, 60 * 1000)
+    const ipRateLimitResult = await rateLimit(`contact:${clientIp}`, 3, 60 * 1000)
     if (!ipRateLimitResult.success) {
       return NextResponse.json(
         { success: false, error: 'Too many requests. Please try again later.' },

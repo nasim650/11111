@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
   try {
     const csrf = csrfGuard(request)
     if (csrf) return csrf
-    const limited = rateLimitOrResponse(request, 'uploads', 20, 60 * 1000)
+    const limited = await rateLimitOrResponse(request, 'uploads', 20, 60 * 1000)
     if (limited) return limited
     const admin = await requireAdmin(request)
     if (!admin.ok) return admin.response

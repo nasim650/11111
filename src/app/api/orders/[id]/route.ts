@@ -14,6 +14,17 @@ const TRACKING_STEPS = [
 
 type OrderStatus = 'pending' | 'confirmed' | 'processing' | 'shipped' | 'out_for_delivery' | 'delivered' | 'cancelled' | 'returned'
 
+const ALLOWED_ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  pending: ['confirmed', 'cancelled'],
+  confirmed: ['processing', 'cancelled'],
+  processing: ['shipped', 'cancelled'],
+  shipped: ['out_for_delivery', 'returned'],
+  out_for_delivery: ['delivered', 'returned'],
+  delivered: ['returned'],
+  cancelled: [],
+  returned: [],
+}
+
 function getOrderStep(status: string): number {
   const statusMap: Record<string, number> = {
     pending: 1,
@@ -220,6 +231,20 @@ export async function PUT(
       )
     }
 
+    if (orderStatus !== undefined) {
+      const nextStatus = orderStatus as OrderStatus
+      if (!Object.prototype.hasOwnProperty.call(ALLOWED_ORDER_TRANSITIONS, nextStatus)) {
+        return NextResponse.json({ success: false, error: 'Invalid order status' }, { status: 400 })
+      }
+      const currentStatus = currentOrder.orderStatus as OrderStatus
+      if (nextStatus !== currentStatus && !ALLOWED_ORDER_TRANSITIONS[currentStatus].includes(nextStatus)) {
+        return NextResponse.json(
+          { success: false, error: `Cannot change an order from '${currentStatus}' to '${nextStatus}'` },
+          { status: 400 }
+        )
+      }
+    }
+
     const data: Record<string, unknown> = {}
     if (orderStatus !== undefined) data.orderStatus = orderStatus
     if (paymentStatus !== undefined) data.paymentStatus = paymentStatus
@@ -328,6 +353,12 @@ export async function PUT(
         await db.product.update({
           where: { id: item.productId },
           data: { stock: { increment: item.quantity } }
+        })
+      }
+      if (currentOrder.couponCode) {
+        await db.coupon.updateMany({
+          where: { code: currentOrder.couponCode, usedCount: { gt: 0 } },
+          data: { usedCount: { decrement: 1 } },
         })
       }
     }

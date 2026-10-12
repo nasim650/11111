@@ -5,7 +5,7 @@ import { normalizeCouponCode, numberInRange } from '@/lib/validation'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { code, orderAmount } = body
+    const { code, totalAmount: orderAmount } = body
     const couponCode = normalizeCouponCode(code)
     const amount = orderAmount === undefined || orderAmount === null || orderAmount === ''
       ? 0

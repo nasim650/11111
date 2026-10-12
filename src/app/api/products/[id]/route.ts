@@ -80,7 +80,6 @@ export async function GET(
       orderBy: { createdAt: 'desc' },
     })
 
-    await invalidateCache(['products'], ['products']);
     return NextResponse.json({
       success: true,
       data: {

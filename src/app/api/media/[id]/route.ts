@@ -10,7 +10,7 @@ export async function DELETE(
   try {
     const csrf = csrfGuard(request)
     if (csrf) return csrf
-    const limited = rateLimitOrResponse(request, 'media-delete', 30, 60 * 1000)
+    const limited = await rateLimitOrResponse(request, 'media-delete', 30, 60 * 1000)
     if (limited) return limited
     const admin = await requireAdmin(request)
     if (!admin.ok) return admin.response

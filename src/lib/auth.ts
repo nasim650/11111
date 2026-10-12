@@ -1,11 +1,16 @@
 import bcrypt from 'bcryptjs'
 import { SignJWT, jwtVerify } from 'jose'
 
-// Secret key - in production, JWT_SECRET environment variable is REQUIRED
-// The app will fail to start in production without it
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'khati-khadyo-jwt-secret-key-2026-production-fallback'
-)
+function getJwtSecret(): Uint8Array {
+  const secret = process.env.JWT_SECRET
+  // A committed fallback makes every deployment forgeable. Keep the check at
+  // request time so builds can run without production secrets, but never sign
+  // or trust a token when the real secret is absent or weak.
+  if (!secret || secret.length < 32) {
+    throw new Error('JWT signing is not configured')
+  }
+  return new TextEncoder().encode(secret)
+}
 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 12)
@@ -15,18 +20,20 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash)
 }
 
-export async function generateToken(userId: string): Promise<string> {
-  return new SignJWT({ userId })
+export async function generateToken(userId: string, sessionVersion: number): Promise<string> {
+  return new SignJWT({ userId, sv: sessionVersion })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
-    .sign(JWT_SECRET)
+    .sign(getJwtSecret())
 }
 
-export async function verifyToken(token: string): Promise<{ userId: string } | null> {
+export async function verifyToken(token: string): Promise<{ userId: string; sessionVersion: number } | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET)
-    return { userId: payload.userId as string }
+    const { payload } = await jwtVerify(token, getJwtSecret())
+    const sessionVersion = payload.sv
+    if (typeof payload.userId !== 'string' || typeof sessionVersion !== 'number') return null
+    return { userId: payload.userId, sessionVersion }
   } catch {
     return null
   }

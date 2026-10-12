@@ -121,7 +121,11 @@ export async function PUT(
     // Basic profile fields
     if (name !== undefined) data.name = name
     if (email !== undefined) data.email = email
-    if (phone !== undefined) data.phone = phone
+    if (phone !== undefined) {
+      data.phone = phone
+      // A changed number must be verified again before it can be trusted.
+      if (!isAdmin(role) || requestUserId === id) data.isVerified = false
+    }
     if (avatar !== undefined) data.avatar = avatar
 
     // Admin-only fields
@@ -161,6 +165,7 @@ export async function PUT(
       }
 
       data.password = await hashPassword(newPassword)
+      data.sessionVersion = { increment: 1 }
     }
 
     const user = await db.user.update({

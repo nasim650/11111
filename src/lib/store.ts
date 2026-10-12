@@ -364,6 +364,15 @@ export const useAppStore = create<AppStore>()(
       },
 
       logout: () => {
+        // Clear the HttpOnly server session as well as local client state.
+        // `keepalive` lets this complete even when navigation follows logout.
+        if (typeof window !== 'undefined') {
+          void fetch('/api/auth/logout', {
+            method: 'POST',
+            credentials: 'same-origin',
+            keepalive: true,
+          })
+        }
         set({
           user: null,
           accessToken: null,

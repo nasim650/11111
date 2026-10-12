@@ -135,6 +135,12 @@ export async function POST(
         data: { stock: { increment: item.quantity } }
       })
     }
+    if (order.couponCode) {
+      await db.coupon.updateMany({
+        where: { code: order.couponCode, usedCount: { gt: 0 } },
+        data: { usedCount: { decrement: 1 } },
+      })
+    }
 
     // Build tracking timeline for cancelled order
     const timeline = buildTimeline(updatedOrder.orderStatus as OrderStatus, updatedOrder.createdAt)

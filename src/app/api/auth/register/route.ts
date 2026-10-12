@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
   try {
     const csrf = csrfGuard(request)
     if (csrf) return csrf
-    const limited = rateLimitOrResponse(request, 'register', 3, 60 * 1000)
+    const limited = await rateLimitOrResponse(request, 'register', 3, 60 * 1000)
     if (limited) return limited
 
     const body = await request.json()
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    const token = await generateToken(user.id)
+    const token = await generateToken(user.id, user.sessionVersion)
 
     const { password: _, ...userWithoutPassword } = user
 
@@ -61,10 +61,9 @@ export async function POST(request: NextRequest) {
     })
     return response
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : 'Internal server error'
     console.error('Register error:', error)
     return NextResponse.json(
-      { success: false, error: errorMsg },
+      { success: false, error: 'Unable to create your account right now. Please try again later.' },
       { status: 500 }
     )
   }

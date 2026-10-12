@@ -33,6 +33,7 @@ model User {
   isVerified    Boolean   @default(false)
   avatar        String?
   isActive      Boolean   @default(true)
+  sessionVersion Int      @default(0)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -43,6 +44,25 @@ model User {
   wishlistItems  Wishlist[]
   cartItems      CartItem[]
   loyaltyPoints  LoyaltyPoint[]
+}
+
+// One-time codes are deliberately kept separate from User so the same safe
+// challenge flow can be used before sign-up, for password recovery, and for
+// phone verification. Codes are stored only as keyed hashes.
+model OtpChallenge {
+  id         String    @id @default(cuid())
+  identifier String
+  purpose    String
+  codeHash   String
+  attempts   Int       @default(0)
+  sendCount  Int       @default(1)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([identifier, purpose, expiresAt])
+  @@index([expiresAt])
 }
 
 // ─── Categories ────────────────────────────────────────────────────────────

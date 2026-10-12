@@ -4,14 +4,14 @@ import { getUserFromRequest, isAdmin } from '@/lib/utils'
 
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
-export function rateLimitOrResponse(
+export async function rateLimitOrResponse(
   request: NextRequest,
   key: string,
   limit: number,
   windowMs: number
-): NextResponse | null {
+): Promise<NextResponse | null> {
   const clientIp = getClientIp(request)
-  const result = rateLimit(`${key}:${clientIp}`, limit, windowMs)
+  const result = await rateLimit(`${key}:${clientIp}`, limit, windowMs)
   if (result.success) return null
 
   return NextResponse.json(

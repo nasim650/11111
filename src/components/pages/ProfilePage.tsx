@@ -126,7 +126,7 @@ const staggerItem = {
 }
 
 export default function ProfilePage() {
-  const { user, isAuthenticated, navigate, logout, wishlistItems } = useAppStore()
+  const { user, isAuthenticated, navigate, logout, wishlistItems, setUser } = useAppStore()
   const [activeTab, setActiveTab] = useState<ProfileTab>('profile')
   const [editing, setEditing] = useState(false)
 
@@ -148,6 +148,9 @@ export default function ProfilePage() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [otpCode, setOtpCode] = useState('')
+  const [otpSent, setOtpSent] = useState(false)
+  const [otpWorking, setOtpWorking] = useState(false)
 
   // Notification preferences
   const [emailNotifications, setEmailNotifications] = useState(true)
@@ -247,7 +250,11 @@ export default function ProfilePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, phone }),
       })
-      if (!res.ok) throw new Error('Failed to update profile')
+      const data = await res.json()
+      if (!res.ok || !data.success) throw new Error('Failed to update profile')
+      if (user) {
+        setUser({ ...user, ...data.data })
+      }
       toast.success('Profile updated successfully!')
       setEditing(false)
       setNameTouched(false)
@@ -285,10 +292,56 @@ export default function ProfilePage() {
       setCurrentPassword('')
       setNewPassword('')
       setConfirmNewPassword('')
+      logout()
+      navigate('login')
     } catch {
       toast.error('Failed to change password')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleSendPhoneVerification = async () => {
+    const token = useAppStore.getState().accessToken
+    setOtpWorking(true)
+    try {
+      const res = await fetch('/api/auth/verify-phone/send', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to send verification code')
+      setOtpSent(true)
+      toast.success('Verification code sent to your mobile number')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to send verification code')
+    } finally {
+      setOtpWorking(false)
+    }
+  }
+
+  const handleVerifyPhone = async () => {
+    const token = useAppStore.getState().accessToken
+    setOtpWorking(true)
+    try {
+      const res = await fetch('/api/auth/verify-phone', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ code: otpCode }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) throw new Error(data.error || 'Verification failed')
+      if (user) setUser({ ...user, isVerified: true })
+      setOtpSent(false)
+      setOtpCode('')
+      toast.success('Your mobile number is verified')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Verification failed')
+    } finally {
+      setOtpWorking(false)
     }
   }
 
@@ -732,6 +785,49 @@ export default function ProfilePage() {
                       </p>
                     </motion.div>
                   )}
+                </CardContent>
+              </Card>
+
+              <Card className="mt-5 rounded-2xl shadow-sm border-0 ring-1 ring-gray-100">
+                <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${user?.isVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                      <BadgeCheck className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm">মোবাইল নম্বর যাচাই</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {user?.isVerified
+                          ? 'আপনার মোবাইল নম্বর যাচাই করা আছে।'
+                          : user?.phone
+                            ? 'অর্ডার ও account recovery নিরাপদ রাখতে নম্বরটি যাচাই করুন।'
+                            : 'আগে Profile থেকে একটি বাংলাদেশি মোবাইল নম্বর যোগ করুন।'}
+                      </p>
+                    </div>
+                  </div>
+                  {user?.isVerified ? (
+                    <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 self-start sm:self-auto">Verified</Badge>
+                  ) : user?.phone ? (
+                    otpSent ? (
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <Input
+                          value={otpCode}
+                          onChange={(event) => setOtpCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                          inputMode="numeric"
+                          maxLength={6}
+                          placeholder="6-digit code"
+                          className="w-32 h-9 text-center tracking-[0.18em]"
+                        />
+                        <Button size="sm" disabled={otpWorking || otpCode.length !== 6} onClick={() => void handleVerifyPhone()}>
+                          {otpWorking ? 'Checking…' : 'Verify'}
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button size="sm" variant="outline" disabled={otpWorking} onClick={() => void handleSendPhoneVerification()}>
+                        {otpWorking ? 'Sending…' : 'Send code'}
+                      </Button>
+                    )
+                  ) : null}
                 </CardContent>
               </Card>
             </motion.div>

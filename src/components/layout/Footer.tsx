@@ -14,16 +14,11 @@ import {
   Send,
   ChevronRight,
   ArrowUp,
-  CreditCard,
-  Smartphone,
-  Banknote,
   ShieldCheck,
   Truck,
   RotateCcw,
   Lock,
   Clock,
-  QrCode,
-  Apple,
   CheckCircle2,
   Heart,
   ExternalLink,
@@ -139,17 +134,6 @@ export default function Footer() {
     { icon: Truck, title: 'Free Delivery', subtitle: 'Over ৳1,500', color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
     { icon: RotateCcw, title: 'Easy Returns', subtitle: '7-Day Policy', color: 'text-sky-400', bg: 'bg-sky-500/10', border: 'border-sky-500/20' },
     { icon: Lock, title: 'Secure Payment', subtitle: 'SSL Encrypted', color: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/20' },
-  ]
-
-  // Payment methods
-  const paymentMethods = [
-    { name: 'SSLCommerz', icon: Lock, color: 'text-emerald-400' },
-    { name: 'bKash', icon: Smartphone, color: 'text-pink-400' },
-    { name: 'Nagad', icon: Smartphone, color: 'text-orange-400' },
-    { name: 'Rocket', icon: Smartphone, color: 'text-purple-400' },
-    { name: 'Visa', icon: CreditCard, color: 'text-blue-400' },
-    { name: 'Mastercard', icon: CreditCard, color: 'text-red-400' },
-    { name: 'COD', icon: Banknote, color: 'text-amber-400' },
   ]
 
   // Social links config
@@ -427,81 +411,6 @@ export default function Footer() {
                   </defs>
                   <rect width="100%" height="100%" fill="url(#map-grid)" />
                 </svg>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Separator ── */}
-      <div className="bg-emerald-950">
-        <div className="w-full max-w-[1600px] mx-auto px-4">
-          <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-        </div>
-      </div>
-
-      {/* ── Payment Methods & App Download Row ── */}
-      <div className="bg-emerald-950">
-        <div className="w-full max-w-[1600px] mx-auto px-4 py-8">
-          <div className="flex flex-col lg:flex-row items-center justify-between gap-8">
-            {/* Payment Methods */}
-            <div className="flex flex-col items-center lg:items-start gap-3">
-              <span className="text-white/40 text-xs font-medium uppercase tracking-wider">
-                Payment Methods
-              </span>
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                {paymentMethods.map((method) => (
-                  <div
-                    key={method.name}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/[0.06] border border-white/[0.08] text-xs text-white/70 font-medium hover:bg-white/[0.1] hover:border-white/[0.15] hover:text-white transition-all duration-200 cursor-default group`}
-                  >
-                    <method.icon className={`h-3.5 w-3.5 ${method.color} group-hover:scale-110 transition-transform`} />
-                    {method.name}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* App Download Section - Desktop Only */}
-            <div className="hidden lg:flex items-center gap-6">
-              <div className="flex flex-col items-center gap-2">
-                <span className="text-white/40 text-xs font-medium uppercase tracking-wider">
-                  Download Our App
-                </span>
-                <div className="flex items-center gap-3">
-                  {/* QR Code Placeholder */}
-                  <div className="size-20 rounded-lg bg-white/[0.08] border border-white/10 flex items-center justify-center hover:border-amber-400/20 transition-colors">
-                    <div className="flex flex-col items-center gap-1">
-                      <QrCode className="size-8 text-white/30" />
-                      <span className="text-[8px] text-white/30">Scan Me</span>
-                    </div>
-                  </div>
-                  {/* App Store Badges */}
-                  <div className="flex flex-col gap-2">
-                    <a
-                      href="#"
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/[0.08] border border-white/10 text-white/70 hover:bg-white/[0.12] hover:text-white transition-all duration-200 group"
-                    >
-                      <Apple className="size-5 text-white/60 group-hover:text-white transition-colors" />
-                      <div className="flex flex-col leading-none">
-                        <span className="text-[9px] text-white/40">Download on the</span>
-                        <span className="text-xs font-semibold">App Store</span>
-                      </div>
-                    </a>
-                    <a
-                      href="#"
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/[0.08] border border-white/10 text-white/70 hover:bg-white/[0.12] hover:text-white transition-all duration-200 group"
-                    >
-                      <svg className="size-5 text-white/60 group-hover:text-white transition-colors" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M3.609 1.814L13.792 12 3.61 22.186a.996.996 0 01-.61-.92V2.734a1 1 0 01.609-.92zm10.89 10.893l2.302 2.302-10.937 6.333 8.635-8.635zm3.199-3.198l2.302 2.302a1 1 0 010 1.38l-2.302 2.302L15.396 13l2.302-2.491zM5.864 2.658L16.8 8.99l-2.302 2.302L5.864 2.658z" />
-                      </svg>
-                      <div className="flex flex-col leading-none">
-                        <span className="text-[9px] text-white/40">Get it on</span>
-                        <span className="text-xs font-semibold">Google Play</span>
-                      </div>
-                    </a>
-                  </div>
-                </div>
               </div>
             </div>
           </div>

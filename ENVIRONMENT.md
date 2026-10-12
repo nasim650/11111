@@ -4,6 +4,11 @@
 | :--- | :---: | :--- | :--- |
 | `DATABASE_URL` | Yes | SQLite or PostgreSQL connection string | `file:../db/custom.db` or `postgresql://user:pass@host:5432/db` |
 | `JWT_SECRET` | Yes | Secret key used to sign authentication JWT tokens | `super-secret-jwt-key-2026` |
+| `OTP_SECRET` | Required for OTP | Separate 32+ character secret used to hash OTP codes | Generate a unique random value |
+| `SMS_GATEWAY_URL` | Required for OTP | SMS provider JSON endpoint. The app sends `{ to, from, message }`. | `https://provider.example/messages` |
+| `SMS_GATEWAY_TOKEN` | Required by most SMS providers | Bearer token sent to the SMS gateway | — |
+| `SMS_SENDER_ID` | Optional/provider-specific | Registered sender ID | `KHATIKHADYO` |
+| `REDIS_URL` | Required in production | Shared Redis instance for distributed rate limiting/cache | `rediss://...` |
 | `NEXTAUTH_SECRET` | Yes | Secret key for NextAuth encryption | `super-secret-nextauth-key-2026` |
 | `NEXTAUTH_URL` | Optional | Canonical URL of application | `http://localhost:3000` or `https://khatikhadyo.com` |
 | `CLOUDINARY_CLOUD_NAME` | Optional | Cloudinary account cloud name | `khati-khadyo-cloud` |
@@ -11,4 +16,4 @@
 | `CLOUDINARY_API_SECRET` | Optional | Cloudinary API secret | `abcdef123456789` |
 | `SSLCOMMERZ_STORE_ID` | Optional | SSLCOMMERZ Store ID | `khati001live` |
 | `SSLCOMMERZ_STORE_PASSWORD` | Optional | SSLCOMMERZ Store Password | `store_password_123` |
-| `SSLCOMMERZ_IS_SANDBOX` | Optional | Set to `"true"` for sandbox testing | `"true"` |
+| `SSLCOMMERZ_IS_LIVE` | Required for live gateway | Set to `"true"` only after SSLCommerz live approval | `"false"` |

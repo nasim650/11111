@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const limited = rateLimitOrResponse(request, 'reviews', 5, 60 * 1000)
+    const limited = await rateLimitOrResponse(request, 'reviews', 5, 60 * 1000)
     if (limited) return limited
 
     const body = await request.json()

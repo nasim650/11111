@@ -15,7 +15,6 @@ import {
   Clock,
   Zap,
   X,
-  Smartphone,
   Flame,
   Gift,
   GripHorizontal,
@@ -25,7 +24,6 @@ import {
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAppStore, type PageName } from '@/lib/store'
@@ -1139,100 +1137,6 @@ function TrustSection() {
   )
 }
 
-// ── Mobile App CTA ──
-function MobileAppCTA({ navigate }: {
-  navigate: (page: PageName, params?: Record<string, unknown>) => void
-}) {
-  return (
-    <section className="py-14 bg-gradient-to-br from-emerald-800 via-emerald-700 to-teal-700 text-white relative overflow-hidden">
-      {/* Decorative elements */}
-      <div className="absolute inset-0 opacity-10">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-400 rounded-full translate-x-1/3 -translate-y-1/3" />
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-teal-300 rounded-full -translate-x-1/4 translate-y-1/4" />
-      </div>
-      <div className="absolute inset-0 opacity-5">
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
-            backgroundSize: '32px 32px',
-          }}
-        />
-      </div>
-
-      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12">
-          <div className="flex-1 text-center md:text-left">
-            <div className="inline-flex items-center gap-2 text-amber-400 mb-3">
-              <Smartphone className="h-5 w-5" />
-              <span className="text-sm font-semibold uppercase tracking-wider">Mobile App</span>
-            </div>
-            <h2 className="text-2xl md:text-4xl font-bold mb-3">
-              Get the Khati Khadyo App
-            </h2>
-            <p className="text-white/80 mb-2 max-w-lg text-sm md:text-base">
-              Shop on the go! Get exclusive app-only deals, faster checkout, and real-time order tracking.
-            </p>
-            <p className="text-amber-300/80 text-sm mb-6">
-              অ্যাপ থেকে কিনুন — এক্সক্লুসিভ ডিসকাউন্ট পান!
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
-              <Button
-                size="lg"
-                className="bg-white text-emerald-800 hover:bg-white/90 font-semibold gap-2 rounded-full h-12 px-6 shadow-lg"
-                onClick={() => navigate('products')}
-              >
-                <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
-                  <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
-                </svg>
-                App Store
-              </Button>
-              <Button
-                size="lg"
-                className="bg-white text-emerald-800 hover:bg-white/90 font-semibold gap-2 rounded-full h-12 px-6 shadow-lg"
-                onClick={() => navigate('products')}
-              >
-                <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
-                  <path d="M3.18 23.49c.34.44.95.58 1.44.3L12 19.87l7.38 3.92c.49.28 1.1.14 1.44-.3.34-.44.28-1.06-.13-1.43L13 13.77V2.5c0-.83-.67-1.5-1.5-1.5S10 1.67 10 2.5v11.27L2.31 22.06c-.41.37-.47.99-.13 1.43z" />
-                </svg>
-                Google Play
-              </Button>
-            </div>
-          </div>
-          {/* Phone mockup */}
-          <div className="flex-shrink-0 relative">
-            <div className="relative w-48 h-80 md:w-56 md:h-96">
-              <div className="absolute inset-0 bg-gradient-to-b from-emerald-400 to-teal-500 rounded-[2rem] shadow-2xl border-4 border-white/20" />
-              <div className="absolute top-3 left-1/2 -translate-x-1/2 w-16 h-4 bg-black/30 rounded-full" />
-              <div className="absolute inset-4 rounded-[1.5rem] bg-white/10 backdrop-blur-sm flex items-center justify-center">
-                <div className="text-center">
-                  <Leaf className="h-10 w-10 text-white/80 mx-auto mb-2" />
-                  <p className="text-white/90 font-bold text-sm">Khati Khadyo</p>
-                  <p className="text-white/60 text-[10px]">খাঁটি খাদ্য</p>
-                </div>
-              </div>
-            </div>
-            {/* Floating notification */}
-            <motion.div
-              animate={{ y: [0, -8, 0] }}
-              transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
-              className="absolute -top-4 -right-4 bg-white rounded-xl shadow-xl px-3 py-2 flex items-center gap-2"
-            >
-              <div className="h-8 w-8 rounded-lg bg-emerald-100 flex items-center justify-center">
-                <Gift className="h-4 w-4 text-emerald-600" />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-foreground">App Only!</p>
-                <p className="text-[9px] text-emerald-600 font-semibold">15% Extra Off</p>
-              </div>
-            </motion.div>
-          </div>
-        </div>
-      </div>
-    </section>
-  )
-}
-
 // ── Seasonal Collection Section ──
 function SeasonalCollectionSection({ navigate }: { navigate: (page: PageName, params?: Record<string, unknown>) => void }) {
   const collections = [
@@ -1461,53 +1365,6 @@ function FAQSection() {
   )
 }
 
-// ── Newsletter Section ──
-function NewsletterSection() {
-  const [input, setInput] = useState('')
-  const [subscribed, setSubscribed] = useState(false)
-
-  const handleSubscribe = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (input.trim()) {
-      setSubscribed(true)
-      toast.success('Thank you for subscribing! Check your inbox for a discount coupon.')
-    }
-  }
-
-  return (
-    <section className="py-8 bg-emerald-900 text-white relative overflow-hidden">
-      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 max-w-4xl text-center relative z-10">
-        <Sparkles className="h-8 w-8 text-amber-400 mx-auto mb-3" />
-        <h2 className="text-2xl md:text-3xl font-extrabold mb-2">
-          বিশেষ অফার ও ডিসকাউন্ট পেতে সাবস্ক্রাইব করুন
-        </h2>
-        <p className="text-emerald-100/80 text-sm max-w-xl mx-auto mb-6">
-          Subscribe to our newsletter to receive exclusive offers, new arrivals, and purity guarantee updates.
-        </p>
-
-        {subscribed ? (
-          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 inline-flex items-center gap-2 text-amber-300 font-bold text-sm">
-            <Check className="h-5 w-5" /> You are subscribed! Discount code: KHATI20
-          </div>
-        ) : (
-          <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-            <Input
-              type="text"
-              placeholder="Enter your email or phone"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              className="bg-white text-foreground h-12 rounded-full px-5 placeholder:text-muted-foreground text-sm flex-1 shadow-md border-0"
-            />
-            <Button type="submit" className="h-12 px-7 rounded-full bg-amber-400 hover:bg-amber-500 text-emerald-950 font-bold shadow-lg">
-              Subscribe
-            </Button>
-          </form>
-        )}
-      </div>
-    </section>
-  )
-}
-
 // ── Loading Skeleton ──
 function HomeLoadingSkeleton() {
   return (
@@ -1718,9 +1575,6 @@ export default function HomePage() {
       {/* ── 12. Frequently Asked Questions (FAQ Accordion) ── */}
       <FAQSection />
 
-      {/* ── 13. Newsletter & Mobile App Download ── */}
-      <NewsletterSection />
-      <MobileAppCTA navigate={navigate} />
     </div>
   )
 }

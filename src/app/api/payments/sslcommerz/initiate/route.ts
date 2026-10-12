@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     const csrf = csrfGuard(request)
     if (csrf) return csrf
 
-    const limited = rateLimitOrResponse(request, 'sslcommerz-initiate', 10, 60 * 1000)
+    const limited = await rateLimitOrResponse(request, 'sslcommerz-initiate', 10, 60 * 1000)
     if (limited) return limited
 
     const body = await request.json()
@@ -50,6 +50,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Order is already paid' },
         { status: 409 }
+      )
+    }
+
+    const onlinePaymentSetting = await db.siteConfig.findUnique({
+      where: { key: 'enableOnlinePayment' },
+      select: { value: true },
+    })
+    if (onlinePaymentSetting?.value !== 'true') {
+      return NextResponse.json(
+        { success: false, error: 'Online payment is currently unavailable' },
+        { status: 503 }
       )
     }
 

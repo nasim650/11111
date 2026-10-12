@@ -28,8 +28,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { CheckCircle, XCircle, Clock, AlertCircle, Eye, Download } from 'lucide-react'
-import { useAppStore } from '@/lib/store'
 import { authFetch } from '@/lib/api'
+import { toast } from 'sonner'
 
 interface Payment {
   id: string
@@ -53,10 +53,13 @@ interface Payment {
 }
 
 interface PaginatedResponse {
-  items: Payment[]
-  total: number
-  page: number
-  pages: number
+  data: Payment[]
+  pagination: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+  }
 }
 
 const statusConfig: Record<
@@ -88,14 +91,28 @@ export default function AdminPaymentsPage() {
         limit: String(limit),
         ...(status && { status }),
       })
-      const response = await fetch(`/api/payments?${params}`)
-      const data = (await response.json()) as { success: boolean; data?: PaginatedResponse }
-      if (data.success && data.data) {
-        setPayments(data.data.items)
-        setTotal(data.data.total)
+      const response = await authFetch(`/api/payments?${params}`)
+      const data = (await response.json()) as {
+        success?: boolean
+        error?: string
+        data?: PaginatedResponse
       }
+
+      if (!response.ok || !data.success || !data.data) {
+        throw new Error(data.error || 'Unable to load payment transactions')
+      }
+
+      // The API uses { data: [], pagination: {} }. The old { items, total }
+      // assumption set `payments` to undefined and crashed the next render.
+      setPayments(Array.isArray(data.data.data) ? data.data.data : [])
+      setTotal(Number.isFinite(data.data.pagination?.total) ? data.data.pagination.total : 0)
     } catch (error) {
       console.error('Failed to fetch payments:', error)
+      setPayments([])
+      setTotal(0)
+      toast.error('Unable to load payment transactions', {
+        description: error instanceof Error ? error.message : 'Please try again.',
+      })
     } finally {
       setLoading(false)
     }
@@ -130,13 +147,16 @@ export default function AdminPaymentsPage() {
       p.order.guestName || p.order.user?.name || 'N/A',
     ])
 
-    const csv = [headers, ...rows].map((row) => row.map((cell) => `"${cell}"`).join(',')).join('\n')
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+      .join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
     a.download = `payments-${Date.now()}.csv`
     a.click()
+    URL.revokeObjectURL(url)
   }
 
   const statusOptions = [
@@ -147,8 +167,7 @@ export default function AdminPaymentsPage() {
     { value: 'cancelled', label: 'Cancelled' },
   ]
 
-  const pages = Math.ceil(total / limit)
-  const config = statusConfig[status] || statusConfig.pending
+  const pages = Math.max(1, Math.ceil(total / limit))
 
   return (
     <div className="space-y-6">
