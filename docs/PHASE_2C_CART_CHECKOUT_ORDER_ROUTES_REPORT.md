@@ -3,6 +3,8 @@
 **Project:** Khati Khadyo (খাঁটি খাদ্য) — Authentic Bangladeshi Food E-Commerce  
 **Branch:** `phase-1b-implementation`  
 **Execution Date:** 2026-11-01  
+**Commit:** `1c2867a`  
+**Vercel Preview URL:** https://11111-6yo386rj2-dorim.vercel.app (Status: `success`)  
 **Scope:** Real App Router routes for `/cart`, `/checkout`, `/orders/[orderNumber]`, Server-Side Order Authorization, Zero-Mutation Payment Redirect Compatibility, and Invariant Preservation  
 
 ---
