@@ -11,7 +11,7 @@
     "pretest": "prisma generate --schema=prisma/test-schema.prisma",
     "test": "node --loader ./scripts/test-loader.mjs --test --test-concurrency=1 tests/**/*.test.mjs",
     "verify:headers": "node scripts/verify-security-headers.mjs",
-    "admin:upsert-safe": "node scripts/safe-upsert-admin.ts",
+    "admin:upsert-safe": "tsx scripts/safe-upsert-admin.ts",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -87,7 +87,8 @@
     "vaul": "^1.1.2",
     "z-ai-web-dev-sdk": "^0.0.18",
     "zod": "^4.0.2",
-    "zustand": "^5.0.6"
+    "zustand": "^5.0.6",
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

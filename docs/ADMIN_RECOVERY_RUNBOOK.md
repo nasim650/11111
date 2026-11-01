@@ -1,7 +1,7 @@
 # 🛡️ Admin Account Recovery Runbook — Khati Khadyo
 
 **Project:** Khati Khadyo (খাঁটি খাদ্য) — Authentic Bangladeshi Food E-Commerce  
-**Document Version:** 1.1.0 (Hardened)  
+**Document Version:** 1.2.0 (Build Fix & Runtime Compatibility)  
 **Effective Date:** 2026-11-01  
 **Applicability:** Production, Staging, and Local Environments  
 
@@ -28,6 +28,7 @@ The dedicated utility [`scripts/safe-upsert-admin.ts`](file:///Users/nasimp/Desk
 - **Session Revocation on Rotation:** When rotating credentials for an existing admin, `sessionVersion` increments, invalidating all previously issued JWT tokens.
 - **Data Safety Guarantee:** Zero `deleteMany`, `truncate`, drop, or cascade operations. All orders, products, and customer records remain 100% untouched.
 - **Zero Log Leakage:** Plaintext passwords, tokens, database URLs, and full email addresses are never logged or stored. Terminal outputs only a masked email address (e.g. `a***n@khatikhadyo.com`).
+- **Production Runtime Architecture:** The script utilizes the production-grade `tsx` CLI runner via `npm run admin:upsert-safe` (`tsx scripts/safe-upsert-admin.ts`), leveraging standard TypeScript path resolution (`@/lib/db`, `@/lib/auth`) without requiring `.ts` file extensions or `allowImportingTsExtensions` hacks, guaranteeing zero build/typecheck breakage across Vercel and CI environments.
 
 ---
 

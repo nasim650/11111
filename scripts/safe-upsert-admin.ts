@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { db } from '../src/lib/db.ts'
-import { hashPassword } from '../src/lib/auth.ts'
+import { db } from '@/lib/db'
+import { hashPassword } from '@/lib/auth'
 
 export type SafeAdminUpsertOptions = {
   email?: string
