@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, lazy, Suspense } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAppStore, type PageName } from '@/lib/store'
 import { toast } from 'sonner'
 
@@ -119,6 +120,7 @@ function CustomerPageRenderer() {
 }
 
 export default function Home() {
+  const router = useRouter()
   const currentPage = useAppStore((s) => s.currentPage)
   const user = useAppStore((s) => s.user)
   const accessToken = useAppStore((s) => s.accessToken)
@@ -137,24 +139,37 @@ export default function Home() {
     loadWishlist()
   }, [loadUser, loadCart, loadWishlist, loadSiteConfig])
 
-  // Handle SSLCommerz payment return
+  // Handle SSLCommerz payment return and forward to canonical /orders/[orderNumber]
   useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
     const paymentStatus = params.get('payment')
     const orderId = params.get('orderId')
 
-    if (paymentStatus === 'success' && orderId) {
+    if (paymentStatus && orderId) {
       window.history.replaceState({}, '', '/')
-      clearCart?.()
-      toast.success('Payment successful! Your order has been placed.')
-      navigate('order-confirmation', { orderId })
-    } else if (paymentStatus === 'fail') {
-      window.history.replaceState({}, '', '/')
-      toast.error('Payment failed. Please try again or choose a different payment method.')
-      navigate('orders')
+      if (paymentStatus === 'success') {
+        clearCart?.()
+        toast.success('Payment completed! Loading order details...')
+      } else if (paymentStatus === 'fail') {
+        toast.error('Payment failed. Please try again or choose Cash on Delivery.')
+      }
+
+      fetch(`/api/orders/${orderId}`)
+        .then((r) => r.json())
+        .then((data) => {
+          const orderNum = data.data?.orderNumber || data.orderNumber
+          if (orderNum) {
+            router.push(`/orders/${encodeURIComponent(orderNum)}?payment=${encodeURIComponent(paymentStatus)}`)
+          } else {
+            navigate('order-confirmation', { orderId })
+          }
+        })
+        .catch(() => {
+          navigate('order-confirmation', { orderId })
+        })
     }
-  }, [clearCart, navigate])
+  }, [clearCart, navigate, router])
 
   useEffect(() => {
     if (adminPages.has(currentPage) && (user?.role !== 'admin' || !accessToken)) {

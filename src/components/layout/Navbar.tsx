@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search,
@@ -168,6 +169,7 @@ function mapUrlToPage(url: string): { page: PageName; params?: Record<string, un
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Navbar() {
+  const router = useRouter()
   const {
     siteConfig,
     loadSiteConfig,
@@ -994,14 +996,22 @@ export default function Navbar() {
                               variant="outline"
                               size="sm"
                               className="w-full text-xs h-9 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors"
-                              onClick={() => { navigate('cart'); setMiniCartOpen(false) }}
+                              onClick={() => {
+                                router.push('/cart')
+                                navigate('cart')
+                                setMiniCartOpen(false)
+                              }}
                             >
                               View Cart
                             </Button>
                             <Button
                               size="sm"
                               className="w-full text-xs h-9 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-600/20 transition-all"
-                              onClick={() => { navigate('checkout'); setMiniCartOpen(false) }}
+                              onClick={() => {
+                                router.push('/checkout')
+                                navigate('checkout')
+                                setMiniCartOpen(false)
+                              }}
                             >
                               Checkout
                             </Button>
