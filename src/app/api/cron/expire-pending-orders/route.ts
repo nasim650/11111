@@ -3,14 +3,13 @@ import { expirePendingOrders } from '@/lib/order-inventory'
 
 /**
  * Universal Protected Cron Endpoint for Expiring Stale Online Checkouts (30+ minutes).
- * Compatible with any scheduler (Vercel Cron, GitHub Actions, Google Cloud Scheduler,
- * AWS EventBridge, EasyCron, or self-hosted crontab).
  *
- * Authentication:
- * Accepts CRON_SECRET via:
- *   1. Authorization: Bearer <CRON_SECRET>
- *   2. Header: x-cron-secret: <CRON_SECRET>
- *   3. Query parameter: ?secret=<CRON_SECRET>
+ * Security Hardening (Phase 1B.1):
+ * - Query-string secret support has been strictly REMOVED to prevent secret leakage in logs,
+ *   browser history, and referrers.
+ * - In production, authentication strictly requires either:
+ *     1. Authorization: Bearer <CRON_SECRET>
+ *     2. Header: x-cron-secret: <CRON_SECRET>
  */
 function verifyCronAuth(request: NextRequest): boolean {
   const expectedSecret = process.env.CRON_SECRET
@@ -21,14 +20,13 @@ function verifyCronAuth(request: NextRequest): boolean {
     return false
   }
 
-  // If secret is set, verify against incoming request
+  // If secret is set, verify against headers ONLY
   if (expectedSecret) {
     const authHeader = request.headers.get('authorization')
     const bearer = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
     const headerSecret = request.headers.get('x-cron-secret')
-    const querySecret = request.nextUrl.searchParams.get('secret')
 
-    const provided = bearer || headerSecret || querySecret
+    const provided = bearer || headerSecret
     return provided === expectedSecret
   }
 
@@ -39,7 +37,7 @@ function verifyCronAuth(request: NextRequest): boolean {
 export async function POST(request: NextRequest) {
   if (!verifyCronAuth(request)) {
     return NextResponse.json(
-      { success: false, error: 'Unauthorized: valid CRON_SECRET required' },
+      { success: false, error: 'Unauthorized: valid Authorization Bearer or x-cron-secret required' },
       { status: 401 }
     )
   }

@@ -1,10 +1,9 @@
 import { db } from '@/lib/db'
-import { createAuditLog } from '@/lib/audit'
 import type { Prisma } from '@prisma/client'
 
 export const ORDER_RESERVATION_TTL_MS = 30 * 60 * 1000 // 30 minutes
 
-type DbClient = Prisma.TransactionClient | typeof db
+export type DbClient = Prisma.TransactionClient | typeof db | any
 
 export interface ReleaseInventoryResult {
   success: boolean
@@ -35,9 +34,18 @@ export function getReservationExpiry(paymentMethod: string): Date | null {
 }
 
 /**
- * Releases reserved inventory and coupon usage for an order in a single atomic transaction.
- * Idempotent: If stock is already released (stockReserved === false) or order is already paid,
- * this function exits cleanly without double-restoring stock or double-releasing coupons.
+ * Releases reserved inventory and coupon usage for an order in a single atomic transaction
+ * with atomic conditional state claim.
+ *
+ * Idempotency & Concurrency:
+ * Uses an atomic UPDATE with conditional WHERE clause:
+ *   UPDATE "Order" SET "stockReserved" = false WHERE "id" = orderId AND "stockReserved" = true AND "paymentStatus" != 'paid'
+ * In PostgreSQL, this locks the matched row. Concurrent requests wait on the lock;
+ * once the first commits, subsequent requests find count = 0 and exit as safe no-ops.
+ *
+ * Transaction Boundary:
+ * All mutations (order update, stock increment, coupon decrement, status history, and audit log)
+ * occur within the exact same transaction client. If any step fails, the entire transaction rolls back.
  */
 export async function releaseOrderInventoryAndCoupon(params: {
   orderId: string
@@ -45,11 +53,43 @@ export async function releaseOrderInventoryAndCoupon(params: {
   paymentStatus?: string
   orderStatus?: string
   tx?: DbClient
+  dbClient?: any
 }): Promise<ReleaseInventoryResult> {
-  const { orderId, reason, paymentStatus = 'failed', orderStatus = 'cancelled', tx } = params
+  const { orderId, reason, paymentStatus = 'failed', orderStatus = 'cancelled', tx, dbClient = db } = params
 
   const runWithTx = async (client: DbClient): Promise<ReleaseInventoryResult> => {
-    // Lock / fetch order with items
+    // ── 1. ATOMIC CONDITIONAL STATE CLAIM ──
+    const claim = await client.order.updateMany({
+      where: {
+        id: orderId,
+        stockReserved: true,
+        paymentStatus: { not: 'paid' },
+      },
+      data: {
+        stockReserved: false,
+        reservationExpiresAt: null,
+      },
+    })
+
+    if (claim.count === 0) {
+      // Order was already claimed/released, or is already confirmed paid
+      const existing = await client.order.findUnique({
+        where: { id: orderId },
+        select: { paymentStatus: true, stockReserved: true },
+      })
+      return {
+        success: true,
+        alreadyReleased: true,
+        restoredStock: 0,
+        restoredCoupon: false,
+        orderId,
+        reason: existing?.paymentStatus === 'paid'
+          ? 'Order is already paid; stock cannot be restored'
+          : 'Stock was already released or claimed by another transaction',
+      }
+    }
+
+    // This transaction now exclusively holds the claim to release inventory & coupon
     const order = await client.order.findUnique({
       where: { id: orderId },
       include: { items: true },
@@ -62,26 +102,13 @@ export async function releaseOrderInventoryAndCoupon(params: {
         restoredStock: 0,
         restoredCoupon: false,
         orderId,
-        reason: 'Order not found',
-      }
-    }
-
-    // Idempotency check:
-    // If stock is already released or order is already marked paid, DO NOT restore again
-    if (!order.stockReserved || order.paymentStatus === 'paid') {
-      return {
-        success: true,
-        alreadyReleased: true,
-        restoredStock: 0,
-        restoredCoupon: false,
-        orderId,
-        reason: order.paymentStatus === 'paid' ? 'Order is already paid' : 'Stock already released',
+        reason: 'Order not found after claim',
       }
     }
 
     let totalRestored = 0
 
-    // 1. Restore product stock atomically
+    // ── 2. RESTORE PRODUCT STOCK ATOMICALLY ──
     for (const item of order.items) {
       await client.product.update({
         where: { id: item.productId },
@@ -90,29 +117,32 @@ export async function releaseOrderInventoryAndCoupon(params: {
       totalRestored += item.quantity
     }
 
-    // 2. Release coupon reservation if applicable
+    // ── 3. RELEASE COUPON RESERVATION ATOMICALLY ──
     let couponRestored = false
     if (order.couponCode && !order.couponReleased) {
-      await client.coupon.updateMany({
-        where: { code: order.couponCode, usedCount: { gt: 0 } },
-        data: { usedCount: { decrement: 1 } },
+      const couponClaim = await client.order.updateMany({
+        where: { id: orderId, couponReleased: false },
+        data: { couponReleased: true },
       })
-      couponRestored = true
+      if (couponClaim.count > 0) {
+        await client.coupon.updateMany({
+          where: { code: order.couponCode, usedCount: { gt: 0 } },
+          data: { usedCount: { decrement: 1 } },
+        })
+        couponRestored = true
+      }
     }
 
-    // 3. Update order state atomically
+    // ── 4. FINALIZE ORDER STATUS ──
     await client.order.update({
       where: { id: orderId },
       data: {
-        stockReserved: false,
-        couponReleased: order.couponCode ? true : false,
         orderStatus,
         paymentStatus,
-        reservationExpiresAt: null, // Clear timer
       },
     })
 
-    // 4. Record order status history
+    // ── 5. RECORD ORDER STATUS HISTORY ──
     await client.orderStatusHistory.create({
       data: {
         orderId,
@@ -121,18 +151,20 @@ export async function releaseOrderInventoryAndCoupon(params: {
       },
     })
 
-    // 5. Record audit log
-    await createAuditLog({
-      action: 'inventory_release',
-      module: 'orders',
-      referenceId: orderId,
-      newData: {
-        orderId,
-        restoredStock: totalRestored,
-        restoredCoupon: couponRestored,
-        reason,
-        orderStatus,
-        paymentStatus,
+    // ── 6. RECORD AUDIT LOG INSIDE SAME TRANSACTION BOUNDARY ──
+    await client.auditLog.create({
+      data: {
+        action: 'inventory_release',
+        module: 'orders',
+        referenceId: orderId,
+        newData: JSON.stringify({
+          orderId,
+          restoredStock: totalRestored,
+          restoredCoupon: couponRestored,
+          reason,
+          orderStatus,
+          paymentStatus,
+        }),
       },
     })
 
@@ -149,15 +181,20 @@ export async function releaseOrderInventoryAndCoupon(params: {
     return runWithTx(tx)
   }
 
-  return db.$transaction(async (client) => {
+  return dbClient.$transaction(async (client: DbClient) => {
     return runWithTx(client)
   })
 }
 
 /**
- * Finalizes order payment upon valid authoritative IPN payment confirmation.
- * Transitions order to 'paid' and 'confirmed', and clears reservation expiry.
- * If order was already cancelled or expired and stock released, returns error.
+ * Finalizes order payment upon valid authoritative server-to-server IPN confirmation.
+ * Uses atomic conditional state claim:
+ *   UPDATE "Order" SET "paymentStatus" = 'paid', "orderStatus" = 'confirmed'
+ *   WHERE "id" = orderId AND "stockReserved" = true AND "paymentStatus" != 'paid' AND "orderStatus" != 'cancelled'
+ *
+ * Idempotency:
+ * If already paid, returns { success: true, alreadyPaid: true } without duplicate mutations.
+ * If already cancelled or expired and stock released, returns error and blocks payment finalization.
  */
 export async function finalizeOrderPayment(params: {
   orderId: string
@@ -165,41 +202,58 @@ export async function finalizeOrderPayment(params: {
   gatewayResponse?: string | null
   paidAt?: Date | null
   tx?: DbClient
+  dbClient?: any
 }): Promise<FinalizePaymentResult> {
-  const { orderId, transactionId, gatewayResponse, paidAt = new Date(), tx } = params
+  const { orderId, transactionId, gatewayResponse, paidAt = new Date(), tx, dbClient = db } = params
 
   const runWithTx = async (client: DbClient): Promise<FinalizePaymentResult> => {
+    // ── 1. ATOMIC CONDITIONAL CLAIM ──
+    const claim = await client.order.updateMany({
+      where: {
+        id: orderId,
+        stockReserved: true,
+        paymentStatus: { not: 'paid' },
+        orderStatus: { not: 'cancelled' },
+      },
+      data: {
+        paymentStatus: 'paid',
+        orderStatus: 'confirmed',
+        reservationExpiresAt: null, // Clear timer, stock is permanently committed
+      },
+    })
+
+    if (claim.count === 0) {
+      const existing = await client.order.findUnique({
+        where: { id: orderId },
+        select: { paymentStatus: true, stockReserved: true, orderStatus: true },
+      })
+
+      if (existing?.paymentStatus === 'paid') {
+        // Idempotent duplicate: already successfully paid
+        return { success: true, alreadyPaid: true, orderId }
+      }
+
+      return {
+        success: false,
+        alreadyPaid: false,
+        orderId,
+        error: `Order cannot be paid: status is ${existing?.orderStatus}, stockReserved=${existing?.stockReserved}, paymentStatus=${existing?.paymentStatus}`,
+      }
+    }
+
+    // This transaction exclusively claimed payment finalization
     const order = await client.order.findUnique({
       where: { id: orderId },
       include: { payment: true },
     })
 
-    if (!order) {
-      return { success: false, alreadyPaid: false, orderId, error: 'Order not found' }
-    }
-
-    // If order was already expired or cancelled and stock was released, it cannot be paid
-    if (!order.stockReserved || order.orderStatus === 'cancelled') {
-      return {
-        success: false,
-        alreadyPaid: false,
-        orderId,
-        error: 'Order was expired/cancelled and reserved inventory was already released',
-      }
-    }
-
-    // Idempotency: if already paid, return cleanly without duplicate history
-    if (order.paymentStatus === 'paid') {
-      return { success: true, alreadyPaid: true, orderId }
-    }
-
-    // Update payment record
+    // ── 2. RECORD / UPDATE PAYMENT RECORD ──
     await client.payment.upsert({
       where: { orderId },
       update: {
         status: 'paid',
-        transactionId: transactionId || order.payment?.transactionId,
-        gatewayResponse: gatewayResponse || order.payment?.gatewayResponse,
+        transactionId: transactionId || order?.payment?.transactionId,
+        gatewayResponse: gatewayResponse || order?.payment?.gatewayResponse,
         paidAt,
       },
       create: {
@@ -207,24 +261,14 @@ export async function finalizeOrderPayment(params: {
         method: 'online',
         gateway: 'sslcommerz',
         status: 'paid',
-        amount: order.totalAmount,
+        amount: order?.totalAmount ?? 0,
         transactionId,
         gatewayResponse,
         paidAt,
       },
     })
 
-    // Update order record
-    await client.order.update({
-      where: { id: orderId },
-      data: {
-        paymentStatus: 'paid',
-        orderStatus: 'confirmed',
-        reservationExpiresAt: null, // Finalized, no longer subject to reservation expiry
-      },
-    })
-
-    // Record order status history
+    // ── 3. RECORD STATUS HISTORY ──
     await client.orderStatusHistory.create({
       data: {
         orderId,
@@ -233,21 +277,23 @@ export async function finalizeOrderPayment(params: {
       },
     })
 
-    // Update delivery label payment status
+    // ── 4. UPDATE DELIVERY LABEL ──
     await client.deliveryLabel.updateMany({
       where: { orderId },
       data: { paymentStatus: 'paid' },
     })
 
-    // Record audit log
-    await createAuditLog({
-      action: 'payment_success_ipn',
-      module: 'payments',
-      referenceId: orderId,
-      newData: {
-        orderId,
-        transactionId,
-        status: 'paid',
+    // ── 5. RECORD AUDIT LOG INSIDE SAME TRANSACTION BOUNDARY ──
+    await client.auditLog.create({
+      data: {
+        action: 'payment_success_ipn',
+        module: 'payments',
+        referenceId: orderId,
+        newData: JSON.stringify({
+          orderId,
+          transactionId,
+          status: 'paid',
+        }),
       },
     })
 
@@ -258,7 +304,7 @@ export async function finalizeOrderPayment(params: {
     return runWithTx(tx)
   }
 
-  return db.$transaction(async (client) => {
+  return dbClient.$transaction(async (client: DbClient) => {
     return runWithTx(client)
   })
 }
@@ -267,11 +313,17 @@ export async function finalizeOrderPayment(params: {
  * Sweeps all pending online orders whose reservation has expired (30+ minutes)
  * and safely releases reserved inventory and coupons in atomic transactions.
  */
-export async function expirePendingOrders(cutoffDate: Date = new Date()): Promise<{
+export async function expirePendingOrders(params?: {
+  cutoffDate?: Date
+  dbClient?: any
+}): Promise<{
   expiredCount: number
   processedOrderIds: string[]
 }> {
-  const expiredOrders = await db.order.findMany({
+  const cutoffDate = params?.cutoffDate || new Date()
+  const dbInstance = params?.dbClient || db
+
+  const expiredOrders = await dbInstance.order.findMany({
     where: {
       paymentMethod: 'online',
       paymentStatus: 'pending',
@@ -290,6 +342,7 @@ export async function expirePendingOrders(cutoffDate: Date = new Date()): Promis
       reason: 'Online checkout reservation expired after 30 minutes',
       paymentStatus: 'expired',
       orderStatus: 'cancelled',
+      dbClient: dbInstance,
     })
     if (result.success && !result.alreadyReleased) {
       processedOrderIds.push(ord.id)
