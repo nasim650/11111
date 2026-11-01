@@ -4,6 +4,7 @@ import { getUserRoleFromRequest, getUserIdFromRequest, getUserFromRequest, isAdm
 import { validateCheckout, validationError } from '@/lib/validation'
 import { appendPaymentLog } from '@/lib/sslcommerz'
 import { getShippingSettings } from '@/lib/shipping'
+import { getReservationExpiry } from '@/lib/order-inventory'
 
 export async function GET(request: NextRequest) {
   try {
@@ -306,6 +307,9 @@ export async function POST(request: NextRequest) {
           deliveryCharge,
           paymentMethod,
           paymentStatus: 'pending',
+          reservationExpiresAt: getReservationExpiry(paymentMethod),
+          stockReserved: true,
+          couponReleased: false,
           orderNote,
           couponCode: validatedCouponCode,
           items: {

@@ -8,8 +8,13 @@ import {
   parseSSLCommerzPayload,
   validateSSLCommerzTransaction,
   verifySSLCommerzSignature,
+  appendPaymentLog,
 } from '@/lib/sslcommerz'
 import { recordPaymentEvent } from '@/lib/payment-sync'
+import {
+  releaseOrderInventoryAndCoupon,
+  finalizeOrderPayment,
+} from '@/lib/order-inventory'
 
 type CallbackKind = 'success' | 'fail' | 'cancel' | 'ipn'
 
@@ -52,7 +57,7 @@ export async function handleSSLCommerzCallback(request: NextRequest, kind: Callb
 
     const order = await db.order.findUnique({
       where: { id: orderId },
-      include: { payment: true },
+      include: { payment: true, items: true },
     })
 
     if (!order) {
@@ -62,6 +67,7 @@ export async function handleSSLCommerzCallback(request: NextRequest, kind: Callb
       )
     }
 
+    // ── 1. TRANSACTION INTEGRITY CHECKS ────────────────────────────────────────
     if (order.payment?.transactionId && order.payment.transactionId !== transactionId) {
       await recordPaymentEvent({
         orderId,
@@ -71,6 +77,12 @@ export async function handleSSLCommerzCallback(request: NextRequest, kind: Callb
         amount: Number(payload.amount || order.totalAmount),
         payload,
         message: `Expected ${order.payment.transactionId}, received ${transactionId}`,
+      })
+      await releaseOrderInventoryAndCoupon({
+        orderId,
+        reason: `Transaction mismatch: expected ${order.payment.transactionId}, got ${transactionId}`,
+        paymentStatus: 'failed',
+        orderStatus: 'cancelled',
       })
       return kind === 'ipn'
         ? NextResponse.json({ success: false, error: 'Transaction mismatch' }, { status: 409 })
@@ -89,24 +101,55 @@ export async function handleSSLCommerzCallback(request: NextRequest, kind: Callb
         : redirectFor(request, orderId, 'failed')
     }
 
-    const signatureValid = verifySSLCommerzSignature(payload, config.storePassword)
-    let validation: Record<string, unknown> | null = null
+    // ── 2. FAIL OR CANCEL CALLBACKS (Browser or IPN) ───────────────────────────
+    if (kind === 'fail' || kind === 'cancel') {
+      const finalStatus = kind === 'cancel' ? 'cancelled' : 'failed'
+      await releaseOrderInventoryAndCoupon({
+        orderId,
+        reason: `Payment ${kind}: reported status ${reportedStatus}`,
+        paymentStatus: finalStatus,
+        orderStatus: 'cancelled',
+      })
 
-    if (valId && signatureValid) {
-      validation = await validateSSLCommerzTransaction(valId, config)
+      await recordPaymentEvent({
+        orderId,
+        event: kind,
+        status: finalStatus.toUpperCase(),
+        transactionId,
+        amount: Number(payload.amount || order.totalAmount),
+        payload,
+      })
+
+      return redirectFor(request, orderId, finalStatus)
     }
 
-    const validationStatus = typeof validation?.status === 'string' ? validation.status : null
-    const reportedAmount = Number(payload.amount || payload.currency_amount || 0)
-    const validatedAmount = Number(validation?.amount || validation?.currency_amount || reportedAmount)
-    const amountMatches = Math.abs((validatedAmount || reportedAmount) - order.totalAmount) < 0.01
-    const statusValid = isSuccessfulSSLCommerzStatus(reportedStatus) && isSuccessfulSSLCommerzStatus(validationStatus)
+    // ── 3. AUTHORITATIVE IPN SUCCESS VALIDATION ────────────────────────────────
+    if (kind === 'ipn') {
+      const signatureValid = verifySSLCommerzSignature(payload, config.storePassword)
+      let validation: Record<string, unknown> | null = null
 
-    if (kind === 'success' || kind === 'ipn') {
+      if (valId && signatureValid) {
+        validation = await validateSSLCommerzTransaction(valId, config)
+      }
+
+      const validationStatus = typeof validation?.status === 'string' ? validation.status : null
+      const reportedAmount = Number(payload.amount || payload.currency_amount || 0)
+      const validatedAmount = Number(validation?.amount || validation?.currency_amount || reportedAmount)
+      const amountMatches = Math.abs((validatedAmount || reportedAmount) - order.totalAmount) < 0.01
+      const statusValid = isSuccessfulSSLCommerzStatus(reportedStatus) && isSuccessfulSSLCommerzStatus(validationStatus)
+
       if (!signatureValid || !validation || !statusValid || !amountMatches) {
+        // Invalid or fraudulent IPN: release stock & mark failed
+        await releaseOrderInventoryAndCoupon({
+          orderId,
+          reason: `IPN verification failed (sig=${signatureValid}, statusValid=${statusValid}, amountMatches=${amountMatches})`,
+          paymentStatus: 'failed',
+          orderStatus: 'cancelled',
+        })
+
         await recordPaymentEvent({
           orderId,
-          event: `${kind}_verification_failed`,
+          event: 'ipn_verification_failed',
           status: 'FAILED',
           transactionId,
           amount: reportedAmount || order.totalAmount,
@@ -115,41 +158,74 @@ export async function handleSSLCommerzCallback(request: NextRequest, kind: Callb
           message: `signature=${signatureValid}; statusValid=${statusValid}; amountMatches=${amountMatches}`,
         })
 
-        return kind === 'ipn'
-          ? NextResponse.json({ success: false, error: 'Payment verification failed' }, { status: 400 })
-          : redirectFor(request, orderId, 'failed')
+        return NextResponse.json({ success: false, error: 'Payment verification failed' }, { status: 400 })
       }
-    }
 
-    const finalStatus = kind === 'fail' ? 'FAILED' : kind === 'cancel' ? 'CANCELLED' : reportedStatus
-    const payment = await recordPaymentEvent({
-      orderId,
-      event: kind,
-      status: finalStatus,
-      transactionId,
-      amount: reportedAmount || order.totalAmount,
-      payload,
-      validation,
-    })
+      // Valid IPN: finalize order payment atomically
+      const finalLog = appendPaymentLog(order.payment?.gatewayResponse, {
+        event: 'ipn_success_validated',
+        status: 'paid',
+        transactionId,
+        validationStatus,
+        payload,
+      })
 
-    await createAuditLog({
-      action: `payment_${kind}`,
-      module: 'payments',
-      referenceId: payment.id,
-      newData: {
+      const finalizeResult = await finalizeOrderPayment({
         orderId,
         transactionId,
-        status: finalStatus,
-        validationStatus,
-        signatureValid,
-      },
-    })
+        gatewayResponse: finalLog,
+        paidAt: new Date(),
+      })
 
-    if (kind === 'ipn') {
-      return NextResponse.json({ success: true, data: { orderId, transactionId, status: payment.status } })
+      if (!finalizeResult.success) {
+        return NextResponse.json(
+          { success: false, error: finalizeResult.error || 'Unable to finalize payment' },
+          { status: 409 }
+        )
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          orderId,
+          transactionId,
+          status: 'paid',
+          alreadyPaid: finalizeResult.alreadyPaid,
+        },
+      })
     }
 
-    return redirectFor(request, orderId, payment.status === 'paid' ? 'success' : payment.status)
+    // ── 4. NON-AUTHORITATIVE BROWSER SUCCESS REDIRECT ──────────────────────────
+    // Browser redirect is not authoritative. We record the user's return event
+    // without releasing stock or forcing unverified status, awaiting authoritative IPN.
+    if (kind === 'success') {
+      const isAlreadyPaid = order.paymentStatus === 'paid'
+
+      await recordPaymentEvent({
+        orderId,
+        event: 'browser_success_redirect',
+        status: isAlreadyPaid ? 'PAID' : 'PENDING_IPN_CONFIRMATION',
+        transactionId,
+        amount: Number(payload.amount || order.totalAmount),
+        payload,
+      })
+
+      await createAuditLog({
+        action: 'payment_browser_success_redirect',
+        module: 'payments',
+        referenceId: orderId,
+        newData: {
+          orderId,
+          transactionId,
+          orderPaymentStatus: order.paymentStatus,
+          authoritativeIpnReceived: isAlreadyPaid,
+        },
+      })
+
+      return redirectFor(request, orderId, 'success')
+    }
+
+    return redirectFor(request, orderId, 'failed')
   } catch (error) {
     console.error(`SSLCOMMERZ ${kind} callback error:`, error)
     return NextResponse.json(

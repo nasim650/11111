@@ -73,6 +73,17 @@ export async function recordPaymentEvent(params: {
         ? 'failed'
         : 'pending'
 
+  const currentOrder = await db.order.findUnique({
+    where: { id: params.orderId },
+    select: { paymentStatus: true, orderStatus: true },
+  })
+
+  // Idempotency: If the order was already confirmed paid by authoritative IPN,
+  // do not allow browser redirects or non-authoritative events to overwrite it.
+  if (currentOrder?.paymentStatus === 'paid' && !paid) {
+    return payment
+  }
+
   const orderStatus = paid ? 'confirmed' : undefined
   await db.order.update({
     where: { id: params.orderId },
