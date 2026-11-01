@@ -1,7 +1,7 @@
 # 🛡️ Admin Account Recovery Runbook — Khati Khadyo
 
 **Project:** Khati Khadyo (খাঁটি খাদ্য) — Authentic Bangladeshi Food E-Commerce  
-**Document Version:** 1.0.0  
+**Document Version:** 1.1.0 (Hardened)  
 **Effective Date:** 2026-11-01  
 **Applicability:** Production, Staging, and Local Environments  
 
@@ -13,47 +13,48 @@
 > **DO NOT RUN `prisma db seed` OR `npx tsx prisma/seed.ts` IN PRODUCTION.**  
 > The standard development seed script (`prisma/seed.ts`) contains table truncation commands (`deleteMany()`) designed to reset development environments. Running it in production will wipe customer orders, payments, reviews, and categories, while attempting to create an insecure default password (`admin123`).
 
-To safely create or recover an administrative account without deleting or modifying any other database records, follow the non-destructive procedure documented below.
+To safely create or recover an administrative account without deleting or modifying any other database records, follow the hardened, non-destructive procedure documented below.
 
 ---
 
 ## 2. Safe Admin Upsert Tool (`scripts/safe-upsert-admin.ts`)
 
-The dedicated utility [`scripts/safe-upsert-admin.ts`](file:///Users/nasimp/Desktop/11111/1/scripts/safe-upsert-admin.ts) performs an **isolated, non-destructive upsert**:
-- If the user does not exist: creates a new user with `role: 'admin'`, `isActive: true`, `isVerified: true`.
-- If the user already exists: safely updates their `role` to `'admin'`, activates the account (`isActive: true`), rotates their password hash with bcrypt (12 rounds), and increments `sessionVersion` to immediately invalidate all previously issued sessions.
-- **Data Safety Guarantee:** Performs zero `deleteMany`, `truncate`, drop, or cascade operations. All orders, products, and customer records remain 100% untouched.
-- **Production Guard:** Requires `CONFIRM_SAFE_ADMIN_UPSERT=true` whenever `NODE_ENV=production` or `VERCEL_ENV=production`.
-- **Zero Log Leakage:** Plaintext passwords are never logged or stored. Terminal outputs only a masked email address (e.g. `a***n@khatikhadyo.com`).
+The dedicated utility [`scripts/safe-upsert-admin.ts`](file:///Users/nasimp/Desktop/11111/1/scripts/safe-upsert-admin.ts) performs an **isolated, non-destructive, and fully transactional upsert**:
+- **Mandatory Confirmation Guard:** Regardless of environment (`NODE_ENV`, `VERCEL_ENV`, local or remote), execution is strictly blocked unless `CONFIRM_SAFE_ADMIN_UPSERT=true` is provided.
+- **Target Match Confirmation:** `CONFIRM_ADMIN_EMAIL` must be explicitly provided and must match `ADMIN_EMAIL` exactly before any database connection or query is initiated.
+- **Atomic Transaction Boundary:** User creation/update, password hashing, `sessionVersion` increment, and audit logging execute within a single atomic Prisma transaction (`$transaction`).
+- **Audit Rollback Guarantee:** If audit logging fails, the transaction immediately rolls back and NO user state changes persist.
+- **Password Policy:** Minimum **12 characters** required; hashed with bcrypt (12 rounds).
+- **Session Revocation on Rotation:** When rotating credentials for an existing admin, `sessionVersion` increments, invalidating all previously issued JWT tokens.
+- **Data Safety Guarantee:** Zero `deleteMany`, `truncate`, drop, or cascade operations. All orders, products, and customer records remain 100% untouched.
+- **Zero Log Leakage:** Plaintext passwords, tokens, database URLs, and full email addresses are never logged or stored. Terminal outputs only a masked email address (e.g. `a***n@khatikhadyo.com`).
 
 ---
 
-## 3. How to Execute Safe Admin Upsert
+## 3. How to Execute Safe Admin Upsert (Interactive Method Only)
 
-### Option A: Local Terminal Connected to Remote PostgreSQL (Recommended)
-
-To prevent passwords from being recorded in shell history files (`~/.zsh_history` or `~/.bash_history`), use `read -s` to prompt for credentials securely:
+To prevent passwords from being recorded in shell history files (`~/.zsh_history` or `~/.bash_history`), process tables, or persistent disk files, use the interactive `read -s` method in your terminal:
 
 ```bash
 # 1. Navigate to the project root directory
 cd 1
 
-# 2. Prompt for credentials interactively without echoing to the screen
-read -p "Enter Admin Email: " ADMIN_EMAIL
-read -s -p "Enter Admin Password (min 8 chars): " ADMIN_PASSWORD
+# 2. Prompt for credentials interactively without echoing passwords to the screen
+read -p "Enter Target Admin Email: " ADMIN_EMAIL
+read -p "Confirm Target Admin Email: " CONFIRM_ADMIN_EMAIL
+read -s -p "Enter Admin Password (min 12 chars): " ADMIN_PASSWORD
 echo ""
 
-# 3. For Production, confirm the safety guard
-CONFIRM_SAFE_ADMIN_UPSERT="true"
-
-# 4. Execute the safe upsert tool
+# 3. Explicitly execute in production context with mandatory confirmation
+NODE_ENV=production \
 ADMIN_EMAIL="$ADMIN_EMAIL" \
+CONFIRM_ADMIN_EMAIL="$CONFIRM_ADMIN_EMAIL" \
 ADMIN_PASSWORD="$ADMIN_PASSWORD" \
-CONFIRM_SAFE_ADMIN_UPSERT="$CONFIRM_SAFE_ADMIN_UPSERT" \
+CONFIRM_SAFE_ADMIN_UPSERT="true" \
 npm run admin:upsert-safe
 
-# 5. Clear sensitive shell variables immediately
-unset ADMIN_EMAIL ADMIN_PASSWORD CONFIRM_SAFE_ADMIN_UPSERT
+# 4. Immediately clear sensitive shell variables from memory
+unset ADMIN_EMAIL CONFIRM_ADMIN_EMAIL ADMIN_PASSWORD CONFIRM_SAFE_ADMIN_UPSERT
 ```
 
 **Expected Successful Output:**
@@ -69,37 +70,16 @@ Active: true
 
 ---
 
-### Option B: Execution via One-Off Secure Environment File
-
-If executing in CI/CD or controlled maintenance shells, create a temporary env file with restrictive file permissions:
-
-```bash
-# 1. Create temporary file with restricted permissions (read-only for owner)
-umask 077
-cat << 'EOF' > .env.admin-temp
-ADMIN_EMAIL="admin@khatikhadyo.com"
-ADMIN_PASSWORD="YourSecurePasswordHere123!"
-CONFIRM_SAFE_ADMIN_UPSERT="true"
-EOF
-
-# 2. Run the upsert using the temporary configuration
-node --env-file=.env.admin-temp --loader ./scripts/test-loader.mjs scripts/safe-upsert-admin.ts
-
-# 3. Immediately shred/delete the temporary file
-rm -f .env.admin-temp
-```
-
----
-
 ## 4. Admin Password Rotation Procedure
 
 Whenever an admin password must be rotated:
-1. Re-run `npm run admin:upsert-safe` with the existing `ADMIN_EMAIL` and the new `ADMIN_PASSWORD`.
+1. Re-run `npm run admin:upsert-safe` following the interactive procedure above, supplying the existing admin email for both `ADMIN_EMAIL` and `CONFIRM_ADMIN_EMAIL`, alongside the new password ($\ge 12$ characters).
 2. The script will automatically:
    - Compute a new bcrypt hash with 12 salt rounds.
-   - Update the `password` field for the user.
+   - Update the `password` field for the user in the database.
    - Increment `sessionVersion`.
-3. Because `sessionVersion` is incremented, any existing JWT tokens previously held by the administrator will immediately fail token validation, forcing a clean re-login with the new password.
+   - Record an `ADMIN_ACCOUNT_UPDATED` entry in the `AuditLog` table.
+3. Because `sessionVersion` is incremented, all existing JWT tokens previously held by the administrator will immediately fail token validation, forcing a clean re-login with the new password.
 
 ---
 

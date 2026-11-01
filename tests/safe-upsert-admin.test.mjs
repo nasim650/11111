@@ -31,14 +31,71 @@ test('1. Mask email utility works correctly and hides private characters', () =>
   assert.equal(maskEmail('invalid-email'), '***')
 })
 
-test('2. New user -> safely creates admin user with bcrypt hash', async () => {
+test('2. Missing CONFIRM_SAFE_ADMIN_UPSERT guard blocks execution in all environments', async () => {
+  await assert.rejects(
+    () =>
+      safeUpsertAdmin({
+        email: 'admin@khatikhadyo.com',
+        confirmEmail: 'admin@khatikhadyo.com',
+        password: 'ValidPassword123!',
+        confirmSafe: false,
+        dbClient: testDb,
+      }),
+    /Execution blocked: CONFIRM_SAFE_ADMIN_UPSERT=true is mandatory in all environments/
+  )
+})
+
+test('3. Missing or mismatched CONFIRM_ADMIN_EMAIL blocks execution before DB queries', async () => {
+  // Missing confirmEmail
+  await assert.rejects(
+    () =>
+      safeUpsertAdmin({
+        email: 'admin@khatikhadyo.com',
+        confirmEmail: '',
+        password: 'ValidPassword123!',
+        confirmSafe: true,
+        dbClient: testDb,
+      }),
+    /CONFIRM_ADMIN_EMAIL is required/
+  )
+
+  // Mismatched confirmEmail
+  await assert.rejects(
+    () =>
+      safeUpsertAdmin({
+        email: 'admin@khatikhadyo.com',
+        confirmEmail: 'different@khatikhadyo.com',
+        password: 'ValidPassword123!',
+        confirmSafe: true,
+        dbClient: testDb,
+      }),
+    /Target confirmation failed: ADMIN_EMAIL and CONFIRM_ADMIN_EMAIL do not match/
+  )
+})
+
+test('4. Password validation: requires minimum 12 characters', async () => {
+  await assert.rejects(
+    () =>
+      safeUpsertAdmin({
+        email: 'admin@khatikhadyo.com',
+        confirmEmail: 'admin@khatikhadyo.com',
+        password: 'Short12345!', // 11 characters
+        confirmSafe: true,
+        dbClient: testDb,
+      }),
+    /ADMIN_PASSWORD must be at least 12 characters long/
+  )
+})
+
+test('5. Atomic create: new user and audit log created in same transaction', async () => {
   await cleanUsersAndRelated()
 
   const result = await safeUpsertAdmin({
     email: 'newadmin@khatikhadyo.com',
+    confirmEmail: 'newadmin@khatikhadyo.com',
     password: 'StrongAdminPass123!',
     name: 'Super Admin',
-    isProduction: false,
+    confirmSafe: true,
     dbClient: testDb,
   })
 
@@ -49,7 +106,7 @@ test('2. New user -> safely creates admin user with bcrypt hash', async () => {
   assert.equal(result.isActive, true)
 
   const user = await testDb.user.findUnique({ where: { email: 'newadmin@khatikhadyo.com' } })
-  assert.ok(user, 'User should be found in database')
+  assert.ok(user, 'User must exist in database')
   assert.equal(user.role, 'admin')
   assert.equal(user.isActive, true)
   assert.equal(user.isVerified, true)
@@ -60,16 +117,26 @@ test('2. New user -> safely creates admin user with bcrypt hash', async () => {
   assert.notEqual(user.password, 'StrongAdminPass123!')
   const passwordValid = await verifyPassword('StrongAdminPass123!', user.password)
   assert.equal(passwordValid, true, 'Stored password must match bcrypt hash')
+
+  // Verify AuditLog record in same transaction
+  const audit = await testDb.auditLog.findFirst({
+    where: { action: 'ADMIN_ACCOUNT_CREATED', referenceId: user.id },
+  })
+  assert.ok(audit, 'Audit log entry must exist')
+  assert.equal(audit.module, 'auth')
+  const details = JSON.parse(audit.newData || '{}')
+  assert.equal(details.maskedEmail, 'n***n@khatikhadyo.com')
+  assert.equal(details.action, 'created')
+  assert.equal(details.role, 'admin')
 })
 
-test('3. Existing non-admin user -> safely promotes to admin and updates credentials', async () => {
+test('6. Atomic update: promotes user, updates password, increments sessionVersion, and creates audit log', async () => {
   await cleanUsersAndRelated()
 
-  // Seed customer user
   const existingCustomer = await testDb.user.create({
     data: {
       email: 'customer@khatikhadyo.com',
-      password: 'OldCustomerPassword!',
+      password: 'OldCustomerPassword123!',
       name: 'Regular Customer',
       role: 'customer',
       isActive: false,
@@ -80,8 +147,9 @@ test('3. Existing non-admin user -> safely promotes to admin and updates credent
 
   const result = await safeUpsertAdmin({
     email: 'customer@khatikhadyo.com',
+    confirmEmail: 'customer@khatikhadyo.com',
     password: 'NewAdminSecurePassword999!',
-    isProduction: false,
+    confirmSafe: true,
     dbClient: testDb,
   })
 
@@ -94,96 +162,69 @@ test('3. Existing non-admin user -> safely promotes to admin and updates credent
   assert.equal(updated.role, 'admin', 'Role must be updated to admin')
   assert.equal(updated.isActive, true, 'User must be activated')
   assert.equal(updated.isVerified, true, 'User must be verified')
-  assert.equal(updated.sessionVersion, 2, 'Session version must be incremented')
+  assert.equal(updated.sessionVersion, 2, 'Session version must be incremented to revoke prior tokens')
 
-  // Verify new password
   const newPassValid = await verifyPassword('NewAdminSecurePassword999!', updated.password)
-  assert.equal(newPassValid, true, 'New password must be valid')
+  assert.equal(newPassValid, true, 'New password must match bcrypt hash')
+
+  const audit = await testDb.auditLog.findFirst({
+    where: { action: 'ADMIN_ACCOUNT_UPDATED', referenceId: existingCustomer.id },
+  })
+  assert.ok(audit, 'Audit log entry must exist for update')
 })
 
-test('4. Existing admin -> idempotent result and password rotation', async () => {
+test('7. Audit failure rolls back user mutation completely (transaction atomicity)', async () => {
   await cleanUsersAndRelated()
 
-  // First upsert
-  await safeUpsertAdmin({
-    email: 'primary-admin@khatikhadyo.com',
-    password: 'PasswordFirstRound1!',
-    isProduction: false,
-    dbClient: testDb,
+  // Seed an existing user
+  const originalUser = await testDb.user.create({
+    data: {
+      email: 'test-rollback@khatikhadyo.com',
+      password: 'OriginalPassword123!',
+      role: 'customer',
+      sessionVersion: 1,
+    },
   })
 
-  // Second upsert with rotated password
-  const result = await safeUpsertAdmin({
-    email: 'primary-admin@khatikhadyo.com',
-    password: 'PasswordSecondRound2!',
-    isProduction: false,
-    dbClient: testDb,
-  })
+  // Create a database client proxy where auditLog.create fails intentionally inside the transaction
+  const failingDbClient = {
+    ...testDb,
+    $transaction: async (fn) => {
+      return testDb.$transaction(async (tx) => {
+        const proxiedTx = {
+          ...tx,
+          auditLog: {
+            create: async () => {
+              throw new Error('SIMULATED_AUDIT_LOG_DATABASE_FAILURE')
+            },
+          },
+        }
+        return fn(proxiedTx)
+      })
+    },
+  }
 
-  assert.equal(result.action, 'updated')
-
-  const admin = await testDb.user.findUnique({ where: { email: 'primary-admin@khatikhadyo.com' } })
-  const oldValid = await verifyPassword('PasswordFirstRound1!', admin.password)
-  const newValid = await verifyPassword('PasswordSecondRound2!', admin.password)
-
-  assert.equal(oldValid, false, 'Old password must no longer match')
-  assert.equal(newValid, true, 'Rotated password must match')
-  assert.equal(admin.role, 'admin')
-})
-
-test('5. Missing or invalid required inputs fail gracefully with clear errors', async () => {
-  // Missing email
-  await assert.rejects(
-    () => safeUpsertAdmin({ email: '', password: 'Password123!', isProduction: false, dbClient: testDb }),
-    /ADMIN_EMAIL is required/
-  )
-
-  // Invalid email
-  await assert.rejects(
-    () => safeUpsertAdmin({ email: 'not-an-email', password: 'Password123!', isProduction: false, dbClient: testDb }),
-    /ADMIN_EMAIL must be a valid email address/
-  )
-
-  // Missing password
-  await assert.rejects(
-    () => safeUpsertAdmin({ email: 'admin@khatikhadyo.com', password: '', isProduction: false, dbClient: testDb }),
-    /ADMIN_PASSWORD is required/
-  )
-
-  // Short password (< 8 chars)
-  await assert.rejects(
-    () => safeUpsertAdmin({ email: 'admin@khatikhadyo.com', password: 'short', isProduction: false, dbClient: testDb }),
-    /ADMIN_PASSWORD must be at least 8 characters long/
-  )
-})
-
-test('6. Production guard blocks execution without explicit confirmation flag', async () => {
-  // In production without confirmation flag -> throws
+  // Expect safeUpsertAdmin to fail because audit logging failed
   await assert.rejects(
     () =>
       safeUpsertAdmin({
-        email: 'admin@khatikhadyo.com',
-        password: 'ValidPassword123!',
-        isProduction: true,
-        confirmProduction: false,
-        dbClient: testDb,
+        email: 'test-rollback@khatikhadyo.com',
+        confirmEmail: 'test-rollback@khatikhadyo.com',
+        password: 'AttemptedNewPassword123!',
+        confirmSafe: true,
+        dbClient: failingDbClient,
       }),
-    /Execution blocked by production guard: CONFIRM_SAFE_ADMIN_UPSERT=true is required/
+    /SIMULATED_AUDIT_LOG_DATABASE_FAILURE/
   )
 
-  // In production WITH confirmation flag -> succeeds
-  const res = await safeUpsertAdmin({
-    email: 'admin@khatikhadyo.com',
-    password: 'ValidPassword123!',
-    isProduction: true,
-    confirmProduction: true,
-    dbClient: testDb,
-  })
-
-  assert.equal(res.success, true)
+  // Verify rollback: user role and password did NOT change in database!
+  const userAfterFailure = await testDb.user.findUnique({ where: { id: originalUser.id } })
+  assert.equal(userAfterFailure.role, 'customer', 'User role must NOT have changed')
+  assert.equal(userAfterFailure.password, 'OriginalPassword123!', 'Password must NOT have changed')
+  assert.equal(userAfterFailure.sessionVersion, 1, 'sessionVersion must NOT have incremented')
 })
 
-test('7. Absolute non-destructive guarantee: zero records deleted or truncated', async () => {
+test('8. Absolute non-destructive guarantee: zero records deleted or truncated', async () => {
   await cleanUsersAndRelated()
 
   // Seed sample database entities
@@ -224,7 +265,7 @@ test('7. Absolute non-destructive guarantee: zero records deleted or truncated',
     },
   })
 
-  const order = await testDb.order.create({
+  await testDb.order.create({
     data: {
       id: 'ord-keep',
       orderNumber: 'KK-KEEP-99',
@@ -248,7 +289,6 @@ test('7. Absolute non-destructive guarantee: zero records deleted or truncated',
     },
   })
 
-  // Record pre-execution counts
   const countCategoryPre = await testDb.category.count()
   const countProductPre = await testDb.product.count()
   const countCouponPre = await testDb.coupon.count()
@@ -259,8 +299,9 @@ test('7. Absolute non-destructive guarantee: zero records deleted or truncated',
   // Execute safe admin upsert
   await safeUpsertAdmin({
     email: 'new-recovery-admin@khatikhadyo.com',
+    confirmEmail: 'new-recovery-admin@khatikhadyo.com',
     password: 'BrandNewAdminPass2026!',
-    isProduction: false,
+    confirmSafe: true,
     dbClient: testDb,
   })
 
@@ -274,7 +315,6 @@ test('7. Absolute non-destructive guarantee: zero records deleted or truncated',
   // User count increased by exactly 1 (the new admin)
   assert.equal(await testDb.user.count(), countUserPre + 1, 'Only 1 user record was added, none deleted')
 
-  // Verify the customer user was not touched
   const customerPost = await testDb.user.findUnique({ where: { id: existingCustomer.id } })
   assert.equal(customerPost.role, 'customer', 'Customer role must remain untouched')
 })

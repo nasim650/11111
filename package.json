@@ -11,7 +11,7 @@
     "pretest": "prisma generate --schema=prisma/test-schema.prisma",
     "test": "node --loader ./scripts/test-loader.mjs --test --test-concurrency=1 tests/**/*.test.mjs",
     "verify:headers": "node scripts/verify-security-headers.mjs",
-    "admin:upsert-safe": "node --loader ./scripts/test-loader.mjs scripts/safe-upsert-admin.ts",
+    "admin:upsert-safe": "node scripts/safe-upsert-admin.ts",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
