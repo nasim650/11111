@@ -9,7 +9,7 @@
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
     "pretest": "prisma generate --schema=prisma/test-schema.prisma",
-    "test": "node --loader ./scripts/test-loader.mjs --test tests/**/*.test.mjs",
+    "test": "node --loader ./scripts/test-loader.mjs --test --test-concurrency=1 tests/**/*.test.mjs",
     "verify:headers": "node scripts/verify-security-headers.mjs",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
