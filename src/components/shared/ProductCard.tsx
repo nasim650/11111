@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Heart, ShoppingCart, Eye, Star, Package, Loader2, Zap } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
@@ -50,6 +52,7 @@ export function ProductCardSkeleton() {
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
+  const router = useRouter()
   const { navigate, addToCart, isInWishlist, toggleWishlist, openQuickView } = useAppStore()
   const [loading, setLoading] = useState(false)
   const [addedToCart, setAddedToCart] = useState(false)
@@ -152,13 +155,15 @@ export default function ProductCard({ product }: ProductCardProps) {
     ? { label: 'New', style: 'bg-emerald-600 text-white' }
     : null
 
+  const productHref = `/products/${product.slug || product.id}`
+
   return (
     <Card
       className="group/card cursor-pointer overflow-hidden border border-stone-200/60 rounded-xl bg-white transition-all duration-300 hover:shadow-xl hover:border-emerald-600/30 flex flex-col h-full relative"
-      onClick={() => navigate('product-detail', { id: product.id })}
+      onClick={() => router.push(productHref)}
     >
       {/* ── 1. HERO BOX (Image Only) ── */}
-      <div className="relative aspect-[4/3] w-full bg-stone-50 flex items-center justify-center shrink-0 overflow-hidden rounded-t-xl">
+      <Link href={productHref} className="relative aspect-[4/3] w-full bg-stone-50 flex items-center justify-center shrink-0 overflow-hidden rounded-t-xl block">
         {imageUrl && !imgLoaded && (
           <div className="absolute inset-0 bg-stone-100 animate-pulse" />
         )}
@@ -213,7 +218,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             <span className="text-[10px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-full shadow-sm border border-stone-200">Out of Stock</span>
           </div>
         )}
-      </div>
+      </Link>
 
       {/* ── 2. CARD CONTENT (Compact Information Layout) ── */}
       <CardContent className="p-2.5 flex flex-col flex-1 bg-white justify-between gap-1">
@@ -227,9 +232,10 @@ export default function ProductCard({ product }: ProductCardProps) {
           </div>
 
           {/* Product Title with Marquee Animation */}
-          <div 
-            ref={titleContainerRef}
-            className="relative h-4 flex items-center w-full overflow-hidden shrink-0 group/title text-slate-800 font-bold text-xs md:text-sm transition-colors group-hover/card:text-emerald-700"
+          <Link 
+            href={productHref}
+            ref={titleContainerRef as any}
+            className="relative h-4 flex items-center w-full overflow-hidden shrink-0 group/title text-slate-800 font-bold text-xs md:text-sm transition-colors group-hover/card:text-emerald-700 block"
           >
             <motion.span
               ref={titleTextRef}
@@ -250,7 +256,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             >
               {product.name}
             </motion.span>
-          </div>
+          </Link>
         </div>
 
         {/* Flexible Spacer */}

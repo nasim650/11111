@@ -276,7 +276,7 @@ function ScrollToTopButton() {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function ProductDetailPage() {
+export default function ProductDetailPage({ initialProduct }: { initialProduct?: ProductDetail | null } = {}) {
   const {
     pageParams,
     navigate,
@@ -293,14 +293,14 @@ export default function ProductDetailPage() {
     recentlyViewed,
   } = useAppStore()
 
-  const [product, setProduct] = useState<ProductDetail | null>(null)
+  const [product, setProduct] = useState<ProductDetail | null>(initialProduct || null)
   const [relatedProducts, setRelatedProducts] = useState<RelatedProduct[]>([])
   const [alsoViewedProducts, setAlsoViewedProducts] = useState<RelatedProduct[]>([])
   const [frequentlyBoughtTogether, setFrequentlyBoughtTogether] = useState<RelatedProduct[]>([])
   const [selectedBundleItems, setSelectedBundleItems] = useState<Set<string>>(new Set())
   const [recentlyViewedProducts, setRecentlyViewedProducts] = useState<RelatedProduct[]>([])
-  const [reviews, setReviews] = useState<Review[]>([])
-  const [loading, setLoading] = useState(true)
+  const [reviews, setReviews] = useState<Review[]>(initialProduct?.reviews || [])
+  const [loading, setLoading] = useState(!initialProduct)
   const [selectedImage, setSelectedImage] = useState(0)
   const [quantity, setQuantity] = useState(1)
   const [adding, setAdding] = useState(false)
@@ -341,6 +341,48 @@ export default function ProductDetailPage() {
 
   // Fetch product data
   useEffect(() => {
+    if (initialProduct) {
+      setProduct(initialProduct)
+      if (initialProduct.reviews) {
+        setReviews(initialProduct.reviews)
+      }
+      setLoading(false)
+      addRecentlyViewed(initialProduct.id)
+
+      const currentCatSlug = initialProduct.category?.slug
+      Promise.all([
+        currentCatSlug
+          ? fetch(`/api/products?category=${currentCatSlug}&limit=8&status=active`)
+              .then((r) => r.json())
+              .then((d) =>
+                extractItems<RelatedProduct>(d).filter(
+                  (p) => p.id !== initialProduct.id
+                )
+              )
+              .catch(() => [] as RelatedProduct[])
+          : Promise.resolve([] as RelatedProduct[]),
+        fetch(`/api/products?status=active&limit=8`)
+          .then((r) => r.json())
+          .then((d) =>
+            extractItems<RelatedProduct>(d).filter(
+              (p) => p.id !== initialProduct.id
+            )
+          )
+          .catch(() => [] as RelatedProduct[]),
+      ]).then(([sameCat, allActive]) => {
+        if (sameCat.length > 0) {
+          setAlsoViewedProducts(sameCat.slice(0, 6))
+        }
+        const crossCat = allActive.filter(
+          (p) => !p.category?.slug || p.category.slug !== currentCatSlug
+        )
+        const youMayLike =
+          crossCat.length >= 4 ? crossCat.slice(0, 8) : sameCat.slice(0, 8)
+        setRelatedProducts(youMayLike)
+      })
+      return
+    }
+
     if (!productId) return
     setLoading(true)
     setSelectedImage(0)

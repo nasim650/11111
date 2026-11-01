@@ -115,7 +115,7 @@ function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
 
 // ── Main Component ──
 
-export default function ProductsPage() {
+export default function ProductsPage({ initialCategorySlug }: { initialCategorySlug?: string } = {}) {
   const { navigate, pageParams, searchQuery, setSearchQuery, selectedCategory, setSelectedCategory } = useAppStore()
 
   // ── State ──
@@ -160,11 +160,12 @@ export default function ProductsPage() {
   const searchInputRef = useRef<HTMLInputElement>(null)
   const suggestionsRef = useRef<HTMLDivElement>(null)
 
-  // ── Initialize from page params ──
+  // ── Initialize from page params or props ──
   useEffect(() => {
-    if (pageParams?.category) {
-      setSelectedCategories([String(pageParams.category)])
-      setSelectedCategory(String(pageParams.category))
+    const categoryToSelect = initialCategorySlug || pageParams?.category
+    if (categoryToSelect) {
+      setSelectedCategories([String(categoryToSelect)])
+      setSelectedCategory(String(categoryToSelect))
     }
     if (pageParams?.sort) {
       setSort(String(pageParams.sort))
@@ -174,7 +175,7 @@ export default function ProductsPage() {
       setSearchInput(q)
       setSearchQuery(q)
     }
-  }, [pageParams, searchQuery, setSearchQuery, setSelectedCategory])
+  }, [initialCategorySlug, pageParams, searchQuery, setSearchQuery, setSelectedCategory])
 
   // ── Load recent searches from localStorage ──
   useEffect(() => {
