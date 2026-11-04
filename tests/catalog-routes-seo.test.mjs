@@ -244,3 +244,8 @@ test('7. Sitemap Contract: includes only real, implemented routes with RESTful c
   const uniqueUrls = new Set(urls)
   assert.equal(urls.length, uniqueUrls.size, 'Sitemap must contain zero duplicate URLs')
 })
+
+test.after(async () => {
+  await testDb.$disconnect()
+})
+

@@ -521,3 +521,8 @@ test('5. Handler-level: browser callback writes minimal append-only audit log wi
   assert.equal(loggedData.val_id, undefined, 'val_id must NOT be present in audit log')
   assert.equal(loggedData.rawPayload, undefined, 'rawPayload must NOT be present in audit log')
 })
+
+test.after(async () => {
+  await testDb.$disconnect()
+})
+

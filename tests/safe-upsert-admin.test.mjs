@@ -318,3 +318,8 @@ test('8. Absolute non-destructive guarantee: zero records deleted or truncated',
   const customerPost = await testDb.user.findUnique({ where: { id: existingCustomer.id } })
   assert.equal(customerPost.role, 'customer', 'Customer role must remain untouched')
 })
+
+test.after(async () => {
+  await testDb.$disconnect()
+})
+

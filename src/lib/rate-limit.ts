@@ -78,8 +78,8 @@ export async function rateLimit(
   }
 }
 
-// Clean up expired entries every 5 minutes
-setInterval(() => {
+// Clean up expired entries every 5 minutes (unref so tests/scripts can exit cleanly)
+const cleanupTimer = setInterval(() => {
   const now = Date.now()
   for (const [key, record] of rateLimitMap.entries()) {
     if (now > record.resetTime) {
@@ -87,6 +87,10 @@ setInterval(() => {
     }
   }
 }, 5 * 60 * 1000)
+
+if (cleanupTimer && typeof cleanupTimer.unref === 'function') {
+  cleanupTimer.unref()
+}
 
 /**
  * Extract client IP from request headers

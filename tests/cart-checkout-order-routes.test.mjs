@@ -345,3 +345,8 @@ test('11. valid IPN payment regression test: server-to-server IPN remains sole a
   assert.equal(orderAfterIpn.paymentStatus, 'failed', 'IPN failure must transition payment to failed')
   assert.equal(orderAfterIpn.stockReserved, false, 'IPN failure must release reserved stock')
 })
+
+test.after(async () => {
+  await testDb.$disconnect()
+})
+
