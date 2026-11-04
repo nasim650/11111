@@ -241,7 +241,7 @@ export default function Footer() {
                       href={social.href || '#'}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={`group relative size-10 rounded-full bg-white/10 flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:ring-4 ${social.hoverRing} ${social.hoverColor}`}
+                      className={`group relative size-10 rounded-full bg-white/10 flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:ring-4 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:outline-none ${social.hoverRing} ${social.hoverColor}`}
                       aria-label={social.label}
                     >
                       <social.icon className="size-[18px] transition-transform duration-200 group-hover:scale-110" />
@@ -390,25 +390,6 @@ export default function Footer() {
                   </div>
                 </li>
               </ul>
-
-              {/* Map placeholder */}
-              <div className="mt-4 rounded-xl overflow-hidden border border-white/10 bg-white/5 h-28 relative group cursor-pointer hover:border-amber-400/30 transition-colors">
-                <div className="absolute inset-0 flex items-center justify-center flex-col gap-1.5">
-                  <MapPin className="size-6 text-amber-400/60 group-hover:text-amber-400 transition-colors" />
-                  <span className="text-white/40 text-[11px] group-hover:text-white/60 transition-colors">
-                    View on Map
-                  </span>
-                </div>
-                {/* Decorative grid lines for map look */}
-                <svg className="absolute inset-0 w-full h-full opacity-[0.06]" xmlns="http://www.w3.org/2000/svg">
-                  <defs>
-                    <pattern id="map-grid" x="0" y="0" width="30" height="30" patternUnits="userSpaceOnUse">
-                      <path d="M30 0H0v30" fill="none" stroke="white" strokeWidth="0.5" />
-                    </pattern>
-                  </defs>
-                  <rect width="100%" height="100%" fill="url(#map-grid)" />
-                </svg>
-              </div>
             </div>
           </div>
         </div>

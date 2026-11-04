@@ -815,6 +815,7 @@ export default function Navbar() {
                 ref={searchInputRef}
                 type="search"
                 placeholder="Search for products..."
+                aria-label="Search products"
                 value={searchQuery}
                 onChange={(e) => handleSearchInputChange(e.target.value)}
                 onFocus={() => {
@@ -828,6 +829,7 @@ export default function Navbar() {
               {/* Search button */}
               <Button
                 type="submit"
+                aria-label="Submit search"
                 className={`rounded-r-xl rounded-l-none px-5 bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 transition-all duration-200 hover:shadow-md hover:shadow-emerald-600/20 ${
                   compactMode ? 'h-9' : 'h-11'
                 }`}
@@ -1443,13 +1445,14 @@ export default function Navbar() {
                     <Input
                       type="search"
                       placeholder="Search for products..."
+                      aria-label="Search products"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="h-10 text-sm pl-8"
                       autoFocus
                     />
                   </div>
-                  <Button type="submit" size="sm" className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white h-10 px-4">
+                  <Button type="submit" size="sm" aria-label="Submit search" className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white h-10 px-4">
                     <Search className="size-4" />
                   </Button>
                 </form>
