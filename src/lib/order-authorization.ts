@@ -125,9 +125,10 @@ export async function getOrderForUser(
   const isOwner = Boolean(order.userId && order.userId === user.userId)
 
   if (!isUserAdmin && !isOwner) {
+    // Non-owner, non-admin access returns 404 to prevent order-number enumeration
     return {
-      status: 403,
-      error: 'Forbidden: You do not have permission to view this order.',
+      status: 404,
+      error: `Order #${orderNumber} not found`,
       order: null,
     }
   }

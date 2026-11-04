@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
+import fs from 'node:fs'
 
 const require = createRequire(import.meta.url)
 const { PrismaClient } = require('../prisma/generated/test-client')
@@ -8,10 +9,9 @@ const testDb = new PrismaClient()
 
 globalThis.prisma = testDb
 
-import fs from 'node:fs'
-
 const { getOrderForUser } = await import('../src/lib/order-authorization.ts')
 const { getSessionUserFromToken } = await import('../src/lib/server-auth.ts')
+const { sanitizeInternalRedirect } = await import('../src/lib/security.ts')
 const { generateToken } = await import('../src/lib/auth.ts')
 const { handleSSLCommerzCallback } = await import('../src/app/api/payments/sslcommerz/handler.ts')
 
@@ -54,6 +54,16 @@ async function setupTestData() {
       phone: '01711000003',
       name: 'Admin Supervisor',
       role: 'admin',
+      sessionVersion: 1,
+    },
+  })
+
+  const managerUser = await testDb.user.create({
+    data: {
+      email: 'manager.ops@example.com',
+      phone: '01711000004',
+      name: 'Operations Manager',
+      role: 'manager',
       sessionVersion: 1,
     },
   })
@@ -156,7 +166,7 @@ async function setupTestData() {
     include: { items: true, payment: true },
   })
 
-  return { customerA, customerB, adminUser, product, orderA, orderB }
+  return { customerA, customerB, adminUser, managerUser, product, orderA, orderB }
 }
 
 test('1. /cart direct route test: file exists with canonical metadata and CustomerShell wrapper', async () => {
@@ -167,7 +177,6 @@ test('1. /cart direct route test: file exists with canonical metadata and Custom
 })
 
 test('2. empty cart -> checkout redirect test: empty cart redirects to /cart', async () => {
-  // Simulate checkout guard condition
   const cartItemsEmpty = []
   let redirectedTo = null
   const fakeRouter = {
@@ -191,61 +200,121 @@ test('3. /checkout direct route test: exports robots noindex and renders checkou
   assert.ok(checkoutRouteContent.includes('<CheckoutPage />'), 'Checkout must render CheckoutPage')
 })
 
-test('4. unauthenticated order access denied test: 401 when user session is missing', async () => {
+test('4. unauthenticated order page -> validated login redirect', async () => {
   const { orderA } = await setupTestData()
 
+  // 1. Data-level check: unauthenticated returns 401 and no order data
   const result = await getOrderForUser(orderA.orderNumber, null, testDb)
-  assert.equal(result.status, 401, 'Unauthenticated access must return 401')
+  assert.equal(result.status, 401, 'Unauthenticated query must return 401')
   assert.equal(result.order, null, 'Must not leak order data to unauthenticated request')
-  assert.match(result.error, /Authentication required/i)
+
+  // 2. Route-level contract check: unauthenticated user triggers redirect to login with safe next parameter
+  const orderRouteContent = fs.readFileSync('src/app/orders/[orderNumber]/page.tsx', 'utf8')
+  assert.ok(orderRouteContent.includes('if (!sessionUser)'), 'Must check sessionUser before querying order')
+  assert.ok(orderRouteContent.includes("redirect(`/login?next="), 'Must redirect unauthenticated request to /login?next=...')
+  assert.ok(!orderRouteContent.includes('OrderAuthErrorView'), 'OrderAuthErrorView must not be used')
 })
 
-test('5. customer A cannot access customer B order test: 403 Forbidden', async () => {
+test('5. malicious external next value -> rejected/sanitized to prevent Open Redirect', async () => {
+  // Test valid internal relative paths
+  assert.equal(sanitizeInternalRedirect('/orders/ORD-2026-A101'), '/orders/ORD-2026-A101')
+  assert.equal(sanitizeInternalRedirect('/orders/ORD-2026-A101?payment=success'), '/orders/ORD-2026-A101?payment=success')
+  assert.equal(sanitizeInternalRedirect('/checkout'), '/checkout')
+
+  // Test malicious external URLs
+  assert.equal(sanitizeInternalRedirect('https://evil.com'), '/', 'External HTTPS must be sanitized to fallback')
+  assert.equal(sanitizeInternalRedirect('http://attacker.com/steal-creds'), '/', 'External HTTP must be sanitized to fallback')
+
+  // Test protocol-relative URLs
+  assert.equal(sanitizeInternalRedirect('//evil.com'), '/', 'Protocol-relative //evil.com must be rejected')
+  assert.equal(sanitizeInternalRedirect('//evil.com/phishing'), '/', 'Protocol-relative //evil.com/phishing must be rejected')
+
+  // Test backslash tricks
+  assert.equal(sanitizeInternalRedirect('/\\evil.com'), '/', 'Backslash /\\evil.com must be rejected')
+  assert.equal(sanitizeInternalRedirect('/\\evil.com/path'), '/', 'Backslash /\\evil.com/path must be rejected')
+  assert.equal(sanitizeInternalRedirect('\\evil.com'), '/', 'Leading backslash must be rejected')
+
+  // Test script & scheme attacks
+  assert.equal(sanitizeInternalRedirect('javascript:alert(1)'), '/', 'javascript: URI must be rejected')
+  assert.equal(sanitizeInternalRedirect('data:text/html,<script>alert(1)</script>'), '/', 'data: URI must be rejected')
+
+  // Test CRLF / control character injection
+  assert.equal(sanitizeInternalRedirect('/orders/ORD-101\r\nHost: evil.com'), '/', 'CRLF injection must be rejected')
+  assert.equal(sanitizeInternalRedirect('/orders/ORD-101\0evil'), '/', 'Null byte must be rejected')
+
+  // Test null / undefined / empty
+  assert.equal(sanitizeInternalRedirect(''), '/')
+  assert.equal(sanitizeInternalRedirect(null), '/')
+  assert.equal(sanitizeInternalRedirect(undefined), '/')
+})
+
+test('6. customer A -> customer B order -> true HTTP 404 and zero order-content leak', async () => {
   const { customerA, orderB } = await setupTestData()
 
   const userA = { userId: customerA.id, role: customerA.role }
   const result = await getOrderForUser(orderB.orderNumber, userA, testDb)
 
-  assert.equal(result.status, 403, 'Cross-customer order access must return 403 Forbidden')
+  // Must return 404 to eliminate order existence enumeration
+  assert.equal(result.status, 404, 'Cross-customer order access must return 404 (same as non-existent)')
   assert.equal(result.order, null, 'Must not leak customer B order details to customer A')
-  assert.match(result.error, /permission/i)
+  assert.equal(result.error, `Order #${orderB.orderNumber} not found`, 'Error must match standard 404')
+
+  // Verify page.tsx triggers notFound() on 404
+  const orderRouteContent = fs.readFileSync('src/app/orders/[orderNumber]/page.tsx', 'utf8')
+  assert.ok(orderRouteContent.includes('notFound()'), 'Must call notFound() on 404')
 })
 
-test('6. admin authorized order access test: 200 OK for admin and owner', async () => {
-  const { customerA, adminUser, orderA } = await setupTestData()
+test('7. unknown order -> true HTTP 404', async () => {
+  const { customerA } = await setupTestData()
 
-  // 1. Owner access test
+  const userA = { userId: customerA.id, role: customerA.role }
+  const result = await getOrderForUser('ORD-NON-EXISTENT-9999', userA, testDb)
+
+  assert.equal(result.status, 404, 'Non-existent order must return 404')
+  assert.equal(result.order, null, 'No order object for non-existent order')
+})
+
+test('8. owner -> HTTP 200 with complete authorized order details', async () => {
+  const { customerA, orderA } = await setupTestData()
+
   const ownerResult = await getOrderForUser(orderA.orderNumber, { userId: customerA.id, role: 'customer' }, testDb)
   assert.equal(ownerResult.status, 200, 'Owner must have access to their order')
   assert.equal(ownerResult.order.orderNumber, orderA.orderNumber)
   assert.equal(ownerResult.order.items.length, 1)
   assert.equal(ownerResult.order.items[0].productName, 'Pure Desi Cow Ghee 500g')
   assert.equal(ownerResult.order.orderNote, 'Please ring the doorbell upon delivery.')
+})
 
-  // 2. Admin access test
+test('9. admin/manager -> HTTP 200 with strictly zero raw secrets leaked', async () => {
+  const { adminUser, managerUser, orderA } = await setupTestData()
+
+  // 1. Admin access test
   const adminResult = await getOrderForUser(orderA.orderNumber, { userId: adminUser.id, role: 'admin' }, testDb)
   assert.equal(adminResult.status, 200, 'Admin must have access to view any order')
   assert.equal(adminResult.order.orderNumber, orderA.orderNumber)
 
+  // 2. Manager access test
+  const managerResult = await getOrderForUser(orderA.orderNumber, { userId: managerUser.id, role: 'manager' }, testDb)
+  assert.equal(managerResult.status, 200, 'Manager must have access to view any order')
+  assert.equal(managerResult.order.orderNumber, orderA.orderNumber)
+
   // 3. Strictly verify NO raw secrets / gateway logs leaked in response
   assert.equal(adminResult.order.payment?.rawResponse, undefined, 'rawResponse must not exist in safe order')
   assert.equal(adminResult.order.payment?.gatewayUrl, undefined, 'gatewayUrl must not exist in safe order')
+  assert.equal(adminResult.order.payment?.sessionKey, undefined, 'sessionKey must not exist in safe order')
 })
 
-test('7. payment browser redirect causes zero database mutation test', async () => {
+test('10. payment browser redirect causes zero database mutation test', async () => {
   const { orderA } = await setupTestData()
 
-  // Setup fake mock request for browser redirect
   const fakeRequest = new Request('http://localhost:3000/api/payments/sslcommerz/success', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `tran_id=FORGED_TXN_BROWSER&val_id=VAL_123&value_a=${orderA.id}`,
   })
 
-  // Invoke handler for 'success' redirect
   await handleSSLCommerzCallback(fakeRequest, 'success', testDb)
 
-  // Verify order in database is completely untouched
   const orderAfter = await testDb.order.findUnique({
     where: { id: orderA.id },
   })
@@ -256,10 +325,9 @@ test('7. payment browser redirect causes zero database mutation test', async () 
   assert.equal(orderAfter.couponReleased, false, 'Browser callback must NOT touch couponReleased')
 })
 
-test('8. valid IPN payment regression test: server-to-server IPN remains sole authoritative mutator', async () => {
+test('11. valid IPN payment regression test: server-to-server IPN remains sole authoritative mutator', async () => {
   const { orderA } = await setupTestData()
 
-  // Authoritative server-to-server IPN failure test
   const ipnFailRequest = new Request('http://localhost:3000/api/payments/sslcommerz/ipn', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
