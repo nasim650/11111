@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Facebook,
@@ -114,18 +115,18 @@ export default function Footer() {
   const socialLinks = siteConfig?.socialLinks || {}
   const currentYear = new Date().getFullYear()
 
-  const quickLinks: { label: string; page: PageName }[] = [
-    { label: 'Home', page: 'home' },
-    { label: 'Products', page: 'products' },
-    { label: 'Offers', page: 'products' },
-    { label: 'Contact', page: 'contact' },
+  const quickLinks: { label: string; href: string }[] = [
+    { label: 'Home', href: '/' },
+    { label: 'Products', href: '/products' },
+    { label: 'Offers', href: '/products' },
+    { label: 'Contact', href: '/contact' },
   ]
 
-  const policyLinks: { label: string; page: PageName }[] = [
-    { label: 'Delivery Policy', page: 'delivery-policy' },
-    { label: 'Return Policy', page: 'return-policy' },
-    { label: 'Terms & Conditions', page: 'terms' },
-    { label: 'Privacy Policy', page: 'privacy' },
+  const policyLinks: { label: string; href: string }[] = [
+    { label: 'Delivery Policy', href: '/delivery-policy' },
+    { label: 'Return Policy', href: '/return-policy' },
+    { label: 'Terms & Conditions', href: '/terms' },
+    { label: 'Privacy Policy', href: '/privacy-policy' },
   ]
 
   // Trust badges data
@@ -240,7 +241,7 @@ export default function Footer() {
                       href={social.href || '#'}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={`group relative size-10 rounded-full bg-white/10 flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:ring-4 ${social.hoverRing} ${social.hoverColor}`}
+                      className={`group relative size-10 rounded-full bg-white/10 flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:ring-4 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:outline-none ${social.hoverRing} ${social.hoverColor}`}
                       aria-label={social.label}
                     >
                       <social.icon className="size-[18px] transition-transform duration-200 group-hover:scale-110" />
@@ -275,10 +276,10 @@ export default function Footer() {
                         </button>
                       </li>
                     ))
-                  : quickLinks.map((link, idx) => (
+                  : quickLinks.map((link) => (
                       <li key={link.label}>
-                        <button
-                          onClick={() => navigate(link.page)}
+                        <Link
+                          href={link.href}
                           className="text-white/60 hover:text-white text-sm transition-all duration-200 flex items-center gap-2 group py-1.5 w-full"
                         >
                           <ChevronRight className="h-3 w-3 opacity-0 -ml-5 group-hover:opacity-100 group-hover:ml-0 transition-all duration-200 text-amber-400" />
@@ -286,7 +287,7 @@ export default function Footer() {
                             {link.label}
                             <span className="absolute bottom-0 left-0 w-0 h-px bg-amber-400/50 group-hover:w-full transition-all duration-300" />
                           </span>
-                        </button>
+                        </Link>
                       </li>
                     ))}
               </ul>
@@ -305,10 +306,8 @@ export default function Footer() {
                 {categories.length > 0
                   ? categories.slice(0, 8).map((cat) => (
                       <li key={cat.id}>
-                        <button
-                          onClick={() =>
-                            navigate('products', { category: cat.slug })
-                          }
+                        <Link
+                          href={`/categories/${cat.slug}`}
                           className="text-white/60 hover:text-white text-sm transition-all duration-200 flex items-center gap-2 group py-1.5 w-full"
                         >
                           <ChevronRight className="h-3 w-3 opacity-0 -ml-5 group-hover:opacity-100 group-hover:ml-0 transition-all duration-200 text-amber-400" />
@@ -316,15 +315,13 @@ export default function Footer() {
                             {cat.name}
                             <span className="absolute bottom-0 left-0 w-0 h-px bg-amber-400/50 group-hover:w-full transition-all duration-300" />
                           </span>
-                        </button>
+                        </Link>
                       </li>
                     ))
                   : defaultCategories.map((cat) => (
                       <li key={cat.slug}>
-                        <button
-                          onClick={() =>
-                            navigate('products', { category: cat.slug })
-                          }
+                        <Link
+                          href={`/categories/${cat.slug}`}
                           className="text-white/60 hover:text-white text-sm transition-all duration-200 flex items-center gap-2 group py-1.5 w-full"
                         >
                           <ChevronRight className="h-3 w-3 opacity-0 -ml-5 group-hover:opacity-100 group-hover:ml-0 transition-all duration-200 text-amber-400" />
@@ -332,7 +329,7 @@ export default function Footer() {
                             {cat.name}
                             <span className="absolute bottom-0 left-0 w-0 h-px bg-amber-400/50 group-hover:w-full transition-all duration-300" />
                           </span>
-                        </button>
+                        </Link>
                       </li>
                     ))}
               </ul>
@@ -393,25 +390,6 @@ export default function Footer() {
                   </div>
                 </li>
               </ul>
-
-              {/* Map placeholder */}
-              <div className="mt-4 rounded-xl overflow-hidden border border-white/10 bg-white/5 h-28 relative group cursor-pointer hover:border-amber-400/30 transition-colors">
-                <div className="absolute inset-0 flex items-center justify-center flex-col gap-1.5">
-                  <MapPin className="size-6 text-amber-400/60 group-hover:text-amber-400 transition-colors" />
-                  <span className="text-white/40 text-[11px] group-hover:text-white/60 transition-colors">
-                    View on Map
-                  </span>
-                </div>
-                {/* Decorative grid lines for map look */}
-                <svg className="absolute inset-0 w-full h-full opacity-[0.06]" xmlns="http://www.w3.org/2000/svg">
-                  <defs>
-                    <pattern id="map-grid" x="0" y="0" width="30" height="30" patternUnits="userSpaceOnUse">
-                      <path d="M30 0H0v30" fill="none" stroke="white" strokeWidth="0.5" />
-                    </pattern>
-                  </defs>
-                  <rect width="100%" height="100%" fill="url(#map-grid)" />
-                </svg>
-              </div>
             </div>
           </div>
         </div>
@@ -435,15 +413,15 @@ export default function Footer() {
 
             {/* Policy Links */}
             <div className="flex items-center gap-2 text-xs">
-              {policyLinks.slice(0, 3).map((link, idx) => (
-                <span key={link.page} className="flex items-center gap-2">
+              {policyLinks.map((link, idx) => (
+                <span key={link.href} className="flex items-center gap-2">
                   {idx > 0 && <span className="text-white/20">•</span>}
-                  <button
-                    onClick={() => navigate(link.page)}
+                  <Link
+                    href={link.href}
                     className="text-white/40 hover:text-white/70 transition-colors hover:underline"
                   >
                     {link.label}
-                  </button>
+                  </Link>
                 </span>
               ))}
             </div>

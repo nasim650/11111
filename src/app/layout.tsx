@@ -1,18 +1,22 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import { getBaseUrl } from "@/lib/site-url";
 
 const geistSans = { variable: "font-sans" };
 const geistMono = { variable: "font-mono" };
 
 export async function generateMetadata(): Promise<Metadata> {
-  // In a real app we could fetch from DB here:
-  // const siteConfig = await prisma.siteConfig.findMany(...)
+  const baseUrl = getBaseUrl();
   
   return {
-    title: "Khati Khadyo - Authentic Bangladeshi Food Products",
+    metadataBase: new URL(baseUrl),
+    title: {
+      default: "Khati Khadyo - Authentic Bangladeshi Food Products",
+      template: "%s | Khati Khadyo",
+    },
     description: "Premium authentic Bangladeshi food products delivered fresh to your doorstep.",
-    keywords: ["Khati Khadyo", "Bangladeshi food", "authentic food", "organic food"],
+    keywords: ["Khati Khadyo", "Bangladeshi food", "authentic food", "organic food", "deshi ghee", "mustard honey"],
     authors: [{ name: "Khati Khadyo" }],
     icons: {
       icon: [

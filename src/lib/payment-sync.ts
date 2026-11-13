@@ -1,19 +1,24 @@
 import { db } from '@/lib/db'
 import { appendPaymentLog, isSuccessfulSSLCommerzStatus } from '@/lib/sslcommerz'
 
-export async function recordPaymentEvent(params: {
-  orderId: string
-  event: string
-  status: string
-  transactionId?: string | null
-  amount?: number | null
-  payload?: Record<string, unknown>
-  validation?: Record<string, unknown> | null
-  message?: string
-}) {
-  const existing = await db.payment.findUnique({ where: { orderId: params.orderId } })
+export async function recordPaymentEvent(
+  params: {
+    orderId: string
+    event: string
+    status: string
+    transactionId?: string | null
+    amount?: number | null
+    payload?: Record<string, unknown>
+    validation?: Record<string, unknown> | null
+    message?: string
+    dbClient?: any
+  },
+  dbClientArg?: any
+) {
+  const client = params.dbClient || dbClientArg || db
+  const existing = await client.payment.findUnique({ where: { orderId: params.orderId } })
   const existingTransaction = params.transactionId
-    ? await db.payment.findFirst({
+    ? await client.payment.findFirst({
         where: {
           transactionId: params.transactionId,
           orderId: { not: params.orderId },
@@ -42,7 +47,7 @@ export async function recordPaymentEvent(params: {
   const paymentStatus = paid ? 'paid' : params.status.toLowerCase()
   const paidAt = paid ? new Date() : existing?.paidAt || null
 
-  const payment = await db.payment.upsert({
+  const payment = await client.payment.upsert({
     where: { orderId: params.orderId },
     update: {
       method: 'online',
@@ -73,8 +78,19 @@ export async function recordPaymentEvent(params: {
         ? 'failed'
         : 'pending'
 
+  const currentOrder = await client.order.findUnique({
+    where: { id: params.orderId },
+    select: { paymentStatus: true, orderStatus: true },
+  })
+
+  // Idempotency: If the order was already confirmed paid by authoritative IPN,
+  // do not allow browser redirects or non-authoritative events to overwrite it.
+  if (currentOrder?.paymentStatus === 'paid' && !paid) {
+    return payment
+  }
+
   const orderStatus = paid ? 'confirmed' : undefined
-  await db.order.update({
+  await client.order.update({
     where: { id: params.orderId },
     data: {
       paymentStatus: orderPaymentStatus,
@@ -83,7 +99,7 @@ export async function recordPaymentEvent(params: {
     },
   })
 
-  await db.deliveryLabel.updateMany({
+  await client.deliveryLabel.updateMany({
     where: { orderId: params.orderId },
     data: { paymentStatus: orderPaymentStatus },
   })

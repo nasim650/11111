@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import { X, Minus, Plus, ShoppingBag, Trash2, Truck, Gift, Sparkles, Tag, BadgeCheck, ChevronRight, RotateCcw, ArrowRight, Package } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet'
@@ -37,6 +38,7 @@ interface CouponData {
 }
 
 export default function CartSidebar() {
+  const router = useRouter()
   const {
     isCartOpen,
     setCartOpen,
@@ -152,6 +154,7 @@ export default function CartSidebar() {
 
   const handleCheckout = () => {
     setCartOpen(false)
+    router.push('/checkout')
     navigate('checkout')
   }
 
@@ -697,6 +700,7 @@ export default function CartSidebar() {
                   className="flex-1"
                   onClick={() => {
                     setCartOpen(false)
+                    router.push('/cart')
                     navigate('cart')
                   }}
                 >

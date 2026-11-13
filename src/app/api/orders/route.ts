@@ -3,6 +3,8 @@ import { db } from '@/lib/db'
 import { getUserRoleFromRequest, getUserIdFromRequest, getUserFromRequest, isAdmin, getPaginationParams, paginatedResponse, generateOrderNumber } from '@/lib/utils'
 import { validateCheckout, validationError } from '@/lib/validation'
 import { appendPaymentLog } from '@/lib/sslcommerz'
+import { getShippingSettings } from '@/lib/shipping'
+import { getReservationExpiry } from '@/lib/order-inventory'
 
 export async function GET(request: NextRequest) {
   try {
@@ -171,18 +173,11 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // ─── Calculate delivery charge server-side ────────────────────────────
-    const shippingConfigs = await db.siteConfig.findMany({
-      where: { group: { in: ['shipping', 'payment'] } }
-    })
-    const shippingConfig: Record<string, string> = {}
-    for (const config of shippingConfigs) {
-      shippingConfig[config.key] = config.value
-    }
-
-    const freeShippingThreshold = Number(shippingConfig.free_shipping_threshold || shippingConfig.free_delivery_min) || 1500
-    const standardDeliveryCharge = Number(shippingConfig.standard_delivery_charge || shippingConfig.delivery_charge) || 60
-    const expressDeliveryCharge = Number(shippingConfig.express_delivery_charge) || 120
+    // ─── Calculate delivery charge server-side (from canonical settings) ────────
+    const shippingSettings = await getShippingSettings()
+    const freeShippingThreshold = shippingSettings.freeShippingThreshold
+    const standardDeliveryCharge = shippingSettings.standardDeliveryCharge
+    const expressDeliveryCharge = shippingSettings.expressDeliveryCharge
 
     let deliveryCharge = standardDeliveryCharge
     if (subtotal >= freeShippingThreshold) {
@@ -312,6 +307,9 @@ export async function POST(request: NextRequest) {
           deliveryCharge,
           paymentMethod,
           paymentStatus: 'pending',
+          reservationExpiresAt: getReservationExpiry(paymentMethod),
+          stockReserved: true,
+          couponReleased: false,
           orderNote,
           couponCode: validatedCouponCode,
           items: {

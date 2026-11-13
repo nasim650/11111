@@ -8,16 +8,23 @@ import {
   parseSSLCommerzPayload,
   validateSSLCommerzTransaction,
   verifySSLCommerzSignature,
+  appendPaymentLog,
 } from '@/lib/sslcommerz'
 import { recordPaymentEvent } from '@/lib/payment-sync'
+import {
+  releaseOrderInventoryAndCoupon,
+  finalizeOrderPayment,
+} from '@/lib/order-inventory'
 
-type CallbackKind = 'success' | 'fail' | 'cancel' | 'ipn'
+export type CallbackKind = 'success' | 'fail' | 'cancel' | 'ipn'
 
 function redirectFor(request: NextRequest, orderId: string, status: string) {
   const baseUrl = getAppBaseUrl(request)
   const url = new URL('/', baseUrl)
   url.searchParams.set('payment', status)
-  url.searchParams.set('orderId', orderId)
+  if (orderId) {
+    url.searchParams.set('orderId', orderId)
+  }
   return NextResponse.redirect(url)
 }
 
@@ -27,9 +34,14 @@ function statusFor(kind: CallbackKind, payloadStatus: string | undefined) {
   return payloadStatus || 'PENDING'
 }
 
-export async function handleSSLCommerzCallback(request: NextRequest, kind: CallbackKind) {
+export async function handleSSLCommerzCallback(
+  request: NextRequest,
+  kind: CallbackKind,
+  customDb?: any
+) {
+  const prisma = customDb || db
   try {
-    const config = await getSSLCommerzConfig()
+    const config = await getSSLCommerzConfig(prisma)
     if (!config) {
       return NextResponse.json(
         { success: false, error: 'SSLCOMMERZ credentials are not configured' },
@@ -38,11 +50,36 @@ export async function handleSSLCommerzCallback(request: NextRequest, kind: Callb
     }
 
     const payload = await parseSSLCommerzPayload(request)
-    const orderId = payload.value_a
-    const transactionId = payload.tran_id
-    const valId = payload.val_id
-    const reportedStatus = statusFor(kind, payload.status)
+    const orderId = payload.value_a || ''
+    const transactionId = payload.tran_id || ''
 
+    // ── 1. BROWSER CALLBACKS (success, fail, cancel) ───────────────────────────
+    // STRICT NON-AUTHORITATIVE POLICY (Phase 1B.1.1):
+    // Browser callbacks are strictly non-authoritative and must NEVER mutate
+    // order status, payment status, inventory stock, coupon counts, or payment logs.
+    // They do NOT call recordPaymentEvent() (which mutates Order, Payment, and DeliveryLabel).
+    // They do NOT perform transaction mismatch, duplicate check, or signature check.
+    if (kind !== 'ipn') {
+      if (orderId) {
+        // Minimal append-only audit log.
+        // Raw gateway payload, card numbers, and secrets are strictly excluded.
+        await createAuditLog({
+          action: `payment_browser_${kind}_redirect`,
+          module: 'payments',
+          referenceId: orderId,
+          newData: {
+            orderId,
+            browserKind: kind,
+          },
+        }, prisma)
+      }
+
+      const targetStatus = kind === 'success' ? 'success' : kind === 'cancel' ? 'cancel' : 'fail'
+      return redirectFor(request, orderId, targetStatus)
+    }
+
+    // ── 2. SOLE AUTHORITATIVE CONTROLLER: SERVER-TO-SERVER IPN ─────────────────
+    // From this point onward, kind === 'ipn' ONLY.
     if (!orderId || !transactionId) {
       return NextResponse.json(
         { success: false, error: 'Invalid payment callback payload' },
@@ -50,9 +87,9 @@ export async function handleSSLCommerzCallback(request: NextRequest, kind: Callb
       )
     }
 
-    const order = await db.order.findUnique({
+    const order = await prisma.order.findUnique({
       where: { id: orderId },
-      include: { payment: true },
+      include: { payment: true, items: true },
     })
 
     if (!order) {
@@ -62,33 +99,43 @@ export async function handleSSLCommerzCallback(request: NextRequest, kind: Callb
       )
     }
 
+    // IPN Transaction integrity check (mismatch)
     if (order.payment?.transactionId && order.payment.transactionId !== transactionId) {
+      await releaseOrderInventoryAndCoupon({
+        orderId,
+        reason: `IPN transaction mismatch: expected ${order.payment.transactionId}, got ${transactionId}`,
+        paymentStatus: 'failed',
+        orderStatus: 'cancelled',
+        dbClient: prisma,
+      })
+
       await recordPaymentEvent({
         orderId,
-        event: `${kind}_transaction_mismatch`,
+        event: 'ipn_transaction_mismatch',
         status: 'FAILED',
         transactionId,
         amount: Number(payload.amount || order.totalAmount),
         payload,
         message: `Expected ${order.payment.transactionId}, received ${transactionId}`,
+        dbClient: prisma,
       })
-      return kind === 'ipn'
-        ? NextResponse.json({ success: false, error: 'Transaction mismatch' }, { status: 409 })
-        : redirectFor(request, orderId, 'failed')
+
+      return NextResponse.json({ success: false, error: 'Transaction mismatch' }, { status: 409 })
     }
 
-    const duplicate = await db.payment.findFirst({
+    // IPN Duplicate transaction check
+    const duplicate = await prisma.payment.findFirst({
       where: {
         transactionId,
         orderId: { not: orderId },
       },
     })
     if (duplicate) {
-      return kind === 'ipn'
-        ? NextResponse.json({ success: false, error: 'Duplicate transaction id' }, { status: 409 })
-        : redirectFor(request, orderId, 'failed')
+      return NextResponse.json({ success: false, error: 'Duplicate transaction id' }, { status: 409 })
     }
 
+    const valId = payload.val_id
+    const reportedStatus = statusFor(kind, payload.status)
     const signatureValid = verifySSLCommerzSignature(payload, config.storePassword)
     let validation: Record<string, unknown> | null = null
 
@@ -100,58 +147,87 @@ export async function handleSSLCommerzCallback(request: NextRequest, kind: Callb
     const reportedAmount = Number(payload.amount || payload.currency_amount || 0)
     const validatedAmount = Number(validation?.amount || validation?.currency_amount || reportedAmount)
     const amountMatches = Math.abs((validatedAmount || reportedAmount) - order.totalAmount) < 0.01
-    const statusValid = isSuccessfulSSLCommerzStatus(reportedStatus) && isSuccessfulSSLCommerzStatus(validationStatus)
+    const isSuccessReported = isSuccessfulSSLCommerzStatus(reportedStatus)
+    const isValidationSuccess = isSuccessfulSSLCommerzStatus(validationStatus)
+    const paymentConfirmedValid = signatureValid && Boolean(validation) && isSuccessReported && isValidationSuccess && amountMatches
 
-    if (kind === 'success' || kind === 'ipn') {
-      if (!signatureValid || !validation || !statusValid || !amountMatches) {
-        await recordPaymentEvent({
-          orderId,
-          event: `${kind}_verification_failed`,
-          status: 'FAILED',
-          transactionId,
-          amount: reportedAmount || order.totalAmount,
-          payload,
-          validation,
-          message: `signature=${signatureValid}; statusValid=${statusValid}; amountMatches=${amountMatches}`,
-        })
+    if (paymentConfirmedValid) {
+      // Authoritative validated payment: finalize order and lock reserved stock
+      const finalLog = appendPaymentLog(order.payment?.gatewayResponse, {
+        event: 'ipn_success_validated',
+        status: 'paid',
+        transactionId,
+        validationStatus,
+        payload,
+      })
 
-        return kind === 'ipn'
-          ? NextResponse.json({ success: false, error: 'Payment verification failed' }, { status: 400 })
-          : redirectFor(request, orderId, 'failed')
+      const finalizeResult = await finalizeOrderPayment({
+        orderId,
+        transactionId,
+        gatewayResponse: finalLog,
+        paidAt: new Date(),
+        dbClient: prisma,
+      })
+
+      if (!finalizeResult.success) {
+        return NextResponse.json(
+          { success: false, error: finalizeResult.error || 'Unable to finalize payment' },
+          { status: 409 }
+        )
       }
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          orderId,
+          transactionId,
+          status: 'paid',
+          alreadyPaid: finalizeResult.alreadyPaid,
+        },
+      })
     }
 
-    const finalStatus = kind === 'fail' ? 'FAILED' : kind === 'cancel' ? 'CANCELLED' : reportedStatus
-    const payment = await recordPaymentEvent({
+    // Authoritative IPN reported failure, cancellation, or verification failure:
+    // Atomic state claim & rollback of reserved inventory and coupon
+    const failureReason = !signatureValid
+      ? 'IPN signature verification failed'
+      : !amountMatches
+      ? `IPN amount mismatch (expected ${order.totalAmount}, got ${validatedAmount || reportedAmount})`
+      : `IPN reported status: ${reportedStatus} (validation: ${validationStatus || 'none'})`
+
+    const finalPaymentStatus = /cancel/i.test(reportedStatus) ? 'cancelled' : 'failed'
+
+    const releaseResult = await releaseOrderInventoryAndCoupon({
       orderId,
-      event: kind,
-      status: finalStatus,
+      reason: `Authoritative IPN: ${failureReason}`,
+      paymentStatus: finalPaymentStatus,
+      orderStatus: 'cancelled',
+      dbClient: prisma,
+    })
+
+    await recordPaymentEvent({
+      orderId,
+      event: 'ipn_failure_processed',
+      status: finalPaymentStatus.toUpperCase(),
       transactionId,
       amount: reportedAmount || order.totalAmount,
       payload,
       validation,
+      message: failureReason,
+      dbClient: prisma,
     })
 
-    await createAuditLog({
-      action: `payment_${kind}`,
-      module: 'payments',
-      referenceId: payment.id,
-      newData: {
+    return NextResponse.json({
+      success: true,
+      data: {
         orderId,
         transactionId,
-        status: finalStatus,
-        validationStatus,
-        signatureValid,
+        status: finalPaymentStatus,
+        inventoryReleased: !releaseResult.alreadyReleased,
       },
     })
-
-    if (kind === 'ipn') {
-      return NextResponse.json({ success: true, data: { orderId, transactionId, status: payment.status } })
-    }
-
-    return redirectFor(request, orderId, payment.status === 'paid' ? 'success' : payment.status)
   } catch (error) {
-    console.error(`SSLCOMMERZ ${kind} callback error:`, error)
+    console.error('SSLCOMMERZ callback error:', error)
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }

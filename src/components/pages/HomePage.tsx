@@ -125,7 +125,8 @@ function SectionHeader({
       {onViewAll && (
         <button
           onClick={onViewAll}
-          className="text-xs font-semibold text-amber-600 hover:text-amber-700 flex items-center gap-0.5 transition-colors"
+          aria-label={`View all ${title}`}
+          className="text-xs font-semibold text-amber-600 hover:text-amber-700 flex items-center gap-0.5 transition-colors focus-visible:outline-none focus-visible:underline"
         >
           View All <ArrowRight className="h-3.5 w-3.5" />
         </button>
@@ -506,6 +507,7 @@ function CategorySection({ categories, navigate }: {
           </h2>
           <button
             onClick={() => navigate('products')}
+            aria-label="View all categories"
             className="text-xs md:text-sm font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 transition-colors"
           >
             View All <ArrowRight className="h-3.5 w-3.5" />
@@ -517,6 +519,7 @@ function CategorySection({ categories, navigate }: {
           {displayCategories.map((cat, idx) => (
             <motion.button
               key={cat.id}
+              aria-label={`Browse ${cat.name}`}
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.03, duration: 0.3 }}
@@ -568,9 +571,6 @@ function DealOfTheDaySection({ product, navigate }: {
   const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 })
   const [adding, setAdding] = useState(false)
   const [added, setAdded] = useState(false)
-
-  // Stable "X% claimed" demo value (60–90%) picked once per mount
-  const claimedPct = useRef<number>(Math.floor(Math.random() * 31) + 60)
 
   // Live countdown — tick every second until 23:59:59.999 today
   useEffect(() => {
@@ -745,22 +745,24 @@ function DealOfTheDaySection({ product, navigate }: {
                   </div>
                 </div>
 
-                {/* Stock progress bar */}
-                <div>
-                  <div className="flex items-center justify-between text-xs mb-1.5">
-                    <span className="text-muted-foreground font-medium">Stock status</span>
-                    <span className="font-semibold text-amber-700">
-                      {claimedPct.current}% claimed
+                {/* Truthful Stock & Availability Status */}
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-muted-foreground font-medium">Availability:</span>
+                  {outOfStock ? (
+                    <span className="font-semibold text-stone-600 bg-stone-100 px-2.5 py-0.5 rounded-full border border-stone-200">
+                      Out of Stock
                     </span>
-                  </div>
-                  <div className="h-2.5 w-full rounded-full bg-amber-100 overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${claimedPct.current}%` }}
-                      transition={{ duration: 1, ease: 'easeOut' }}
-                      className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
-                    />
-                  </div>
+                  ) : product.stock <= 5 ? (
+                    <span className="font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                      <Flame className="h-3.5 w-3.5 text-rose-600" />
+                      Only {product.stock} {product.unit || 'units'} left!
+                    </span>
+                  ) : (
+                    <span className="font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                      <Check className="h-3.5 w-3.5 text-emerald-600" />
+                      In Stock ({product.stock} {product.unit || 'units'})
+                    </span>
+                  )}
                 </div>
 
                 {/* CTA buttons */}
@@ -948,6 +950,7 @@ function BestSellersSection({ products, navigate }: {
                       variant="outline"
                       size="sm"
                       disabled={outOfStock || loadingId === p.id}
+                      aria-label={outOfStock ? `${p.name} is out of stock` : `Add ${p.name} to cart`}
                       className="h-9 px-3 text-xs font-bold rounded-xl border-amber-500 text-amber-600 hover:bg-amber-50 gap-1.5 flex-1"
                       onClick={async () => {
                         setLoadingId(p.id)
@@ -973,6 +976,7 @@ function BestSellersSection({ products, navigate }: {
                     <Button
                       size="sm"
                       disabled={outOfStock || loadingId === p.id}
+                      aria-label={outOfStock ? `${p.name} is out of stock` : `Buy ${p.name} now`}
                       className="h-9 px-4 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-600 text-white shadow-sm gap-1.5 flex-1"
                       onClick={async () => {
                         setLoadingId(p.id)
@@ -1218,31 +1222,48 @@ function SeasonalCollectionSection({ navigate }: { navigate: (page: PageName, pa
   )
 }
 
-// ── Customer Reviews Section ──
+// ── Customer Reviews Section (Authentic Database Reviews Only) ──
+interface ApprovedReviewItem {
+  id: string
+  rating: number
+  comment?: string | null
+  createdAt: string
+  isVerified?: boolean
+  user?: {
+    name?: string | null
+  } | null
+}
+
 function CustomerReviewsSection() {
-  const reviews = [
-    {
-      name: 'Dr. Rafiqul Islam',
-      location: 'Dhanmondi, Dhaka',
-      rating: 5,
-      comment: 'খাঁটি খাদ্যের আখের গুড় এবং সরিষার তেলের কোয়ালিটি সত্যিই দারুণ। পরিবারের জন্য নিয়মিত অর্ডার করি।',
-      date: '2 days ago',
-    },
-    {
-      name: 'Nusrat Jahan',
-      location: 'Gulshan, Dhaka',
-      rating: 5,
-      comment: 'Sundarbans honey is 100% pure! Fast delivery and exceptional customer support.',
-      date: '1 week ago',
-    },
-    {
-      name: 'Mahmudul Hasan',
-      location: 'Panchlaish, Chittagong',
-      rating: 5,
-      comment: 'পণ্য হাতে পাওয়ার পর দেখে টাকা দেয়ার সুবিধা সত্যিই ভরসা জাগায়। ঘি-এর অরিজিনাল ঘ্রাণ পাওয়া যায়।',
-      date: '2 weeks ago',
-    },
-  ]
+  const [reviews, setReviews] = useState<ApprovedReviewItem[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let isMounted = true
+    async function fetchReviews() {
+      try {
+        const res = await fetch('/api/reviews?limit=6')
+        if (res.ok) {
+          const json = await res.json()
+          const items = extractItems<ApprovedReviewItem>(json)
+          if (isMounted) {
+            setReviews(items.filter((r) => r.comment && r.comment.trim()))
+          }
+        }
+      } catch {
+        if (isMounted) setReviews([])
+      } finally {
+        if (isMounted) setLoading(false)
+      }
+    }
+    fetchReviews()
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  // If loading or no approved reviews exist, render nothing (no fake filler or empty placeholders)
+  if (loading || reviews.length === 0) return null
 
   return (
     <AnimatedSection className="py-8 bg-stone-50">
@@ -1252,19 +1273,19 @@ function CustomerReviewsSection() {
             গ্রাহকদের সন্তুষ্টি
           </Badge>
           <h2 className="text-2xl md:text-3xl font-extrabold text-foreground">
-            What Our Customers Say
+            Customer Reviews
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Over 10,000+ happy Bangladeshi families trust Khati Khadyo
+            Authentic verified feedback from our community
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {reviews.map((r, i) => (
-            <div key={i} className="p-6 rounded-2xl bg-white border border-stone-200/80 shadow-sm flex flex-col justify-between space-y-4">
+          {reviews.map((r) => (
+            <div key={r.id} className="p-6 rounded-2xl bg-white border border-stone-200/80 shadow-sm flex flex-col justify-between space-y-4">
               <div className="space-y-3">
                 <div className="flex items-center gap-1">
-                  {Array.from({ length: r.rating }).map((_, idx) => (
+                  {Array.from({ length: r.rating || 5 }).map((_, idx) => (
                     <Star key={idx} className="h-4 w-4 fill-amber-400 text-amber-400" />
                   ))}
                 </div>
@@ -1272,13 +1293,18 @@ function CustomerReviewsSection() {
               </div>
               <div className="flex items-center justify-between pt-3 border-t border-stone-100">
                 <div>
-                  <h4 className="font-bold text-sm text-foreground flex items-center gap-1">
-                    {r.name}
-                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                  </h4>
-                  <p className="text-[11px] text-muted-foreground">{r.location}</p>
+                  <h3 className="font-bold text-sm text-foreground flex items-center gap-1">
+                    {r.user?.name || 'Verified Customer'}
+                    {r.isVerified && (
+                      <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                        <ShieldCheck className="h-3 w-3 text-emerald-600" /> Verified
+                      </span>
+                    )}
+                  </h3>
                 </div>
-                <span className="text-[10px] text-muted-foreground bg-stone-100 px-2 py-0.5 rounded-full">{r.date}</span>
+                <span className="text-[10px] text-muted-foreground bg-stone-100 px-2 py-0.5 rounded-full">
+                  {new Date(r.createdAt).toLocaleDateString()}
+                </span>
               </div>
             </div>
           ))}

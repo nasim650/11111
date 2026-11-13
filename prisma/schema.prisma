@@ -304,6 +304,9 @@ model Order {
   orderStatus     String      @default("pending")
   orderNote       String?
   couponCode      String?
+  reservationExpiresAt DateTime?              // Expiry timestamp for pending online checkout reservation (30 mins)
+  stockReserved        Boolean   @default(true) // True while product inventory is reserved; False once restored or finalized
+  couponReleased       Boolean   @default(false)// True once coupon usage reservation has been reversed/released
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
@@ -323,6 +326,8 @@ model Order {
   @@index([userId])
   @@index([orderStatus])
   @@index([createdAt])
+  @@index([reservationExpiresAt])
+  @@index([paymentStatus])
 }
 
 model OrderItem {

@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Heart, ShoppingCart, Eye, Star, Package, Loader2, Zap } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
@@ -50,32 +52,15 @@ export function ProductCardSkeleton() {
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
+  const router = useRouter()
   const { navigate, addToCart, isInWishlist, toggleWishlist, openQuickView } = useAppStore()
   const [loading, setLoading] = useState(false)
   const [addedToCart, setAddedToCart] = useState(false)
   const [imgError, setImgError] = useState(false)
   const [imgLoaded, setImgLoaded] = useState(false)
   
-  const [isOverflowing, setIsOverflowing] = useState(false)
-  const [overflowWidth, setOverflowWidth] = useState(0)
-  const titleContainerRef = useRef<HTMLDivElement>(null)
-  const titleTextRef = useRef<HTMLSpanElement>(null)
-  
   const addedTimerRef = useRef<NodeJS.Timeout | null>(null)
   const wishlisted = product?.id ? isInWishlist(product.id) : false
-
-  useEffect(() => {
-    if (titleContainerRef.current && titleTextRef.current) {
-      const containerWidth = titleContainerRef.current.clientWidth
-      const textWidth = titleTextRef.current.scrollWidth
-      if (textWidth > containerWidth) {
-        setIsOverflowing(true)
-        setOverflowWidth(textWidth - containerWidth + 8) // 8px buffer
-      } else {
-        setIsOverflowing(false)
-      }
-    }
-  }, [product?.name])
 
   useEffect(() => {
     return () => {
@@ -152,13 +137,19 @@ export default function ProductCard({ product }: ProductCardProps) {
     ? { label: 'New', style: 'bg-emerald-600 text-white' }
     : null
 
+  const productHref = `/products/${product.slug || product.id}`
+
   return (
     <Card
-      className="group/card cursor-pointer overflow-hidden border border-stone-200/60 rounded-xl bg-white transition-all duration-300 hover:shadow-xl hover:border-emerald-600/30 flex flex-col h-full relative"
-      onClick={() => navigate('product-detail', { id: product.id })}
+      className="group/card cursor-pointer overflow-hidden border border-stone-200/60 rounded-xl bg-white transition-all duration-300 hover:shadow-xl hover:border-emerald-600/30 flex flex-col h-full relative focus-within:ring-2 focus-within:ring-emerald-600"
+      onClick={() => router.push(productHref)}
     >
       {/* ── 1. HERO BOX (Image Only) ── */}
-      <div className="relative aspect-[4/3] w-full bg-stone-50 flex items-center justify-center shrink-0 overflow-hidden rounded-t-xl">
+      <Link
+        href={productHref}
+        className="relative aspect-[4/3] w-full bg-stone-50 flex items-center justify-center shrink-0 overflow-hidden rounded-t-xl block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
+        aria-label={`View details for ${product.name}`}
+      >
         {imageUrl && !imgLoaded && (
           <div className="absolute inset-0 bg-stone-100 animate-pulse" />
         )}
@@ -191,103 +182,92 @@ export default function ProductCard({ product }: ProductCardProps) {
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={handleWishlist}
-            className={`h-6 w-6 rounded-full flex items-center justify-center shadow-sm transition-all duration-200 ${
-              wishlisted ? 'bg-red-500 text-white' : 'bg-white/90 text-slate-500 hover:text-red-500 md:opacity-0 md:group-hover/card:opacity-100'
+            className={`h-7 w-7 rounded-full flex items-center justify-center shadow-sm transition-all duration-200 focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:outline-none ${
+              wishlisted ? 'bg-red-500 text-white' : 'bg-white/95 text-slate-600 hover:text-red-500 md:opacity-0 md:group-hover/card:opacity-100'
             }`}
+            aria-label={wishlisted ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
           >
-            <Heart className={`h-3 w-3 ${wishlisted ? 'fill-white text-white' : ''}`} />
+            <Heart className={`h-3.5 w-3.5 ${wishlisted ? 'fill-white text-white' : ''}`} />
           </motion.button>
           {!outOfStock && (
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={handleQuickView}
-              className="h-6 w-6 rounded-full bg-white/90 flex items-center justify-center shadow-sm text-slate-500 hover:text-emerald-700 md:opacity-0 md:group-hover/card:opacity-100 transition-all duration-200"
+              className="h-7 w-7 rounded-full bg-white/95 flex items-center justify-center shadow-sm text-slate-600 hover:text-emerald-700 md:opacity-0 md:group-hover/card:opacity-100 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:outline-none"
+              aria-label={`Quick view ${product.name}`}
             >
-              <Eye className="h-3 w-3" />
+              <Eye className="h-3.5 w-3.5" />
             </motion.button>
           )}
         </div>
 
         {outOfStock && (
-          <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] flex items-center justify-center z-20">
-            <span className="text-[10px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-full shadow-sm border border-stone-200">Out of Stock</span>
+          <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px] flex items-center justify-center z-20">
+            <span className="text-[10px] font-bold text-stone-700 bg-white px-2 py-0.5 rounded-full shadow-sm border border-stone-200">Out of Stock</span>
           </div>
         )}
-      </div>
+      </Link>
 
       {/* ── 2. CARD CONTENT (Compact Information Layout) ── */}
-      <CardContent className="p-2.5 flex flex-col flex-1 bg-white justify-between gap-1">
-        
+      <CardContent className="p-3 flex flex-col flex-1 bg-white justify-between gap-2">
         <div className="flex flex-col w-full shrink-0">
           {/* Category */}
-          <div className="flex items-center w-full mb-0.5">
-            <span className="text-[9px] text-slate-400 font-semibold truncate uppercase tracking-wider w-full text-left leading-none">
+          <div className="flex items-center w-full mb-1">
+            <span className="text-[10px] text-slate-400 font-semibold truncate uppercase tracking-wider w-full text-left leading-none">
               {product.category?.name || 'Uncategorized'}
             </span>
           </div>
 
-          {/* Product Title with Marquee Animation */}
-          <div 
-            ref={titleContainerRef}
-            className="relative h-4 flex items-center w-full overflow-hidden shrink-0 group/title text-slate-800 font-bold text-xs md:text-sm transition-colors group-hover/card:text-emerald-700"
+          {/* Accessible 2-Line Title (No Distracting Marquee) */}
+          <Link
+            href={productHref}
+            className="text-slate-800 font-bold text-xs md:text-sm line-clamp-2 min-h-[2.25rem] leading-snug transition-colors group-hover/card:text-emerald-700 block focus-visible:underline focus-visible:outline-none"
+            aria-label={product.name}
           >
-            <motion.span
-              ref={titleTextRef}
-              className="whitespace-nowrap inline-block absolute left-0"
-              animate={isOverflowing ? { x: [0, -overflowWidth, 0] } : { x: 0 }}
-              transition={
-                isOverflowing
-                  ? {
-                      x: {
-                        repeat: Infinity,
-                        repeatType: 'mirror',
-                        duration: Math.max(3, overflowWidth / 20),
-                        ease: 'linear',
-                      },
-                    }
-                  : {}
-              }
-            >
-              {product.name}
-            </motion.span>
-          </div>
+            {product.name}
+          </Link>
         </div>
 
         {/* Flexible Spacer */}
         <div className="flex-1" />
 
-        <div className="flex flex-col gap-1.5 w-full shrink-0">
+        <div className="flex flex-col gap-2 w-full shrink-0">
           {/* ── PRICE ROW ── */}
-          <div className="flex items-end gap-1.5 w-full whitespace-nowrap overflow-hidden leading-none">
-            <span className="text-sm md:text-base font-extrabold text-amber-600 leading-none">
+          <div className="flex items-baseline gap-1.5 w-full flex-wrap leading-tight">
+            <span className="text-sm md:text-base font-extrabold text-amber-600">
               {formatPrice(effectivePrice)}
             </span>
-            <span className={`text-[10px] md:text-xs text-slate-400 line-through ${!hasDiscount ? 'invisible' : ''}`}>
-              {formatPrice(price)}
-            </span>
-            <span className={`text-[9px] font-bold text-emerald-700 bg-emerald-50/80 px-1.5 py-0.5 rounded ml-auto border border-emerald-100 ${!hasDiscount ? 'invisible' : ''}`}>
-              Save {formatPrice(Math.max(0, pVal - (dpVal || 0)))}
-            </span>
+            {hasDiscount && (
+              <>
+                <span className="text-[10px] md:text-xs text-slate-400 line-through">
+                  {formatPrice(price)}
+                </span>
+                <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded ml-auto border border-emerald-100">
+                  Save {formatPrice(Math.max(0, pVal - (dpVal || 0)))}
+                </span>
+              </>
+            )}
           </div>
 
           {/* ── BUTTONS ── */}
           <div className="flex items-center gap-1.5 w-full box-border">
             <Button
-              className={`flex-1 min-w-0 h-7 px-2 text-[10px] md:text-xs font-bold rounded-md shadow-sm transition-colors ${
+              className={`flex-1 min-w-0 h-8 px-2 text-[11px] md:text-xs font-bold rounded-lg shadow-sm transition-colors focus-visible:ring-2 focus-visible:ring-emerald-600 ${
                 outOfStock ? 'bg-stone-100 text-stone-400 cursor-not-allowed' : addedToCart ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-amber-500 hover:bg-amber-600 text-white'
               }`}
               disabled={outOfStock || loading}
               onClick={handleAddToCart}
+              aria-label={outOfStock ? `${product.name} is out of stock` : `Add ${product.name} to cart`}
             >
               {loading ? (
-                <Loader2 className="h-3 w-3 animate-spin mx-auto" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" />
               ) : addedToCart ? (
                 <span className="truncate w-full text-center">Added</span>
               ) : outOfStock ? (
                 <span className="truncate w-full text-center">Out of Stock</span>
               ) : (
                 <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
-                  <ShoppingCart className="h-3 w-3 shrink-0" />
+                  <ShoppingCart className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate">Add to Cart</span>
                 </div>
               )}
@@ -295,7 +275,7 @@ export default function ProductCard({ product }: ProductCardProps) {
 
             {/* Buy Now - Desktop Only, Equal Flex */}
             <Button
-              className="hidden md:flex flex-1 min-w-0 h-7 px-2 text-[10px] md:text-xs font-bold rounded-md shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="hidden md:flex flex-1 min-w-0 h-8 px-2 text-[11px] md:text-xs font-bold rounded-lg shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white focus-visible:ring-2 focus-visible:ring-emerald-600"
               disabled={outOfStock || loading}
               onClick={(e) => {
                 e.stopPropagation()
@@ -303,9 +283,10 @@ export default function ProductCard({ product }: ProductCardProps) {
                   handleAddToCart(e).then(() => navigate('checkout'))
                 }
               }}
+              aria-label={`Buy ${product.name} now`}
             >
               <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
-                <Zap className="h-3 w-3 shrink-0" />
+                <Zap className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate">Buy Now</span>
               </div>
             </Button>

@@ -276,7 +276,7 @@ function ScrollToTopButton() {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function ProductDetailPage() {
+export default function ProductDetailPage({ initialProduct }: { initialProduct?: ProductDetail | null } = {}) {
   const {
     pageParams,
     navigate,
@@ -293,14 +293,14 @@ export default function ProductDetailPage() {
     recentlyViewed,
   } = useAppStore()
 
-  const [product, setProduct] = useState<ProductDetail | null>(null)
+  const [product, setProduct] = useState<ProductDetail | null>(initialProduct || null)
   const [relatedProducts, setRelatedProducts] = useState<RelatedProduct[]>([])
   const [alsoViewedProducts, setAlsoViewedProducts] = useState<RelatedProduct[]>([])
   const [frequentlyBoughtTogether, setFrequentlyBoughtTogether] = useState<RelatedProduct[]>([])
   const [selectedBundleItems, setSelectedBundleItems] = useState<Set<string>>(new Set())
   const [recentlyViewedProducts, setRecentlyViewedProducts] = useState<RelatedProduct[]>([])
-  const [reviews, setReviews] = useState<Review[]>([])
-  const [loading, setLoading] = useState(true)
+  const [reviews, setReviews] = useState<Review[]>(initialProduct?.reviews || [])
+  const [loading, setLoading] = useState(!initialProduct)
   const [selectedImage, setSelectedImage] = useState(0)
   const [quantity, setQuantity] = useState(1)
   const [adding, setAdding] = useState(false)
@@ -341,6 +341,48 @@ export default function ProductDetailPage() {
 
   // Fetch product data
   useEffect(() => {
+    if (initialProduct) {
+      setProduct(initialProduct)
+      if (initialProduct.reviews) {
+        setReviews(initialProduct.reviews)
+      }
+      setLoading(false)
+      addRecentlyViewed(initialProduct.id)
+
+      const currentCatSlug = initialProduct.category?.slug
+      Promise.all([
+        currentCatSlug
+          ? fetch(`/api/products?category=${currentCatSlug}&limit=8&status=active`)
+              .then((r) => r.json())
+              .then((d) =>
+                extractItems<RelatedProduct>(d).filter(
+                  (p) => p.id !== initialProduct.id
+                )
+              )
+              .catch(() => [] as RelatedProduct[])
+          : Promise.resolve([] as RelatedProduct[]),
+        fetch(`/api/products?status=active&limit=8`)
+          .then((r) => r.json())
+          .then((d) =>
+            extractItems<RelatedProduct>(d).filter(
+              (p) => p.id !== initialProduct.id
+            )
+          )
+          .catch(() => [] as RelatedProduct[]),
+      ]).then(([sameCat, allActive]) => {
+        if (sameCat.length > 0) {
+          setAlsoViewedProducts(sameCat.slice(0, 6))
+        }
+        const crossCat = allActive.filter(
+          (p) => !p.category?.slug || p.category.slug !== currentCatSlug
+        )
+        const youMayLike =
+          crossCat.length >= 4 ? crossCat.slice(0, 8) : sameCat.slice(0, 8)
+        setRelatedProducts(youMayLike)
+      })
+      return
+    }
+
     if (!productId) return
     setLoading(true)
     setSelectedImage(0)
@@ -1473,72 +1515,33 @@ export default function ProductDetailPage() {
               </Card>
             </AnimatedSection>
 
-            {/* ── Trust Badges ── */}
+            {/* ── Unified Product Assurance Bar (Consolidated & Non-Repetitive) ── */}
             <AnimatedSection delay={0.36}>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 {[
-                  { icon: ShieldCheck, label: '100% Authentic', subtitle: 'Genuine Products', color: 'emerald' },
-                  { icon: Truck, label: `Free Delivery`, subtitle: `Over ৳${freeShippingThreshold.toLocaleString()}`, color: 'amber' },
-                  { icon: RefreshCw, label: 'Easy Returns', subtitle: `${siteConfig?.returnWindowDays || 7}-Day Policy`, color: 'emerald' },
-                  { icon: Lock, label: 'Secure Payment', subtitle: 'SSL Encrypted', color: 'amber' },
+                  { icon: ShieldCheck, label: '100% Authentic', subtitle: 'Direct from Source', color: 'emerald' },
+                  { icon: Truck, label: 'Fast Delivery', subtitle: `Free over ৳${freeShippingThreshold.toLocaleString()}`, color: 'amber' },
+                  { icon: RefreshCw, label: 'Easy Returns', subtitle: `${siteConfig?.returnWindowDays || 7}-Day Window`, color: 'emerald' },
+                  { icon: Lock, label: 'SSL Secured', subtitle: 'Safe Checkout', color: 'amber' },
                 ].map(({ icon: Icon, label, subtitle, color }, idx) => (
                   <motion.div
                     key={label}
-                    className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-muted/30 border border-border/50 text-center group hover:shadow-md hover:border-emerald-200 dark:hover:border-emerald-800 transition-all duration-300"
-                    whileHover={{ y: -2 }}
+                    className="flex flex-col items-center gap-1 p-2.5 sm:p-3 rounded-xl bg-stone-50/80 dark:bg-muted/30 border border-stone-200/60 dark:border-border/50 text-center group hover:shadow-sm hover:border-emerald-200 transition-all duration-200"
+                    whileHover={{ y: -1 }}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 + idx * 0.05 }}
+                    transition={{ delay: 0.38 + idx * 0.04 }}
                   >
-                    <div className={`h-9 w-9 rounded-full flex items-center justify-center transition-transform group-hover:scale-110 ${
-                      color === 'emerald' ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-amber-100 dark:bg-amber-900/30'
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center transition-transform group-hover:scale-105 ${
+                      color === 'emerald' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
                     }`}>
-                      <Icon className={`h-4 w-4 ${
-                        color === 'emerald' ? 'text-emerald-600' : 'text-amber-600'
-                      }`} />
+                      <Icon className="h-4 w-4" />
                     </div>
-                    <span className="text-xs font-semibold leading-tight">{label}</span>
+                    <span className="text-xs font-bold leading-tight text-foreground">{label}</span>
                     <span className="text-[10px] text-muted-foreground leading-tight">{subtitle}</span>
                   </motion.div>
                 ))}
               </div>
-            </AnimatedSection>
-
-            {/* Delivery Info Card */}
-            <AnimatedSection delay={0.38}>
-              <Card className="border shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-                <CardContent className="p-0">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x">
-                    <div className="flex items-center gap-3 p-4 hover:bg-muted/30 transition-colors">
-                      <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
-                        <Truck className="h-5 w-5 text-emerald-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold">Free Shipping</p>
-                        <p className="text-xs text-muted-foreground">Orders over ৳{freeShippingThreshold.toLocaleString()}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-4 hover:bg-muted/30 transition-colors">
-                      <div className="h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
-                        <ShieldCheck className="h-5 w-5 text-amber-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold">Quality Guaranteed</p>
-                        <p className="text-xs text-muted-foreground">100% authentic products</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-4 hover:bg-muted/30 transition-colors">
-                      <div className="h-10 w-10 rounded-full bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0">
-                        <RefreshCw className="h-5 w-5 text-emerald-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold">Easy Returns</p>
-                        <p className="text-xs text-muted-foreground">{siteConfig?.returnWindowDays || 7}-day return policy</p>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
             </AnimatedSection>
 
             {/* Share Buttons */}

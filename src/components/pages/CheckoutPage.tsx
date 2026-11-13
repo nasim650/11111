@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   CreditCard, Truck, MapPin, ChevronRight, Loader2, ShieldCheck,
@@ -51,7 +52,15 @@ interface Address {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CheckoutPage() {
+  const router = useRouter()
   const { cartItems, subtotal, totalItems, navigate, isAuthenticated, user, siteConfig, clearCart, updateQuantity, removeFromCart } = useAppStore()
+
+  // Safe redirect to /cart when cart is empty
+  useEffect(() => {
+    if (cartItems.length === 0) {
+      router.replace('/cart')
+    }
+  }, [cartItems.length, router])
   const [addresses, setAddresses] = useState<Address[]>([])
   const [selectedAddressId, setSelectedAddressId] = useState('')
   const [shippingMethod, setShippingMethod] = useState('standard')
@@ -393,6 +402,7 @@ export default function CheckoutPage() {
         toast.success('Order placed successfully!', {
           description: `Order #${orderNum} confirmed. Thank you!`,
         })
+        router.push(`/orders/${encodeURIComponent(orderNum)}`)
         navigate('order-confirmation', { orderId, orderNumber: orderNum })
       }
     } catch (error) {

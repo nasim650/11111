@@ -4,6 +4,23 @@ import bcrypt from 'bcryptjs'
 const prisma = new PrismaClient()
 
 async function main() {
+  const isProduction =
+    process.env.NODE_ENV === 'production' ||
+    process.env.APP_ENV === 'production' ||
+    process.env.VERCEL_ENV === 'production'
+
+  if (isProduction && process.env.ALLOW_PRODUCTION_SEED !== 'true') {
+    console.error('❌ SEED BLOCKED: Seeding is blocked in production to prevent data loss and default credential creation.')
+    console.error('To run seeding safely in development or staging, ensure NODE_ENV is not set to production.')
+    process.exit(1)
+  }
+
+  if (isProduction && process.env.ALLOW_DESTRUCTIVE_SEED !== 'true') {
+    console.error('❌ DESTRUCTIVE SEED BLOCKED: Table truncation (deleteMany) is disabled in production.')
+    console.error('To allow destructive re-seed, set ALLOW_DESTRUCTIVE_SEED=true explicitly.')
+    process.exit(1)
+  }
+
   console.log('🌱 Seeding database...')
 
   // Clean existing data (in correct order to respect foreign keys)
@@ -40,8 +57,18 @@ async function main() {
 
   // ─── Users ──────────────────────────────────────────────────────────────
   console.log('👤 Creating users...')
-  const adminPassword = await bcrypt.hash('admin123', 10)
-  const customerPassword = await bcrypt.hash('customer123', 10)
+  const rawAdminPassword = process.env.SEED_ADMIN_PASSWORD || (isProduction ? null : 'admin123')
+  if (!rawAdminPassword) {
+    console.error('❌ SEED BLOCKED: In production, SEED_ADMIN_PASSWORD environment variable must be provided.')
+    process.exit(1)
+  }
+  const adminPassword = await bcrypt.hash(rawAdminPassword, 12)
+  const rawCustomerPassword = process.env.SEED_CUSTOMER_PASSWORD || (isProduction ? null : 'customer123')
+  if (!rawCustomerPassword) {
+    console.error('❌ SEED BLOCKED: In production, SEED_CUSTOMER_PASSWORD environment variable must be provided.')
+    process.exit(1)
+  }
+  const customerPassword = await bcrypt.hash(rawCustomerPassword, 10)
 
   const admin = await prisma.user.create({
     data: {

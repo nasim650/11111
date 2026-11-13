@@ -37,8 +37,9 @@ function redactPayload(payload: Record<string, unknown>) {
   return redacted
 }
 
-export async function getSSLCommerzConfig(): Promise<SSLCommerzConfig | null> {
-  const configRows = await db.siteConfig.findMany({
+export async function getSSLCommerzConfig(dbClient?: any): Promise<SSLCommerzConfig | null> {
+  const client = dbClient || db
+  const configRows = await client.siteConfig.findMany({
     where: { key: { in: ['sslcommerzStoreId', 'sslcommerzPassword', 'sslcommerzMode'] } },
   })
   const siteConfig = Object.fromEntries(configRows.map((row) => [row.key, row.value]))
@@ -134,19 +135,35 @@ export function getAppBaseUrl(request: NextRequest): string {
 }
 
 export async function parseSSLCommerzPayload(request: NextRequest): Promise<Record<string, string>> {
-  const contentType = request.headers.get('content-type') || ''
+  const url = new URL(request.url)
+  const queryParams = Object.fromEntries([...url.searchParams.entries()])
 
-  if (contentType.includes('application/json')) {
-    const body = await request.json()
-    return Object.fromEntries(
-      Object.entries(body as Record<string, unknown>).map(([key, value]) => [key, String(value ?? '')])
-    )
+  if (request.method === 'GET') {
+    return queryParams
   }
 
-  const formData = await request.formData()
-  return Object.fromEntries(
-    [...formData.entries()].map(([key, value]) => [key, String(value)])
-  )
+  const contentType = request.headers.get('content-type') || ''
+  try {
+    if (contentType.includes('application/json')) {
+      const body = await request.json()
+      return {
+        ...queryParams,
+        ...Object.fromEntries(
+          Object.entries(body as Record<string, unknown>).map(([key, value]) => [key, String(value ?? '')])
+        ),
+      }
+    }
+
+    const formData = await request.formData()
+    return {
+      ...queryParams,
+      ...Object.fromEntries(
+        [...formData.entries()].map(([key, value]) => [key, String(value)])
+      ),
+    }
+  } catch {
+    return queryParams
+  }
 }
 
 export function verifySSLCommerzSignature(
