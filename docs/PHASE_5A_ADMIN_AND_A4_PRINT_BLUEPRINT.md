@@ -420,3 +420,273 @@ Before proceeding to Phase 5B implementation, the following architectural and in
 4. Customer accounts cannot access any `/admin/*` route or admin API.
 5. Online payment states remain strictly protected from manual tampering.
 6. TypeScript, ESLint, full test suite (including new admin tests), and production build pass with 0 errors.
+
+
+---
+
+## 10. Admin Product Advertising Link & UTM Campaign URL Generator
+
+### 10.1 Feature Overview
+
+**Purpose:** Allow admin and manager roles to generate trackable advertising URLs for any active product, enabling attribution measurement across paid social and search ad campaigns.
+
+**Scope:**
+- Admin-only panel — visible in the product row in the admin product list and on the `/admin/products/[slug]` detail page (planned for Phase 5B)
+- Zero customer-facing exposure — no UTM configuration data, no ad-link UI, and no campaign metadata are ever rendered on customer-facing pages
+
+**Key capabilities:**
+1. Display the canonical production URL for a product (copy-to-clipboard with one click)
+2. Build a UTM-decorated campaign URL with configurable `utm_source`, `utm_medium`, `utm_campaign`, and optional `utm_content`
+3. Enforce production-domain-only base URL — never `localhost` or Vercel preview domains
+4. Disable link generation for inactive or archived products with a clear warning banner
+
+---
+
+### 10.2 Database Schema Decision
+
+#### MVP (Phase 5B): No new DB table required
+
+UTM parameters are **stateless query parameters** generated entirely in the admin UI at copy time. The base URL is derived server-side from `NEXT_PUBLIC_APP_URL` and returned to the client via a protected API endpoint. No persistent storage is needed for MVP.
+
+#### Phase 6+ optional: `CampaignLink` table
+
+```prisma
+model CampaignLink {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+  slug        String   // denormalized for query performance
+  source      String   // facebook, instagram, google, tiktok, other
+  medium      String   // paid_social, cpc
+  campaign    String
+  content     String?  // optional ad-set label
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([productId])
+  @@index([createdAt])
+}
+```
+
+**What this enables in Phase 6+:**
+- Audit trail — who generated which link and when
+- Link performance correlation if UTM data is imported from Google Analytics or Meta Ads Manager
+- Campaign frequency analysis per product and per manager
+
+---
+
+### 10.3 Security Rules
+
+1. **Production domain enforcement** — The URL base is derived exclusively from `NEXT_PUBLIC_APP_URL` server-side. Fallback to `khatikhadyo.com` only if the env variable is correctly set and starts with `https://`. Never `VERCEL_URL`. Never `localhost`.
+2. **Destination whitelist** — Only `/products/[slug]` is a valid ad-link destination. Cart, checkout, admin, API, and order paths are blocked by a server-side path prefix check before the URL is returned.
+3. **Inactive product block** — If `product.status !== 'active'`, the API returns `{ active: false }` and the UI shows a warning banner with the Copy button disabled (`aria-disabled=true`).
+4. **Admin-only** — The entire ad-link panel lives inside `/admin/*` routes, protected by `requireAdmin()` in the layout. No UTM data ever reaches a customer session or customer-facing page.
+5. **UTM encoding** — All UTM parameter values are URL-encoded via the browser-native `URLSearchParams` API, preventing injection of arbitrary query string characters.
+6. **Audit log** — Each link generation/copy action is optionally logged to `AuditLog` with `action: 'AD_LINK_GENERATED'`, `entityType: 'Product'`, `entityId: productId` (see Section 10.8).
+
+---
+
+### 10.4 Server-Side API Contract
+
+**Endpoint:** `GET /api/admin/products/[slug]/ad-url`
+
+| Property | Value |
+|---|---|
+| Authentication | Admin or Manager session required — HTTP 401 otherwise |
+| Rate limit | Inherits global admin API rate limit from `src/lib/security.ts` |
+| Caching | `no-store` — always reads live product status from DB |
+
+**Server logic (ordered steps):**
+1. Verify session via `requireAdmin()` — return HTTP 401/403 if unauthorized
+2. Fetch product by `slug` from DB
+3. If `product.status !== 'active'`, return HTTP 200 with `{ success: true, data: { active: false, warning: 'Product is inactive. Ad link disabled.' } }`
+4. Read `NEXT_PUBLIC_APP_URL` server-side; verify it starts with `https://` — return HTTP 500 if not
+5. Build canonical URL: `${baseUrl}/products/${product.slug}`
+6. Verify canonical URL path starts with `/products/` — reject any other prefix
+7. Return product metadata and canonical URL
+
+**Success response:**
+```json
+{
+  "success": true,
+  "data": {
+    "productId": "...",
+    "slug": "sundarbans-honey-500g",
+    "name": "সুন্দরবনের খাঁটি মধু ৫০০গ্রাম",
+    "status": "active",
+    "canonicalUrl": "https://khatikhadyo.com/products/sundarbans-honey-500g",
+    "ogImage": "https://res.cloudinary.com/...",
+    "price": 650,
+    "currency": "BDT"
+  }
+}
+```
+
+**Inactive product response (HTTP 200):**
+```json
+{
+  "success": true,
+  "data": {
+    "active": false,
+    "warning": "Product is inactive. Ad link disabled."
+  }
+}
+```
+
+---
+
+### 10.5 UTM URL Builder Logic (Client-Side Admin Component)
+
+```typescript
+// src/components/admin/AdLinkGenerator.tsx (Phase 5B implementation target)
+
+const UTM_SOURCES = ['facebook', 'instagram', 'google', 'tiktok', 'other'] as const
+const UTM_MEDIUMS = ['paid_social', 'cpc'] as const
+
+function buildUtmUrl(
+  canonicalUrl: string,
+  utm: { source: string; medium: string; campaign: string; content?: string }
+): string {
+  const url = new URL(canonicalUrl)
+  // Safety: verify host matches expected production domain
+  const allowedHost = process.env.NEXT_PUBLIC_APP_URL
+    ? new URL(process.env.NEXT_PUBLIC_APP_URL).host
+    : 'khatikhadyo.com'
+  if (url.host !== allowedHost) throw new Error('Invalid ad link host')
+
+  url.searchParams.set('utm_source', utm.source)
+  url.searchParams.set('utm_medium', utm.medium)
+  url.searchParams.set('utm_campaign', utm.campaign.trim())
+  if (utm.content?.trim()) url.searchParams.set('utm_content', utm.content.trim())
+  return url.toString()
+}
+```
+
+**Component responsibilities:**
+- Fetches canonical URL from `/api/admin/products/[slug]/ad-url` on mount (SWR or React Query with `no-store`)
+- Renders active/inactive state from API response
+- Calls `buildUtmUrl()` on every UTM field change (derived state, no server round-trip)
+- Clipboard write via `navigator.clipboard.writeText()` with a success toast on copy
+- Opens landing page in new tab via `window.open(canonicalUrl, '_blank', 'noopener,noreferrer')`
+
+---
+
+### 10.6 UI Component Design
+
+**Active product — full panel:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 📢 Ad Link Generator            [Active Product ✓]          │
+│ ─────────────────────────────────────────────────────────── │
+│ Canonical URL:                                              │
+│  https://khatikhadyo.com/products/sundarbans-honey-500g    │
+│  [Copy Ad Link 📋]  [Open Landing Page ↗]                  │
+│ ─────────────────────────────────────────────────────────── │
+│ UTM Campaign URL Builder (optional):                        │
+│  Source:  [facebook ▾]  Medium: [paid_social ▾]           │
+│  Campaign: [eid-sale-2026          ]                        │
+│  Ad Set:   [honey-banner-v2        ] (optional)             │
+│                                                             │
+│  Generated URL:                                             │
+│  https://khatikhadyo.com/products/sundarbans-honey-        │
+│  500g?utm_source=facebook&utm_medium=paid_social&utm_       │
+│  campaign=eid-sale-2026&utm_content=honey-banner-v2        │
+│  [Copy UTM Link 📋]                      ✓ Copied!         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Inactive product — warning state:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│ ⚠️ Ad Link Generator                                        │
+│  This product is currently INACTIVE.                       │
+│  Ad link generation is disabled until the product is       │
+│  set to Active status.                                      │
+│  [Copy Ad Link 📋] ← DISABLED (grey, aria-disabled=true)  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Accessibility requirements:**
+- Disabled Copy button uses `aria-disabled="true"` and `tabIndex={-1}` (not `disabled` attribute, to allow focus-visible outline for keyboard users)
+- Toast announcements use `role="status"` and `aria-live="polite"`
+- Dropdown selects are native `<select>` elements for maximum screen-reader compatibility
+
+---
+
+### 10.7 Meta/Google Ad Compatibility Audit
+
+| Requirement | Status | Notes |
+|---|---|---|
+| OG `og:title` per product | ✅ Implemented | `generateMetadata` exports per-slug |
+| OG `og:description` | ✅ Implemented | From product `shortDescription` |
+| OG `og:image` | ✅ Implemented | Cloudinary URL from product images |
+| OG `og:url` canonical | ✅ Implemented | `${baseUrl}/products/${slug}` |
+| OG `og:type` | ✅ `website` | Meta does not require `og:type=product` for ad landing pages |
+| Twitter card | ✅ `summary_large_image` | |
+| JSON-LD Product schema | ✅ Implemented | Schema.org Product, Offer, AggregateRating |
+| Canonical URL | ✅ Implemented | `alternates.canonical` |
+| **Meta "Buy Now" button** | N/A — Ads Manager only | Configured in Meta Ads Manager, NOT in website code |
+| **Google Shopping** | ✅ Ready | JSON-LD has price, currency (BDT), availability, image |
+| Facebook Pixel | ❌ Not implemented | Recommended for Phase 6B |
+| Google Analytics 4 | ❌ Not implemented | Required to track UTM campaigns |
+
+> **Important:** Meta "Buy Now" / "Shop Now" CTA buttons are configured exclusively in Meta Ads Manager when creating the ad campaign. The website code does not implement any special button for this — the ad platform reads the product landing page's Open Graph tags to auto-populate ad creative previews. The website's responsibility is to ensure OG tags are correct (already done).
+
+---
+
+### 10.8 Audit Log Policy
+
+```typescript
+// Optional: log to AuditLog when admin generates/copies an ad link
+await db.auditLog.create({
+  data: {
+    userId: adminUserId,
+    action: 'AD_LINK_GENERATED',
+    entityType: 'Product',
+    entityId: productId,
+    details: JSON.stringify({
+      slug: product.slug,
+      utm_source: utm?.source,
+      utm_campaign: utm?.campaign,
+    }),
+    ipAddress: clientIp,
+  }
+})
+```
+
+**Policy:** Audit logging for ad link generation is **optional for MVP**. It is recommended to enable from Phase 5B launch onward for campaign attribution auditing and to satisfy any future compliance requirements. The `AuditLog` model in `prisma/schema.prisma` already supports this without schema migration.
+
+---
+
+### 10.9 Phase 5B Acceptance Criteria (Addition to Section 9.4)
+
+The following items extend the acceptance criteria list in Section 9.4:
+
+7. Admin/manager can view the canonical product URL for any active product in the product detail view
+8. One-click Copy Ad Link copies the clean production URL to clipboard and displays a success toast
+9. Open Landing Page opens the product page in a new tab (`noopener,noreferrer`)
+10. UTM URL builder generates a correctly encoded URL with all parameters on every field change
+11. Inactive/archived product shows a warning banner; Copy button is visually disabled with `aria-disabled=true`
+12. Customer-facing product pages contain no ad-link UI or UTM configuration data
+13. Ad link URLs only use the `https://khatikhadyo.com` base — never `localhost` or a Vercel preview domain
+14. *(Optional)* AuditLog entry is created when an admin generates or copies a campaign link
+
+---
+
+### 10.10 Test Matrix
+
+| # | Test | Input | Expected |
+|---|---|---|---|
+| 1 | Active product canonical URL | slug: `sundarbans-honey-500g` | Returns `https://khatikhadyo.com/products/sundarbans-honey-500g` |
+| 2 | UTM URL encoding — special chars | campaign: `eid sale & promo` | Encoded: `eid+sale+%26+promo` |
+| 3 | UTM URL encoding — XSS attempt | source: `<script>alert(1)</script>` | `URLSearchParams` encoding neutralizes — no script tag in output |
+| 4 | Preview/localhost host rejected | `NEXT_PUBLIC_APP_URL=localhost` | Server throws, returns HTTP 500 (non-`https://` rejected by validation) |
+| 5 | Inactive product API response | `product.status = 'inactive'` | `{ active: false, warning: '...' }` |
+| 6 | Inactive product UI | Admin views inactive product | Copy button disabled, warning banner visible |
+| 7 | Customer access blocked | Customer session → `GET /api/admin/products/[slug]/ad-url` | HTTP 401/403 |
+| 8 | Unauthenticated access blocked | No session → `GET /api/admin/products/[slug]/ad-url` | HTTP 401 |
+| 9 | Destination path validation | Attempt to generate URL for `/checkout` | Rejected — only `/products/[slug]` path prefix allowed |
+| 10 | Copy UTM link → product page loads | Paste UTM URL in browser | Product page loads; `utm_source` parameter preserved in address bar |
+
+---
