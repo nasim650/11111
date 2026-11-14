@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -53,7 +54,7 @@ interface Address {
 
 export default function CheckoutPage() {
   const router = useRouter()
-  const { cartItems, subtotal, totalItems, navigate, isAuthenticated, user, siteConfig, clearCart, updateQuantity, removeFromCart } = useAppStore()
+  const { cartItems, subtotal, totalItems, navigate, isAuthenticated, user, setUser, siteConfig, clearCart, updateQuantity, removeFromCart } = useAppStore()
 
   // Safe redirect to /cart when cart is empty
   useEffect(() => {
@@ -86,6 +87,27 @@ export default function CheckoutPage() {
 
   // Mobile summary sheet
   const [mobileSummaryOpen, setMobileSummaryOpen] = useState(false)
+
+  // Phone OTP Verification State for logged-in accounts
+  const [otpPhone, setOtpPhone] = useState(user?.phone || '')
+  const [otpCode, setOtpCode] = useState('')
+  const [otpSent, setOtpSent] = useState(false)
+  const [otpSending, setOtpSending] = useState(false)
+  const [otpVerifying, setOtpVerifying] = useState(false)
+  const [otpCooldown, setOtpCooldown] = useState(0)
+
+  useEffect(() => {
+    if (user?.phone) {
+      setOtpPhone(user.phone)
+    }
+  }, [user?.phone])
+
+  useEffect(() => {
+    if (otpCooldown > 0) {
+      const timer = setTimeout(() => setOtpCooldown((c) => c - 1), 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [otpCooldown])
 
   // Load user addresses on mount
   useEffect(() => {
@@ -140,6 +162,13 @@ export default function CheckoutPage() {
     }
 
     if (isAuthenticated && user?.id) {
+      if (!user.isVerified || !user.phone) {
+        errors.phoneVerification = 'অর্ডার করতে আপনার মোবাইল নম্বর ও ওটিপি ভেরিফাই করুন'
+        toast.error('ফোন নম্বর ভেরিফিকেশন আবশ্যক', {
+          description: 'অর্ডার নিশ্চিত করতে অনুগ্রহ করে আপনার মোবাইল নম্বর ভেরিফাই করুন।',
+        })
+      }
+
       if (!selectedAddressId) {
         errors.address = 'Please select a delivery address'
         toast.error('Please select a delivery address', {
@@ -178,6 +207,81 @@ export default function CheckoutPage() {
     setCurrentStep(step)
     setMaxReachedStep((prev) => Math.max(prev, step))
     window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  // ─── OTP Phone Verification Handlers ─────────────────────────────────────
+  const handleSendOtp = async () => {
+    if (!otpPhone.trim()) {
+      toast.error('অনুগ্রহ করে একটি সচল ১১ ডিজিটের মোবাইল নম্বর লিখুন')
+      return
+    }
+    setOtpSending(true)
+    try {
+      const token = useAppStore.getState().accessToken
+      const res = await fetch('/api/auth/verify-phone/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ phone: otpPhone.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'ভেরিফিকেশন কোড পাঠানো সম্ভব হয়নি')
+      }
+      setOtpSent(true)
+      setOtpCooldown(60)
+      toast.success('ভেরিফিকেশন কোড পাঠানো হয়েছে', {
+        description: `${otpPhone} নম্বরে ৬ ডিজিটের কোড পাঠানো হয়েছে।`,
+      })
+    } catch (err: any) {
+      toast.error(err.message || 'ভেরিফিকেশন কোড পাঠানো ব্যর্থ হয়েছে')
+    } finally {
+      setOtpSending(false)
+    }
+  }
+
+  const handleVerifyOtp = async () => {
+    if (!otpCode.trim() || otpCode.trim().length !== 6) {
+      toast.error('অনুগ্রহ করে সঠিক ৬ ডিজিটের ওটিপি কোড লিখুন')
+      return
+    }
+    setOtpVerifying(true)
+    try {
+      const token = useAppStore.getState().accessToken
+      const res = await fetch('/api/auth/verify-phone', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ phone: otpPhone.trim(), code: otpCode.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'ভেরিফিকেশন কোডটি সঠিক নয় বা মেয়াদোত্তীর্ণ হয়েছে')
+      }
+      if (user) {
+        setUser({
+          ...user,
+          phone: otpPhone.trim(),
+          isVerified: true,
+        })
+      }
+      setFormErrors((prev) => {
+        const next = { ...prev }
+        delete next.phoneVerification
+        return next
+      })
+      toast.success('মোবাইল নম্বর সফলভাবে ভেরিফাই হয়েছে!', {
+        description: 'এখন আপনি নিরাপদে আপনার অর্ডার সম্পন্ন করতে পারবেন।',
+      })
+    } catch (err: any) {
+      toast.error(err.message || 'ভেরিফিকেশন ব্যর্থ হয়েছে')
+    } finally {
+      setOtpVerifying(false)
+    }
   }
 
   // ─── Coupon ───────────────────────────────────────────────────────────────
@@ -373,6 +477,13 @@ export default function CheckoutPage() {
 
       if (!res.ok) {
         const data = await res.json()
+        if (data.code === 'PHONE_UNVERIFIED') {
+          setCurrentStep(1)
+          setFormErrors((prev) => ({
+            ...prev,
+            phoneVerification: data.error || 'অর্ডার করতে আপনার মোবাইল নম্বর ও ওটিপি ভেরিফাই করুন',
+          }))
+        }
         throw new Error(data.error || 'Failed to place order')
       }
 
@@ -421,7 +532,7 @@ export default function CheckoutPage() {
             <div className="h-24 w-24 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
               <ShoppingBag className="h-12 w-12 text-primary" />
             </div>
-            <h2 className="text-2xl font-bold mb-2">Your shopping cart is empty</h2>
+            <h1 className="text-2xl font-bold mb-2">Your shopping cart is empty</h1>
             <p className="text-muted-foreground mb-6 text-sm">Explore our premium organic products and add items to your cart before proceeding to checkout.</p>
             <Button onClick={() => navigate('products')} className="rounded-xl px-8 h-12 shadow-sm font-semibold">
               Browse Products
@@ -655,14 +766,18 @@ export default function CheckoutPage() {
       {/* Compact Header */}
       <div className="bg-background border-b sticky top-0 z-30 shadow-sm">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => navigate('home')}>
+          <Link
+            href="/"
+            aria-label="Khati Khadyo - Go to homepage"
+            className="flex items-center gap-2 hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 rounded-md"
+          >
             {siteConfig?.logo ? (
               <img src={siteConfig.logo} alt="Khati Khadyo" className="h-7 w-auto object-contain" />
             ) : (
               <img src="/all_logo.png" alt="Khati Khadyo" className="h-7 w-auto object-contain" />
             )}
             <span className="font-bold text-base hidden sm:block">Khati Khadyo</span>
-          </div>
+          </Link>
           <Button
             variant="ghost"
             size="sm"
@@ -684,6 +799,7 @@ export default function CheckoutPage() {
 
       {/* Main Container */}
       <div className="flex-1 container mx-auto px-4 py-6 sm:py-8">
+        <h1 className="sr-only">Checkout - Complete Your Order</h1>
         <div className="grid lg:grid-cols-3 gap-6">
 
           {/* Left Column: Checkout Step Forms */}
@@ -700,6 +816,106 @@ export default function CheckoutPage() {
                   transition={{ duration: 0.25 }}
                   className="space-y-6"
                 >
+                  {/* Phone Verification Card for unverified logged-in users */}
+                  {isAuthenticated && user?.id && (!user.isVerified || !user.phone) && (
+                    <Card className="shadow-sm rounded-2xl border-amber-200 bg-amber-50/40 dark:bg-amber-950/20 border-2">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2 text-amber-800 dark:text-amber-300">
+                          <div className="h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center text-amber-700 dark:text-amber-300">
+                            <Phone className="h-4 w-4" />
+                          </div>
+                          <span>মোবাইল নম্বর ভেরিফিকেশন (Phone Verification)</span>
+                          <Badge variant="destructive" className="ml-auto text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white border-0">
+                            বাধ্যতামূলক
+                          </Badge>
+                        </CardTitle>
+                        <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 ml-10">
+                          অর্ডার নিশ্চিত করতে আপনার ১১ ডিজিটের বাংলাদেশি মোবাইল নম্বর ও SMS ওটিপি কোড দিয়ে ভেরিফিকেশন সম্পন্ন করুন।
+                        </p>
+                      </CardHeader>
+                      <CardContent className="space-y-4 pt-0">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="checkout-otp-phone" className="text-xs font-medium text-foreground">
+                              মোবাইল নম্বর <span className="text-destructive">*</span>
+                            </Label>
+                            <Input
+                              id="checkout-otp-phone"
+                              type="tel"
+                              value={otpPhone}
+                              onChange={(e) => setOtpPhone(e.target.value)}
+                              placeholder="01XXXXXXXXX"
+                              disabled={otpSending || (otpSent && otpCooldown > 0)}
+                              className="bg-background"
+                            />
+                          </div>
+                          <div>
+                            <Button
+                              type="button"
+                              onClick={handleSendOtp}
+                              disabled={otpSending || (otpSent && otpCooldown > 0)}
+                              className="w-full sm:w-auto h-10 px-5"
+                              variant={otpSent ? "outline" : "default"}
+                            >
+                              {otpSending ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> কোড পাঠানো হচ্ছে...
+                                </>
+                              ) : otpCooldown > 0 ? (
+                                `আবার কোড পাঠান (${otpCooldown}s)`
+                              ) : otpSent ? (
+                                'কোড পুনরায় পাঠান (Resend OTP)'
+                              ) : (
+                                'ওটিপি কোড পাঠান (Send OTP)'
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+
+                        {otpSent && (
+                          <div className="p-3.5 bg-background rounded-xl border border-amber-200/80 space-y-3">
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                              <span>{otpPhone} নম্বরে ৬ ডিজিটের ভেরিফিকেশন কোড পাঠানো হয়েছে।</span>
+                            </div>
+                            <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
+                              <Input
+                                type="text"
+                                maxLength={6}
+                                value={otpCode}
+                                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                placeholder="৬ ডিজিটের ওটিপি লিখুন"
+                                className="w-full sm:w-48 text-center text-lg tracking-widest font-mono"
+                              />
+                              <Button
+                                type="button"
+                                onClick={handleVerifyOtp}
+                                disabled={otpVerifying || otpCode.length !== 6}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white h-10 px-6 font-semibold"
+                              >
+                                {otpVerifying ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> যাচাই করা হচ্ছে...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Check className="h-4 w-4 mr-1.5" /> ভেরিফাই করুন (Verify)
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+
+                        {formErrors.phoneVerification && (
+                          <p className="text-xs text-destructive flex items-center gap-1 font-medium">
+                            <AlertCircle className="h-3.5 w-3.5" /> {formErrors.phoneVerification}
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+
                   {/* Delivery Address Card */}
                   <Card className="shadow-sm rounded-2xl border">
                     <SectionHeader

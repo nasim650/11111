@@ -92,6 +92,26 @@ export async function POST(request: NextRequest) {
           { status: 403 }
         )
       }
+
+      // Checkout security rule: Logged-in customer must have a verified phone number
+      const customer = await db.user.findUnique({
+        where: { id: userId },
+        select: { phone: true, isVerified: true, role: true },
+      })
+      if (customer && customer.role === 'customer') {
+        if (!customer.phone || !customer.isVerified) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'অর্ডার সম্পন্ন করতে অনুগ্রহ করে আপনার মোবাইল নম্বর ভেরিফাই করুন। (Please verify your mobile number to complete the order)',
+              code: 'PHONE_UNVERIFIED',
+              requiresPhoneVerification: true,
+              hasPhone: Boolean(customer.phone),
+            },
+            { status: 403 }
+          )
+        }
+      }
     }
 
     // Get address if addressId provided

@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { db } from '@/lib/db'
 import { normalizePhone } from '@/lib/validation'
+import { sendBulkSms, isBulkSmsConfigured, normalizeBulkSmsPhone, BulkSmsError } from '@/lib/bulksmsbd'
 
 export type OtpPurpose = 'password_reset' | 'phone_verification'
 
@@ -10,8 +11,12 @@ const MAX_OTP_ATTEMPTS = 5
 
 export class OtpDeliveryUnavailableError extends Error {}
 export class OtpCooldownError extends Error {
-  constructor(public readonly retryAfter: number) {
+  readonly retryAfter: number
+
+  constructor(retryAfter: number) {
     super(`Please wait ${retryAfter} seconds before requesting another code`)
+    this.name = 'OtpCooldownError'
+    this.retryAfter = retryAfter
   }
 }
 
@@ -25,7 +30,15 @@ function getOtpSecret(): string {
 
 export function ensureOtpDeliveryConfigured(): void {
   getOtpSecret()
-  if (!process.env.SMS_GATEWAY_URL) {
+  // In test mode, allowed without live SMS provider
+  if (process.env.NODE_ENV === 'test') {
+    return
+  }
+
+  const hasBulkSms = isBulkSmsConfigured()
+  const hasGenericGateway = Boolean(process.env.SMS_GATEWAY_URL && process.env.SMS_GATEWAY_URL.trim())
+
+  if (!hasBulkSms && !hasGenericGateway) {
     throw new OtpDeliveryUnavailableError('SMS OTP delivery has not been configured')
   }
 }
@@ -54,37 +67,52 @@ export function parseOtpPhone(value: unknown): string | null {
 }
 
 async function deliverSmsOtp(phone: string, purpose: OtpPurpose, code: string): Promise<void> {
-  const endpoint = process.env.SMS_GATEWAY_URL
-  if (!endpoint) {
-    throw new OtpDeliveryUnavailableError('SMS OTP delivery has not been configured')
-  }
-
-  const token = process.env.SMS_GATEWAY_TOKEN
-  const sender = process.env.SMS_SENDER_ID
   const action = purpose === 'password_reset' ? 'reset your password' : 'verify your phone number'
-  let response: Response
-  try {
-    response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      // Generic JSON adapter contract for the chosen Bangladesh SMS provider.
-      // Do not log this payload: it includes the one-time code.
-      body: JSON.stringify({
-        to: phone,
-        from: sender,
-        message: `Your Khati Khadyo code to ${action} is ${code}. It expires in 5 minutes. Do not share this code.`,
-      }),
-    })
-  } catch {
-    throw new OtpDeliveryUnavailableError('Unable to reach the SMS service right now')
+  const message = `Your Khati Khadyo code to ${action} is ${code}. It expires in 5 minutes. Do not share this code.`
+
+  // 1. BulkSMSBD adapter (Primary & official contract)
+  if (isBulkSmsConfigured() || process.env.NODE_ENV === 'test') {
+    try {
+      await sendBulkSms({ to: phone, message })
+      return
+    } catch (error) {
+      if (error instanceof BulkSmsError) {
+        throw new OtpDeliveryUnavailableError(error.message)
+      }
+      throw new OtpDeliveryUnavailableError('Unable to deliver the verification code right now')
+    }
   }
 
-  if (!response.ok) {
-    throw new OtpDeliveryUnavailableError('Unable to deliver the verification code right now')
+  // 2. Generic SMS Gateway Fallback (if BulkSMSBD not configured)
+  const endpoint = process.env.SMS_GATEWAY_URL
+  if (endpoint) {
+    const token = process.env.SMS_GATEWAY_TOKEN
+    const sender = process.env.SMS_SENDER_ID
+    let response: Response
+    try {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          to: phone,
+          from: sender,
+          message,
+        }),
+      })
+    } catch {
+      throw new OtpDeliveryUnavailableError('Unable to reach the SMS service right now')
+    }
+
+    if (!response.ok) {
+      throw new OtpDeliveryUnavailableError('Unable to deliver the verification code right now')
+    }
+    return
   }
+
+  throw new OtpDeliveryUnavailableError('SMS OTP delivery has not been configured')
 }
 
 export async function issueOtp(phone: string, purpose: OtpPurpose): Promise<{ expiresInSeconds: number }> {

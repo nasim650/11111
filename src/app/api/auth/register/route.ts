@@ -41,8 +41,21 @@ export async function POST(request: NextRequest) {
         phone: phone || null,
         password: hashedPassword,
         role: 'customer',
+        isVerified: false,
       },
     })
+
+    // If phone-based signup, issue 6-digit OTP so the customer receives verification code immediately
+    let otpSent = false
+    if (phone) {
+      try {
+        const { issueOtp } = await import('@/lib/otp')
+        await issueOtp(phone, 'phone_verification')
+        otpSent = true
+      } catch (otpErr) {
+        console.warn('Initial registration OTP deferred:', otpErr instanceof Error ? otpErr.message : otpErr)
+      }
+    }
 
     const token = await generateToken(user.id, user.sessionVersion)
 
@@ -50,7 +63,12 @@ export async function POST(request: NextRequest) {
 
     const response = NextResponse.json({
       success: true,
-      data: { user: userWithoutPassword, token },
+      data: {
+        user: userWithoutPassword,
+        token,
+        otpSent,
+        requiresVerification: !user.isVerified,
+      },
     }, { status: 201 })
     response.cookies.set('auth_token', token, {
       httpOnly: true,

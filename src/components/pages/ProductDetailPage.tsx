@@ -1440,32 +1440,24 @@ export default function ProductDetailPage({ initialProduct }: { initialProduct?:
 
             {/* Action Buttons Row */}
             <AnimatedSection delay={0.3}>
-              <div className="flex gap-2">
-                <Button variant="outline" className="flex-1 h-11 rounded-xl" onClick={handleWishlist}>
-                  <motion.div
-                    animate={wishlistAnimating ? { scale: [1, 1.3, 1] } : {}}
-                    transition={{ duration: 0.4 }}
-                  >
-                    <Heart className={`h-4 w-4 mr-1.5 transition-colors ${wishlisted ? 'fill-red-500 text-red-500' : ''}`} />
-                  </motion.div>
-                  <span className="hidden sm:inline">{wishlisted ? 'Wishlisted' : 'Wishlist'}</span>
-                </Button>
+              <div className="flex gap-2.5">
                 <Button
                   variant="outline"
-                  className={`flex-1 h-11 rounded-xl ${compared ? 'border-emerald-500 text-emerald-600' : ''}`}
-                  onClick={handleCompare}
-                  disabled={compareProducts.length >= 4 && !compared}
+                  className={`flex-1 h-11 rounded-xl focus-visible:ring-2 focus-visible:ring-emerald-600 ${wishlisted ? 'border-red-200 bg-red-50/50 text-red-600' : ''}`}
+                  onClick={handleWishlist}
+                  aria-label={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
                 >
-                  <GitCompareArrows className="h-4 w-4 mr-1.5" />
-                  <span className="hidden sm:inline">{compared ? 'In Compare' : 'Compare'}</span>
+                  <Heart className={`h-4 w-4 mr-1.5 transition-colors ${wishlisted ? 'fill-red-500 text-red-500' : ''}`} />
+                  <span>{wishlisted ? 'উইশলিস্টে যুক্ত' : 'উইশলিস্ট'}</span>
                 </Button>
                 <Button
                   variant="outline"
-                  className="flex-1 h-11 rounded-xl"
+                  className="flex-1 h-11 rounded-xl focus-visible:ring-2 focus-visible:ring-emerald-600"
                   onClick={() => handleShare('copy')}
+                  aria-label="Copy product link"
                 >
-                  {copied ? <Check className="h-4 w-4 mr-1.5 text-emerald-500" /> : <Share2 className="h-4 w-4 mr-1.5" />}
-                  <span className="hidden sm:inline">{copied ? 'Copied!' : 'Share'}</span>
+                  {copied ? <Check className="h-4 w-4 mr-1.5 text-emerald-600" /> : <Share2 className="h-4 w-4 mr-1.5" />}
+                  <span>{copied ? 'লিংক কপি হয়েছে!' : 'শেয়ার করুন'}</span>
                 </Button>
               </div>
             </AnimatedSection>
@@ -1573,136 +1565,9 @@ export default function ProductDetailPage({ initialProduct }: { initialProduct?:
         </div>
 
         {/* ══════════════════════════════════════════════════════════════════════
-            FREQUENTLY BOUGHT TOGETHER
-        ══════════════════════════════════════════════════════════════════════ */}
-        {frequentlyBoughtTogether.length > 0 && (
-          <AnimatedSection className="mt-12">
-            <section>
-              <div className="flex items-center gap-2 mb-6">
-                <div className="h-8 w-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                  <Users className="h-4 w-4 text-emerald-600" />
-                </div>
-                <h2 className="text-xl md:text-2xl font-bold">Frequently Bought Together</h2>
-              </div>
-              <Card className="shadow-sm hover:shadow-md transition-shadow">
-                <CardContent className="p-5">
-                  <div className="flex flex-col lg:flex-row lg:items-stretch gap-6">
-                    {/* ── Product cards row ── */}
-                    <div className="flex items-start gap-3 overflow-x-auto pb-2 scrollbar-hide flex-1">
-                      {/* Current product — always selected, not deselectable */}
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.92 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ duration: 0.3, ease: 'easeOut' }}
-                        className="flex-shrink-0"
-                      >
-                        <div className="relative w-32 rounded-xl border-2 border-emerald-500 bg-emerald-50/40 dark:bg-emerald-900/10 p-2.5 shadow-sm">
-                          <div className="absolute -top-2 -left-2 z-10">
-                            <Checkbox
-                              checked
-                              disabled
-                              className="h-5 w-5 rounded-md border-emerald-500 bg-emerald-500 text-white data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
-                            />
-                          </div>
-                          <div className="relative h-16 w-16 mx-auto rounded-lg overflow-hidden bg-muted/30">
-                            <Image
-                              src={images[0]?.url || '/placeholder.png'}
-                              alt={product.name}
-                              fill
-                              className="object-cover"
-                              sizes="64px"
-                            />
-                          </div>
-                          <p className="text-sm font-medium mt-2 line-clamp-2 leading-tight h-8">{product.name}</p>
-                          <p className="text-sm text-emerald-600 font-bold">৳{(effectivePrice ?? 0).toLocaleString()}</p>
-                          <Badge className="mt-1.5 bg-emerald-600 text-primary-foreground text-[9px] h-4 px-1">This item</Badge>
-                        </div>
-                      </motion.div>
-
-                      {/* Related products with toggles */}
-                      {frequentlyBoughtTogether.map((p, idx) => {
-                        const pPrice = p.discountPrice != null ? p.discountPrice : (p.price ?? 0)
-                        const pImage = p.images?.[0]?.url
-                        const isSelected = selectedBundleItems.has(p.id)
-                        return (
-                          <motion.div
-                            key={p.id}
-                            initial={{ opacity: 0, scale: 0.92 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ duration: 0.3, delay: 0.08 + idx * 0.08, ease: 'easeOut' }}
-                            className="flex items-start gap-3 flex-shrink-0"
-                          >
-                            <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center mt-6 flex-shrink-0">
-                              <Plus className="h-4 w-4 text-muted-foreground" />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => toggleBundleItem(p.id)}
-                              aria-pressed={isSelected}
-                              className={`w-32 text-left rounded-xl border-2 p-2.5 transition-all duration-200 ${
-                                isSelected
-                                  ? 'border-emerald-500 bg-emerald-50/40 dark:bg-emerald-900/10 shadow-sm'
-                                  : 'border-border/60 opacity-70 hover:opacity-100 hover:border-emerald-500/40'
-                              }`}
-                            >
-                              <div className="flex justify-end -mt-1 mb-1">
-                                <Checkbox
-                                  checked={isSelected}
-                                  onCheckedChange={() => toggleBundleItem(p.id)}
-                                  className={`h-5 w-5 rounded-md ${
-                                    isSelected
-                                      ? 'border-emerald-500 bg-emerald-500 text-white data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600'
-                                      : 'border-muted-foreground/40'
-                                  }`}
-                                />
-                              </div>
-                              <div className="relative h-16 w-16 mx-auto rounded-lg overflow-hidden bg-muted/30">
-                                {pImage ? (
-                                  <Image src={pImage} alt={p.name} fill className="object-cover" sizes="64px" />
-                                ) : (
-                                  <div className="flex items-center justify-center h-full">
-                                    <Package className="h-6 w-6 text-muted-foreground/30" />
-                                  </div>
-                                )}
-                              </div>
-                              <p className="text-sm font-medium mt-2 line-clamp-2 leading-tight h-8">{p.name}</p>
-                              <p className="text-sm text-emerald-600 font-bold">৳{(pPrice ?? 0).toLocaleString()}</p>
-                            </button>
-                          </motion.div>
-                        )
-                      })}
-                    </div>
-
-                    {/* ── Total + Add to cart ── */}
-                    <div className="flex-shrink-0 lg:w-60 border-t lg:border-t-0 lg:border-l lg:pl-6 pt-5 lg:pt-0 flex flex-col justify-center">
-                      <div className="text-center lg:text-left">
-                        <p className="text-sm text-muted-foreground">
-                          {selectedBundleCount} item{selectedBundleCount === 1 ? '' : 's'} selected
-                        </p>
-                        <p className="text-2xl font-bold text-emerald-600 leading-tight">
-                          ৳{bundleTotal.toLocaleString()}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Bundle price for all selected</p>
-                      </div>
-                      <Button
-                        onClick={handleAddBundleToCart}
-                        className="h-12 w-full mt-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-base font-semibold"
-                      >
-                        <ShoppingCart className="h-4 w-4 mr-2" />
-                        Add Selected to Cart
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </section>
-          </AnimatedSection>
-        )}
-
-        {/* ══════════════════════════════════════════════════════════════════════
             PRODUCT DETAILS TABS
         ══════════════════════════════════════════════════════════════════════ */}
-        <AnimatedSection className="mt-12">
+        <AnimatedSection className="mt-10 md:mt-12">
           <div ref={reviewsRef}>
             <Tabs defaultValue="description">
               <TabsList className="w-full justify-start flex-wrap h-auto gap-1 bg-transparent p-0 border-b rounded-none">

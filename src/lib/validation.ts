@@ -1,3 +1,5 @@
+import { packSmartAddress, unpackSmartAddress, type SmartAddressData } from '@/lib/bangladesh-address'
+
 export type ValidationResult<T> = {
   ok: true
   data: T
@@ -8,8 +10,8 @@ export type ValidationResult<T> = {
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,254}$/
 const BD_PHONE_REGEX = /^(?:01\d{9}|\+8801\d{9})$/
-const NAME_REGEX = /^[\p{L}\p{M}\d\s.'()&,+:;!?/_-]+$/u
-const ADDRESS_REGEX = /^[\p{L}\p{M}\d\s.,'()/#&+:;_-]+$/u
+const NAME_REGEX = /^[\p{L}\p{M}\p{N}\s.'()&,+:;!?/_-]+$/u
+const ADDRESS_REGEX = /^[\p{L}\p{M}\p{N}\s.,'"()/#&+:;_|।—–-]+$/u
 const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const COUPON_REGEX = /^[A-Z0-9_-]{3,32}$/
 
@@ -252,7 +254,28 @@ export function validateCheckout(body: Record<string, unknown>): ValidationResul
   const guestName = cleanText(body.guestName, 80)
   const guestPhone = normalizePhone(body.guestPhone)
   const guestEmail = normalizeEmail(body.guestEmail)
-  const guestAddress = cleanText(body.guestAddress, 240, true)
+  let guestAddress: string | null = null
+  if (body.guestAddress !== undefined && body.guestAddress !== null && body.guestAddress !== '') {
+    if (typeof body.guestAddress === 'string' && body.guestAddress.includes('__BDMETA__')) {
+      const parsedSmart = validateAddressParts({
+        name: body.guestName || 'Guest Customer',
+        phone: body.guestPhone || '01700000000',
+        address: body.guestAddress,
+        city: body.city || 'Dhaka',
+        district: body.district || 'Dhaka',
+      })
+      if (!parsedSmart.ok) {
+        errors.guestAddress = parsedSmart.errors.address || 'Invalid guest address structure'
+      } else {
+        guestAddress = parsedSmart.data.address
+      }
+    } else {
+      guestAddress = cleanText(body.guestAddress, 500, true)
+      if (!guestAddress) {
+        errors.guestAddress = 'Delivery address is required and must be 500 characters or fewer'
+      }
+    }
+  }
   const paymentMethod = cleanText(body.paymentMethod || 'cod', 40)
   const shippingMethod = cleanOptionalText(body.shippingMethod, 40)
   const orderNote = cleanOptionalText(body.orderNote, 500, true)
@@ -324,15 +347,104 @@ export function validateAddressParts(body: Record<string, unknown>): ValidationR
   const errors: Record<string, string> = {}
   const name = cleanText(body.name ?? body.guestName, 80)
   const phone = normalizePhone(body.phone ?? body.guestPhone)
-  const address = cleanText(body.address ?? body.guestAddress, 240, true)
-  const city = cleanText(body.city, 80)
-  const district = cleanOptionalText(body.district, 80)
-  const postalCode = cleanOptionalText(body.postalCode, 20, true)
 
   if (!name) errors.name = 'Name is required'
   if (!phone || !isValidBangladeshPhone(phone)) errors.phone = 'Valid Bangladesh phone is required'
-  if (!address) errors.address = 'Address is required and must be 240 characters or fewer'
-  if (!city) errors.city = 'City is required'
+
+  const rawAddress = body.address ?? body.guestAddress
+  if (!rawAddress || typeof rawAddress !== 'string' || !rawAddress.trim()) {
+    errors.address = 'Address is required'
+    return { ok: false, errors }
+  }
+
+  // ── 1. Smart Address Validation (contains __BDMETA__) ──────────────────────
+  if (rawAddress.includes('__BDMETA__')) {
+    const metaParts = rawAddress.split('__BDMETA__')
+    if (metaParts.length !== 2) {
+      errors.address = 'Address metadata is malformed'
+      return { ok: false, errors }
+    }
+
+    let meta: Record<string, unknown>
+    try {
+      meta = JSON.parse(metaParts[1])
+    } catch {
+      errors.address = 'Address metadata is malformed'
+      return { ok: false, errors }
+    }
+
+    if (!meta || typeof meta !== 'object' || Array.isArray(meta)) {
+      errors.address = 'Address metadata is malformed'
+      return { ok: false, errors }
+    }
+
+    // Validate core detailed address (House / Road / Village)
+    const detail = cleanText(meta.addressDetail || metaParts[0].split(' | ')[0], 240, true)
+    if (!detail) {
+      errors.address = 'Detailed address (house/road/village) is required and must be 240 characters or fewer'
+    }
+
+    // Validate administrative hierarchy
+    const division = cleanText(meta.division || body.division || 'Dhaka', 60)
+    const district = cleanText(meta.district || body.district || 'Dhaka', 80)
+    const city = cleanText(meta.upazila || body.city || district || 'Dhaka', 80)
+    const unionOrArea = cleanOptionalText(meta.unionOrArea, 100, true)
+    const landmark = cleanOptionalText(meta.landmark, 120, true)
+    const deliveryNote = cleanOptionalText(meta.deliveryNote, 200, true)
+
+    let altPhone: string | null = null
+    if (meta.altPhone && typeof meta.altPhone === 'string' && meta.altPhone.trim()) {
+      const normAlt = normalizePhone(meta.altPhone)
+      if (!normAlt || !isValidBangladeshPhone(normAlt)) {
+        errors.altPhone = 'Alternative phone must be a valid Bangladesh phone number'
+      } else {
+        altPhone = normAlt
+      }
+    }
+
+    const label = cleanOptionalText(meta.label || 'Home', 30) || 'Home'
+    const postalCode = cleanOptionalText(meta.postalCode || body.postalCode, 30, true) || ''
+
+    if (Object.keys(errors).length > 0) return { ok: false, errors }
+
+    // Re-pack metadata through the official packSmartAddress utility to eliminate any untrusted properties
+    const repacked = packSmartAddress({
+      name: name!,
+      phone: phone!,
+      altPhone: altPhone || '',
+      division: division || 'Dhaka',
+      district: district || 'Dhaka',
+      upazila: city || 'Dhaka',
+      postalCode: postalCode || '',
+      unionOrArea: unionOrArea || '',
+      addressDetail: detail!,
+      landmark: landmark || '',
+      deliveryNote: deliveryNote || '',
+      label,
+      isDefault: Boolean(body.isDefault),
+    })
+
+    return {
+      ok: true,
+      data: {
+        name: name!,
+        phone: phone!,
+        address: repacked.address,
+        city: city || district || 'Dhaka',
+        district: district || 'Dhaka',
+        postalCode: postalCode || label,
+      },
+    }
+  }
+
+  // ── 2. Plain / Legacy Free-Text Address Validation ─────────────────────────
+  const address = cleanText(rawAddress, 500, true)
+  const city = cleanText(body.city, 80)
+  const district = cleanOptionalText(body.district, 80)
+  const postalCode = cleanOptionalText(body.postalCode, 30, true)
+
+  if (!address) errors.address = 'Address is required and must be 500 characters or fewer'
+  if (!city) errors.city = 'City/Upazila is required'
   if (body.district && !district) errors.district = 'District contains invalid characters'
   if (body.postalCode && !postalCode) errors.postalCode = 'Postal code contains invalid characters'
 

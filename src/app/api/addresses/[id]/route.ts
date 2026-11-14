@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserFromRequest } from '@/lib/utils'
+import { validateAddressParts, validationError } from '@/lib/validation'
 
 export async function PUT(
   request: NextRequest,
@@ -17,12 +18,19 @@ export async function PUT(
 
     const { id } = await params
     const body = await request.json()
-    const { name, phone, address, city, district, postalCode, isDefault, userId } = body
+    const { isDefault, userId } = body
 
     // Ownership check: non-admin users can only update their own addresses
+    const existingAddr = await db.address.findUnique({ where: { id }, select: { userId: true, name: true, phone: true, address: true, city: true, district: true, postalCode: true } })
+    if (!existingAddr) {
+      return NextResponse.json(
+        { success: false, error: 'Address not found' },
+        { status: 404 }
+      )
+    }
+
     if (authUser.role !== 'admin' && authUser.role !== 'manager') {
-      const existingAddr = await db.address.findUnique({ where: { id }, select: { userId: true } })
-      if (!existingAddr || existingAddr.userId !== authUser.userId) {
+      if (existingAddr.userId !== authUser.userId) {
         return NextResponse.json(
           { success: false, error: 'Forbidden: you can only update your own addresses' },
           { status: 403 }
@@ -30,22 +38,40 @@ export async function PUT(
       }
     }
 
+    // Merge with existing for validation
+    const toValidate = {
+      name: body.name !== undefined ? body.name : existingAddr.name,
+      phone: body.phone !== undefined ? body.phone : existingAddr.phone,
+      address: body.address !== undefined ? body.address : existingAddr.address,
+      city: body.city !== undefined ? body.city : existingAddr.city,
+      district: body.district !== undefined ? body.district : existingAddr.district,
+      postalCode: body.postalCode !== undefined ? body.postalCode : existingAddr.postalCode,
+      isDefault: isDefault !== undefined ? isDefault : false,
+    }
+
+    const parsed = validateAddressParts(toValidate)
+    if (!parsed.ok) {
+      return NextResponse.json(validationError(parsed.errors), { status: 400 })
+    }
+
+    const targetUserId = userId || existingAddr.userId
     // If setting as default, unset others
-    if (isDefault && userId) {
+    if (isDefault && targetUserId) {
       await db.address.updateMany({
-        where: { userId, isDefault: true },
+        where: { userId: targetUserId, isDefault: true },
         data: { isDefault: false },
       })
     }
 
-    const data: Record<string, unknown> = {}
-    if (name !== undefined) data.name = name
-    if (phone !== undefined) data.phone = phone
-    if (address !== undefined) data.address = address
-    if (city !== undefined) data.city = city
-    if (district !== undefined) data.district = district
-    if (postalCode !== undefined) data.postalCode = postalCode
-    if (isDefault !== undefined) data.isDefault = isDefault
+    const data: Record<string, unknown> = {
+      name: parsed.data.name,
+      phone: parsed.data.phone,
+      address: parsed.data.address,
+      city: parsed.data.city,
+      district: parsed.data.district,
+      postalCode: parsed.data.postalCode,
+    }
+    if (isDefault !== undefined) data.isDefault = Boolean(isDefault)
 
     const addr = await db.address.update({ where: { id }, data })
 
