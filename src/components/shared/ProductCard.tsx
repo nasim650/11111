@@ -144,14 +144,14 @@ export default function ProductCard({ product }: ProductCardProps) {
       className="group/card cursor-pointer overflow-hidden border border-stone-200/60 rounded-xl bg-white transition-all duration-300 hover:shadow-xl hover:border-emerald-600/30 flex flex-col h-full relative focus-within:ring-2 focus-within:ring-emerald-600"
       onClick={() => router.push(productHref)}
     >
-      {/* ── 1. HERO BOX (Square Aspect Ratio) ── */}
+      {/* ── 1. HERO BOX (Image Only) ── */}
       <Link
         href={productHref}
-        className="relative aspect-square w-full bg-stone-50 dark:bg-stone-800/50 flex items-center justify-center shrink-0 overflow-hidden rounded-t-xl block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
+        className="relative aspect-[4/3] w-full bg-stone-50 flex items-center justify-center shrink-0 overflow-hidden rounded-t-xl block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
         aria-label={`View details for ${product.name}`}
       >
         {imageUrl && !imgLoaded && (
-          <div className="absolute inset-0 bg-stone-100 dark:bg-stone-800 animate-pulse" />
+          <div className="absolute inset-0 bg-stone-100 animate-pulse" />
         )}
 
         {imageUrl ? (
@@ -167,48 +167,43 @@ export default function ProductCard({ product }: ProductCardProps) {
             onLoad={() => setImgLoaded(true)}
           />
         ) : (
-          <div className="flex flex-col items-center justify-center gap-1 text-stone-300">
-            <Package className="h-10 w-10" />
-            <span className="text-[10px] font-medium text-stone-400">খাঁটি খাদ্য</span>
-          </div>
+          <Package className="h-10 w-10 text-stone-300" />
         )}
 
         {/* Badges */}
         {badge && (
-          <span className={`absolute top-2 left-2 z-10 text-[10px] font-bold px-2 py-0.5 rounded-md shadow-sm ${badge.style}`}>
+          <span className={`absolute top-1.5 left-1.5 z-10 text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm ${badge.style}`}>
             {badge.label}
           </span>
         )}
 
         {/* Hover Actions */}
-        <div className="absolute top-2 right-2 flex flex-col gap-1.5 z-20">
+        <div className="absolute top-1.5 right-1.5 flex flex-col gap-1 z-20">
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={handleWishlist}
-            className={`h-8 w-8 rounded-full flex items-center justify-center shadow-md transition-all duration-200 focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:outline-none ${
-              wishlisted ? 'bg-red-500 text-white' : 'bg-white/95 dark:bg-stone-900/90 text-stone-600 dark:text-stone-300 hover:text-red-500 md:opacity-0 md:group-hover/card:opacity-100'
+            className={`h-7 w-7 rounded-full flex items-center justify-center shadow-sm transition-all duration-200 focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:outline-none ${
+              wishlisted ? 'bg-red-500 text-white' : 'bg-white/95 text-slate-600 hover:text-red-500 md:opacity-0 md:group-hover/card:opacity-100'
             }`}
             aria-label={wishlisted ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
           >
-            <Heart className={`h-4 w-4 ${wishlisted ? 'fill-white text-white' : ''}`} />
+            <Heart className={`h-3.5 w-3.5 ${wishlisted ? 'fill-white text-white' : ''}`} />
           </motion.button>
           {!outOfStock && (
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={handleQuickView}
-              className="h-8 w-8 rounded-full bg-white/95 dark:bg-stone-900/90 flex items-center justify-center shadow-md text-stone-600 dark:text-stone-300 hover:text-emerald-700 md:opacity-0 md:group-hover/card:opacity-100 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:outline-none"
+              className="h-7 w-7 rounded-full bg-white/95 flex items-center justify-center shadow-sm text-slate-600 hover:text-emerald-700 md:opacity-0 md:group-hover/card:opacity-100 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:outline-none"
               aria-label={`Quick view ${product.name}`}
             >
-              <Eye className="h-4 w-4" />
+              <Eye className="h-3.5 w-3.5" />
             </motion.button>
           )}
         </div>
 
         {outOfStock && (
-          <div className="absolute inset-0 bg-white/80 dark:bg-stone-950/80 backdrop-blur-[2px] flex items-center justify-center z-20">
-            <span className="text-xs font-bold text-stone-800 dark:text-stone-200 bg-white dark:bg-stone-900 px-3 py-1 rounded-full shadow-md border border-stone-200 dark:border-stone-700">
-              স্টকে নেই (Out of Stock)
-            </span>
+          <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px] flex items-center justify-center z-20">
+            <span className="text-[10px] font-bold text-stone-700 bg-white px-2 py-0.5 rounded-full shadow-sm border border-stone-200">Out of Stock</span>
           </div>
         )}
       </Link>
@@ -255,32 +250,32 @@ export default function ProductCard({ product }: ProductCardProps) {
           </div>
 
           {/* ── BUTTONS ── */}
-          <div className="flex items-center gap-1.5 w-full box-border mt-1">
+          <div className="flex items-center gap-1.5 w-full box-border">
             <Button
-              className={`flex-1 min-w-0 h-9 px-3 text-xs font-bold rounded-xl shadow-sm transition-colors focus-visible:ring-2 focus-visible:ring-emerald-600 ${
-                outOfStock ? 'bg-stone-100 text-stone-400 cursor-not-allowed' : addedToCart ? 'bg-emerald-700 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+              className={`flex-1 min-w-0 h-8 px-2 text-[11px] md:text-xs font-bold rounded-lg shadow-sm transition-colors focus-visible:ring-2 focus-visible:ring-emerald-600 ${
+                outOfStock ? 'bg-stone-100 text-stone-400 cursor-not-allowed' : addedToCart ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-amber-500 hover:bg-amber-600 text-white'
               }`}
               disabled={outOfStock || loading}
               onClick={handleAddToCart}
               aria-label={outOfStock ? `${product.name} is out of stock` : `Add ${product.name} to cart`}
             >
               {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" />
               ) : addedToCart ? (
-                <span className="truncate w-full text-center">যোগ করা হয়েছে</span>
+                <span className="truncate w-full text-center">Added</span>
               ) : outOfStock ? (
-                <span className="truncate w-full text-center">স্টক শেষ</span>
+                <span className="truncate w-full text-center">Out of Stock</span>
               ) : (
-                <div className="flex items-center justify-center gap-1.5 w-full overflow-hidden">
+                <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
                   <ShoppingCart className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">কার্টে যোগ করুন</span>
+                  <span className="truncate">Add to Cart</span>
                 </div>
               )}
             </Button>
 
-            {/* Buy Now - Desktop Only */}
+            {/* Buy Now - Desktop Only, Equal Flex */}
             <Button
-              className="hidden sm:flex flex-1 min-w-0 h-9 px-3 text-xs font-bold rounded-xl shadow-sm bg-amber-500 hover:bg-amber-600 text-white focus-visible:ring-2 focus-visible:ring-amber-500"
+              className="hidden md:flex flex-1 min-w-0 h-8 px-2 text-[11px] md:text-xs font-bold rounded-lg shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white focus-visible:ring-2 focus-visible:ring-emerald-600"
               disabled={outOfStock || loading}
               onClick={(e) => {
                 e.stopPropagation()
@@ -290,9 +285,9 @@ export default function ProductCard({ product }: ProductCardProps) {
               }}
               aria-label={`Buy ${product.name} now`}
             >
-              <div className="flex items-center justify-center gap-1.5 w-full overflow-hidden">
+              <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
                 <Zap className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">এখনই কিনুন</span>
+                <span className="truncate">Buy Now</span>
               </div>
             </Button>
           </div>

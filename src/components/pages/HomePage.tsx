@@ -1,20 +1,26 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import Image from 'next/image'
-import Link from 'next/link'
 import {
-  ShieldCheck,
-  Truck,
-  RotateCcw,
-  Leaf,
-  ArrowRight,
-  Flame,
-  Clock,
-  Star,
   ChevronLeft,
   ChevronRight,
-  CheckCircle2,
+  ShieldCheck,
+  Truck,
+  RefreshCw,
+  Leaf,
+  Star,
+  ArrowRight,
+  Sparkles,
+  Clock,
+  Zap,
+  X,
+  Flame,
+  Gift,
+  GripHorizontal,
+  ShoppingCart,
+  Loader2,
+  Check,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
@@ -23,6 +29,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useAppStore, type PageName } from '@/lib/store'
 import { extractItems } from '@/lib/api'
 import ProductCard from '@/components/shared/ProductCard'
+import { toast } from 'sonner'
 
 // ── Types ──
 interface Banner {
@@ -33,7 +40,9 @@ interface Banner {
   mobileImage?: string
   ctaText?: string
   ctaLink?: string
+  link?: string
   bgColor?: string
+  location?: string
 }
 
 interface Category {
@@ -41,6 +50,10 @@ interface Category {
   name: string
   slug: string
   image?: string
+  icon?: string
+  description?: string
+  showInHome?: boolean
+  bengaliName?: string
 }
 
 interface Product {
@@ -57,9 +70,1160 @@ interface Product {
   isNewArrival?: boolean
   isBestSeller?: boolean
   isFeatured?: boolean
+
+  shortDescription?: string
 }
 
-interface ReviewItem {
+// Bengali category names mapping
+const bengaliCategoryNames: Record<string, string> = {
+  'Honey & Jaggery': 'মধু ও গুড়',
+  'Ghee & Oils': 'ঘি ও তেল',
+  'Rice & Grains': 'চাল ও শস্য',
+  'Spices & Masala': 'মশলা',
+  'Sweets & Snacks': 'মিষ্টি ও স্ন্যাকস',
+  'Tea & Beverages': 'চা ও পানীয়',
+  'Pickles & Chutney': 'আচার ও চাটনি',
+  'Dry Fruits & Nuts': 'শুকনো ফল ও বাদাম',
+  'Deshi Gur': 'দেশি গুড়',
+  'Organic Products': 'জৈব পণ্য',
+  'Special Combos': 'স্পেশাল কম্বো',
+}
+
+// ── Animated Section Wrapper ──
+function AnimatedSection({ children, className, delay = 0, style }: {
+  children: React.ReactNode
+  className?: string
+  delay?: number
+  style?: React.CSSProperties
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  return (
+    <div
+      ref={ref}
+      className={className}
+      style={style}
+    >
+      {children}
+    </div>
+  )
+}
+
+// ── Unified Section Header ──
+function SectionHeader({
+  title,
+  onViewAll,
+}: {
+  title: string
+  onViewAll?: () => void
+}) {
+  return (
+    <div className="flex items-center justify-between mb-4">
+      <h2 className="text-base font-bold text-slate-900 tracking-tight">
+        {title}
+      </h2>
+      {onViewAll && (
+        <button
+          onClick={onViewAll}
+          aria-label={`View all ${title}`}
+          className="text-xs font-semibold text-amber-600 hover:text-amber-700 flex items-center gap-0.5 transition-colors focus-visible:outline-none focus-visible:underline"
+        >
+          View All <ArrowRight className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ── Compact Flash Sale Countdown ──
+function FlashSaleCountdown({ endDate }: { endDate?: string }) {
+  const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 })
+
+  useEffect(() => {
+    const updateCountdown = () => {
+      const now = new Date()
+      const end = endDate ? new Date(endDate) : new Date()
+      if (!endDate) end.setHours(23, 59, 59, 999)
+      const diff = Math.max(end.getTime() - now.getTime(), 0)
+      setTimeLeft({
+        hours: Math.floor(diff / (1000 * 60 * 60)),
+        minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
+        seconds: Math.floor((diff % (1000 * 60)) / 1000),
+      })
+    }
+    updateCountdown()
+    const timer = setInterval(updateCountdown, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const pad = (n: number) => n.toString().padStart(2, '0')
+
+  return (
+    <span className="font-mono text-sm font-bold text-white tabular-nums">
+      {pad(timeLeft.hours)}:{pad(timeLeft.minutes)}:{pad(timeLeft.seconds)}
+    </span>
+  )
+}
+
+// ── Announcement Bar ──
+function AnnouncementBar({ siteConfig }: { siteConfig: import('@/lib/store').SiteConfig | null }) {
+  const [isVisible, setIsVisible] = useState(true)
+
+  // Round 3E: admin-controlled enable/disable
+  if (!isVisible) return null
+  if (siteConfig && siteConfig.announcementEnabled === false) return null
+
+  // Round 3E: admin-controlled text (with safe fallbacks to existing copy)
+  const announcementText = siteConfig?.announcementText || 'Selected items at special prices'
+  const freeDeliveryEnabled = siteConfig ? siteConfig.freeDeliveryEnabled !== false : true
+  const freeDeliveryMessage = siteConfig?.freeDeliveryMessage || 'Free Delivery on Orders Above ৳1,500'
+  const promoText = siteConfig?.homepagePromoText || '100% Authentic Bangladeshi Products'
+
+  return (
+    <div className="relative bg-gradient-to-r from-emerald-700 via-teal-600 to-emerald-700 text-white overflow-hidden">
+      {/* Decorative pattern overlay */}
+      <div className="absolute inset-0 opacity-10">
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.1) 10px, rgba(255,255,255,0.1) 20px)`,
+          }}
+        />
+      </div>
+      <div className="relative flex items-center">
+        {/* Marquee container */}
+        <div className="flex-1 overflow-hidden py-2">
+          <div className="flex animate-marquee whitespace-nowrap">
+            {[1, 2].map((set) => (
+              <div key={set} className="flex items-center gap-8 mr-8">
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <Zap className="h-3.5 w-3.5 text-amber-300" />
+                  {announcementText}
+                </span>
+                <span className="text-amber-300 font-bold text-sm">|</span>
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <Gift className="h-3.5 w-3.5 text-amber-300" />
+                  Use code <span className="bg-white/20 px-2 py-0.5 rounded font-medium text-amber-300">KHATI20</span> for 20% off
+                </span>
+                <span className="text-amber-300 font-bold text-sm">|</span>
+                {freeDeliveryEnabled && (
+                  <span className="flex items-center gap-2 text-sm font-medium">
+                    <Truck className="h-3.5 w-3.5 text-amber-300" />
+                    {freeDeliveryMessage}
+                  </span>
+                )}
+                {freeDeliveryEnabled && <span className="text-amber-300 font-bold text-sm">|</span>}
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <Leaf className="h-3.5 w-3.5 text-amber-300" />
+                  {promoText}
+                </span>
+                <span className="text-amber-300 font-bold text-sm">|</span>
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <Sparkles className="h-3.5 w-3.5 text-amber-300" />
+                  সতেজ ও খাঁটি পণ্য — সরাসরি কৃষক থেকে
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Close button */}
+        <button
+          onClick={() => setIsVisible(false)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-white/20 rounded-full transition-colors z-10"
+          aria-label="Close announcement"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Hero Banner Carousel ──
+function HeroBannerCarousel({ banners, navigate }: {
+  banners: Banner[]
+  navigate: (page: PageName, params?: Record<string, unknown>) => void
+}) {
+  const [currentBanner, setCurrentBanner] = useState(0)
+  const [isPaused, setIsPaused] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [scrollY, setScrollY] = useState(0)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Parallax scroll tracking
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrollY(window.scrollY)
+    }
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  // Auto-play with progress
+  useEffect(() => {
+    if (banners.length <= 1 || isPaused) return
+
+    const SLIDE_DURATION = 5000
+    const TICK = 50
+    let elapsed = 0
+
+    intervalRef.current = setInterval(() => {
+      elapsed += TICK
+      setProgress((elapsed / SLIDE_DURATION) * 100)
+
+      if (elapsed >= SLIDE_DURATION) {
+        elapsed = 0
+        setCurrentBanner((prev) => (prev + 1) % banners.length)
+        setProgress(0)
+      }
+    }, TICK)
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+  }, [banners.length, isPaused, currentBanner])
+
+  const handlePrev = () => {
+    setCurrentBanner((prev) => (prev - 1 + banners.length) % banners.length)
+    setProgress(0)
+  }
+
+  const handleNext = () => {
+    setCurrentBanner((prev) => (prev + 1) % banners.length)
+    setProgress(0)
+  }
+
+  const handleDotClick = (idx: number) => {
+    setCurrentBanner(idx)
+    setProgress(0)
+  }
+
+  if (banners.length === 0) return null
+
+  // Parallax offset - capped at 60px
+  const parallaxOffset = Math.min(scrollY * 0.3, 60)
+
+  return (
+    <div
+      className="relative h-52 sm:h-72 md:h-[400px] lg:h-[480px] overflow-hidden bg-muted"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+    >
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={currentBanner}
+          initial={{ opacity: 0, x: 60 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -60 }}
+          transition={{ duration: 0.5, ease: 'easeInOut' }}
+          className="absolute inset-0"
+        >
+          {banners[currentBanner].desktopImage ? (
+            <>
+              {/* Parallax image container */}
+              <div
+                className="absolute inset-0 w-full h-full"
+                style={{ transform: `translateY(${parallaxOffset}px) scale(1.1)` }}
+              >
+                <Image
+                  src={banners[currentBanner].desktopImage}
+                  alt={banners[currentBanner].title}
+                  fill
+                  className="object-cover"
+                  priority={currentBanner === 0}
+                  sizes="100vw"
+                />
+              </div>
+              {/* Gradient overlays - enhanced for text readability */}
+              <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-black/20" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30" />
+              {/* Subtle emerald tint */}
+              <div className="absolute inset-0 bg-emerald-900/10" />
+              {/* Content */}
+              <div className="absolute inset-0 flex items-end pb-8">
+                <div className="px-4 md:px-12 lg:px-16 max-w-full sm:max-w-2xl pr-12 sm:pr-0">
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2, duration: 0.5 }}
+                  >
+                    <h1 className="text-lg sm:text-3xl md:text-5xl font-extrabold text-white mb-2 leading-tight drop-shadow-lg line-clamp-2">
+                      {banners[currentBanner].title}
+                    </h1>
+                  </motion.div>
+                  {banners[currentBanner].subtitle && (
+                    <motion.p
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.35, duration: 0.5 }}
+                      className="text-xs sm:text-base md:text-xl text-white/90 mb-4 drop-shadow max-w-lg line-clamp-2"
+                    >
+                      {banners[currentBanner].subtitle}
+                    </motion.p>
+                  )}
+                  {banners[currentBanner].ctaText && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.5, duration: 0.5 }}
+                    >
+                      <Button
+                        size="sm"
+                        className="bg-amber-500 hover:bg-amber-600 text-white font-semibold px-5 h-10 sm:h-12 text-sm shadow-lg rounded-full"
+                        onClick={() => {
+                          const banner = banners[currentBanner]
+                          if (banner.ctaLink) {
+                            if (banner.ctaLink.startsWith('/')) {
+                              navigate('products')
+                            } else {
+                              window.open(banner.ctaLink, '_blank')
+                            }
+                          } else {
+                            navigate('products')
+                          }
+                        }}
+                      >
+                        {banners[currentBanner].ctaText}
+                        <ArrowRight className="h-4 w-4 ml-1" />
+                      </Button>
+                    </motion.div>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div
+              className="w-full h-full flex items-center justify-center"
+              style={{ backgroundColor: banners[currentBanner].bgColor || '#1B4332' }}
+            >
+              <div className="text-center text-white px-6">
+                <h1 className="text-2xl sm:text-3xl md:text-5xl font-bold mb-3">
+                  {banners[currentBanner].title}
+                </h1>
+                {banners[currentBanner].subtitle && (
+                  <p className="text-base sm:text-xl opacity-90 mb-4">
+                    {banners[currentBanner].subtitle}
+                  </p>
+                )}
+                {banners[currentBanner].ctaText && (
+                  <Button
+                    size="lg"
+                    className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold mt-2 rounded-full"
+                    onClick={() => {
+                      const banner = banners[currentBanner]
+                      if (banner.ctaLink) {
+                        if (banner.ctaLink.startsWith('/')) {
+                          navigate('products')
+                        } else {
+                          window.open(banner.ctaLink, '_blank')
+                        }
+                      }
+                    }}
+                  >
+                    {banners[currentBanner].ctaText}
+                    <ArrowRight className="h-5 w-5 ml-2" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Carousel Controls */}
+      {banners.length > 1 && (
+        <>
+          <button
+            className="absolute left-3 md:left-6 top-1/2 -translate-y-1/2 bg-black/20 backdrop-blur-sm hover:bg-black/40 rounded-full p-2 md:p-3 shadow-lg transition-all hover:scale-110 z-20"
+            onClick={handlePrev}
+            aria-label="Previous banner"
+          >
+            <ChevronLeft className="h-5 w-5 md:h-6 md:w-6 text-white" />
+          </button>
+          <button
+            className="absolute right-3 md:right-6 top-1/2 -translate-y-1/2 bg-black/20 backdrop-blur-sm hover:bg-black/40 rounded-full p-2 md:p-3 shadow-lg transition-all hover:scale-110 z-20"
+            onClick={handleNext}
+            aria-label="Next banner"
+          >
+            <ChevronRight className="h-5 w-5 md:h-6 md:w-6 text-white" />
+          </button>
+          {/* Dot indicators with progress */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+            {banners.map((_, idx) => (
+              <button
+                key={idx}
+                className="relative h-2.5 rounded-full transition-all duration-300 overflow-hidden"
+                style={{
+                  width: idx === currentBanner ? '32px' : '10px',
+                }}
+                onClick={() => handleDotClick(idx)}
+                aria-label={`Go to slide ${idx + 1}`}
+              >
+                <div className={`absolute inset-0 rounded-full ${idx === currentBanner ? 'bg-white/40' : 'bg-white/40'}`} />
+                {idx === currentBanner && (
+                  <motion.div
+                    className="absolute inset-0 bg-white rounded-full"
+                    initial={{ width: '0%' }}
+                    animate={{ width: `${progress}%` }}
+                    transition={{ duration: 0.05 }}
+                  />
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Mobile Swipe Indicator */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 2 }}
+            className="sm:hidden absolute bottom-12 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-black/30 backdrop-blur-sm rounded-full px-3 py-1"
+          >
+            <GripHorizontal className="h-3 w-3 text-white/70" />
+            <span className="text-[10px] text-white/70 font-medium">Swipe</span>
+          </motion.div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ── Category Section (Compact & Product-Focused) ──
+function CategorySection({ categories, navigate }: {
+  categories: Category[]
+  navigate: (page: PageName, params?: Record<string, unknown>) => void
+}) {
+  if (categories.length === 0) return null
+
+  const displayCategories = categories.slice(0, 10)
+
+  return (
+    <section className="py-4 md:py-6 bg-[#FAF8F5] dark:bg-stone-950/30">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Compact Header: Left "Categories", Right "View All →" */}
+        <div className="flex items-center justify-between mb-3 md:mb-4">
+          <h2 className="text-lg md:text-xl font-bold tracking-tight text-foreground">
+            Categories
+          </h2>
+          <button
+            onClick={() => navigate('products')}
+            aria-label="View all categories"
+            className="text-xs md:text-sm font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 transition-colors"
+          >
+            View All <ArrowRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        {/* Responsive Horizontal Scroll on Mobile, Grid on Desktop */}
+        <div className="flex overflow-x-auto gap-3 pb-2 -mx-4 px-4 md:mx-0 md:px-0 md:grid md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 md:gap-3.5 snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          {displayCategories.map((cat, idx) => (
+            <motion.button
+              key={cat.id}
+              aria-label={`Browse ${cat.name}`}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.03, duration: 0.3 }}
+              className="group bg-white dark:bg-card border border-stone-200/70 dark:border-border/60 rounded-2xl p-2 sm:p-2.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex flex-col items-center cursor-pointer w-[76px] min-w-[76px] md:w-full shrink-0 snap-center"
+              onClick={() => navigate('products', { category: cat.slug })}
+            >
+              {/* Normalized Fixed Image Canvas */}
+              <div className="relative aspect-square w-full rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-900/40 p-2 mb-1.5 flex items-center justify-center">
+                {cat.image ? (
+                  <Image
+                    src={cat.image}
+                    alt={cat.name}
+                    fill
+                    className="object-cover transition-transform duration-300 group-hover:scale-105"
+                    sizes="80px"
+                    onError={(e) => {
+                      const t = e.currentTarget as HTMLImageElement
+                      t.style.display = 'none'
+                    }}
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full w-full bg-emerald-100 text-2xl rounded-xl">
+                    🍽️
+                  </div>
+                )}
+              </div>
+
+              {/* 1-Line Clean Category Title */}
+              <h3 className="font-bold text-xs text-center line-clamp-1 text-foreground group-hover:text-amber-600 transition-colors w-full">
+                {cat.name}
+              </h3>
+            </motion.button>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── Deal of the Day Section ──
+// Single featured product with a live HH:MM:SS countdown until midnight.
+// Highlights the highest-discount product from `discountProducts`, falling back
+// to the first featured product when no discounted products are available.
+function DealOfTheDaySection({ product, navigate }: {
+  product: Product
+  navigate: (page: PageName, params?: Record<string, unknown>) => void
+}) {
+  const addToCart = useAppStore((s) => s.addToCart)
+  const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 })
+  const [adding, setAdding] = useState(false)
+  const [added, setAdded] = useState(false)
+
+  // Live countdown — tick every second until 23:59:59.999 today
+  useEffect(() => {
+    const updateCountdown = () => {
+      const now = new Date()
+      const end = new Date()
+      end.setHours(23, 59, 59, 999)
+      const diff = Math.max(end.getTime() - now.getTime(), 0)
+      setTimeLeft({
+        hours: Math.floor(diff / (1000 * 60 * 60)),
+        minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
+        seconds: Math.floor((diff % (1000 * 60)) / 1000),
+      })
+    }
+    updateCountdown()
+    const timer = setInterval(updateCountdown, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const hasDiscount =
+    product.discountPrice != null && product.discountPrice < product.price
+  const discountPercent = hasDiscount
+    ? Math.round(((product.price - product.discountPrice!) / product.price) * 100)
+    : 0
+  const effectivePrice = hasDiscount ? product.discountPrice! : product.price
+  const savingsAmount = hasDiscount ? product.price - product.discountPrice! : 0
+  const imageUrl = product.images?.[0]?.url || '/placeholder.png'
+  const outOfStock = product.stock <= 0
+  const pad = (n: number) => n.toString().padStart(2, '0')
+
+  const handleAddToCart = async () => {
+    if (adding || outOfStock) return
+    setAdding(true)
+    try {
+      await addToCart({
+        productId: product.id,
+        productName: product.name,
+        price: product.price,
+        discountPrice: product.discountPrice,
+        quantity: 1,
+        unit: product.unit,
+        image: imageUrl,
+        stock: product.stock,
+      })
+      setAdded(true)
+      setTimeout(() => setAdded(false), 1500)
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  const countdownUnits = [
+    { label: 'Hours', value: pad(timeLeft.hours) },
+    { label: 'Min', value: pad(timeLeft.minutes) },
+    { label: 'Sec', value: pad(timeLeft.seconds) },
+  ]
+
+  return (
+    <section className="py-8 md:py-10 bg-white">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
+        <AnimatedSection>
+          <div className="relative rounded-3xl overflow-hidden border-2 border-amber-200 bg-gradient-to-br from-amber-50 via-orange-50 to-amber-50 shadow-sm">
+            {/* Decorative dotted pattern background */}
+            <div
+              className="absolute inset-0 opacity-30 pointer-events-none"
+              style={{
+                backgroundImage: `radial-gradient(circle at 2px 2px, rgba(245,158,11,0.18) 1px, transparent 0)`,
+                backgroundSize: '24px 24px',
+              }}
+            />
+            {/* Floating decorative blobs */}
+            <div className="absolute top-0 right-0 w-48 h-48 bg-amber-200/40 rounded-full -translate-y-1/3 translate-x-1/3 blur-2xl pointer-events-none" />
+            <div className="absolute bottom-0 left-1/4 w-32 h-32 bg-orange-200/40 rounded-full translate-y-1/2 blur-2xl pointer-events-none" />
+
+            <div className="relative grid md:grid-cols-2 gap-6 md:gap-10 p-5 md:p-10 items-center">
+              {/* ── Left column: Product image with discount badge ── */}
+              <div className="relative">
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ duration: 0.5, ease: 'easeOut' }}
+                  className="relative aspect-square w-full max-w-sm mx-auto rounded-2xl overflow-hidden bg-white shadow-xl ring-1 ring-amber-100"
+                >
+                  <Image
+                    src={imageUrl}
+                    alt={product.name}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, 50vw"
+                  />
+                  {/* Discount badge overlay */}
+                  {hasDiscount && (
+                    <div className="absolute top-3 left-3 bg-gradient-to-br from-amber-500 to-orange-600 text-white font-bold text-sm px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1">
+                      <Flame className="h-3.5 w-3.5" />
+                      {discountPercent}% OFF
+                    </div>
+                  )}
+                  {/* Featured ribbon */}
+                  <div className="absolute top-3 right-3 bg-emerald-700 text-white text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full shadow-md">
+                    Featured
+                  </div>
+                </motion.div>
+              </div>
+
+              {/* ── Right column: Details + countdown + CTAs ── */}
+              <div className="flex flex-col gap-4">
+                {/* "DEAL OF THE DAY" label */}
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1, duration: 0.5 }}
+                  className="inline-flex items-center gap-1.5 self-start bg-amber-100 px-3 py-1 rounded-full"
+                >
+                  <Zap className="h-4 w-4 fill-amber-500 text-amber-500" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-amber-700">
+                    Deal of the Day
+                  </span>
+                </motion.div>
+
+                {/* Product name + short description */}
+                <div>
+                  <h2 className="text-2xl md:text-3xl font-extrabold text-foreground leading-tight">
+                    {product.name}
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1 line-clamp-1">
+                    {product.shortDescription ||
+                      'Limited-time offer on this authentic Bangladeshi favorite.'}
+                  </p>
+                </div>
+
+                {/* Price block */}
+                <div className="flex flex-wrap items-end gap-3">
+                  <span className="text-3xl md:text-4xl font-extrabold text-emerald-700">
+                    ৳{effectivePrice.toLocaleString()}
+                  </span>
+                  {hasDiscount && (
+                    <>
+                      <span className="text-lg text-muted-foreground line-through">
+                        ৳{product.price.toLocaleString()}
+                      </span>
+                      <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 font-semibold text-xs">
+                        Save ৳{savingsAmount.toLocaleString()}
+                      </Badge>
+                    </>
+                  )}
+                </div>
+
+                {/* Countdown timer (HH:MM:SS) */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-1.5 text-amber-700">
+                    <Clock className="h-4 w-4" />
+                    <span className="text-xs font-semibold uppercase tracking-wider">
+                      Ends in
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {countdownUnits.map((unit, idx) => (
+                      <div key={unit.label} className="flex items-center gap-2">
+                        <div className="flex flex-col items-center">
+                          <div className="bg-slate-900 text-white rounded-lg px-3 py-2 min-w-[56px] text-center text-2xl font-bold tabular-nums shadow-md">
+                            {unit.value}
+                          </div>
+                          <span className="text-[10px] text-muted-foreground mt-1 font-medium uppercase tracking-wide">
+                            {unit.label}
+                          </span>
+                        </div>
+                        {idx < countdownUnits.length - 1 && (
+                          <span className="text-2xl font-bold text-slate-900 -mt-4">:</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Truthful Stock & Availability Status */}
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-muted-foreground font-medium">Availability:</span>
+                  {outOfStock ? (
+                    <span className="font-semibold text-stone-600 bg-stone-100 px-2.5 py-0.5 rounded-full border border-stone-200">
+                      Out of Stock
+                    </span>
+                  ) : product.stock <= 5 ? (
+                    <span className="font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                      <Flame className="h-3.5 w-3.5 text-rose-600" />
+                      Only {product.stock} {product.unit || 'units'} left!
+                    </span>
+                  ) : (
+                    <span className="font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                      <Check className="h-3.5 w-3.5 text-emerald-600" />
+                      In Stock ({product.stock} {product.unit || 'units'})
+                    </span>
+                  )}
+                </div>
+
+                {/* CTA buttons */}
+                <div className="flex flex-col sm:flex-row gap-3 mt-2">
+                  <Button
+                    size="lg"
+                    onClick={handleAddToCart}
+                    disabled={adding || outOfStock}
+                    className="h-12 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-semibold gap-2 sm:flex-1 shadow-md disabled:opacity-60"
+                  >
+                    {adding ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Adding...
+                      </>
+                    ) : added ? (
+                      <>
+                        <Check className="h-4 w-4" />
+                        Added to Cart
+                      </>
+                    ) : (
+                      <>
+                        <ShoppingCart className="h-4 w-4" />
+                        {outOfStock ? 'Out of Stock' : 'Add to Cart'}
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="lg"
+                    onClick={() => navigate('product-detail', { id: product.id })}
+                    className="h-12 rounded-xl border border-amber-200 text-amber-800 hover:bg-amber-50 hover:text-amber-900 font-semibold gap-2"
+                  >
+                    View Details
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </AnimatedSection>
+      </div>
+    </section>
+  )
+}
+
+// ── Flash Sale Section ──
+function FlashSaleSection({ products, navigate, siteConfig }: {
+  products: Product[]
+  navigate: (page: import('@/lib/store').PageName, params?: Record<string, unknown>) => void
+  siteConfig: import('@/lib/store').SiteConfig | null
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  let flashConfig = { enabled: true, title: 'Flash Sale', subtitle: 'Today', endDate: '' }
+  if (siteConfig?.flash_sale) {
+    try {
+      flashConfig = { ...flashConfig, ...JSON.parse(siteConfig.flash_sale) }
+    } catch(e) {}
+  }
+
+  if (!flashConfig.enabled) return null
+  if (products.length === 0) return null
+  if (flashConfig.endDate && new Date(flashConfig.endDate) < new Date()) return null
+
+  const flashSaleTitle = flashConfig.title
+  const flashSaleSubtitle = flashConfig.subtitle
+
+  return (
+    <section className="py-4 bg-emerald-900 text-white relative overflow-hidden">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Compact single-row header */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Flame className="h-4 w-4 text-amber-400" />
+            <h2 className="text-sm font-bold text-white">{flashSaleTitle}</h2>
+            <div className="flex items-center gap-1 bg-white/10 rounded-full px-2 py-0.5">
+              <Clock className="h-3 w-3 text-amber-300" />
+              <FlashSaleCountdown endDate={flashConfig.endDate} />
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('products')}
+            className="text-xs font-semibold text-amber-400 hover:text-amber-300 flex items-center gap-0.5"
+          >
+            View All <ArrowRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        {/* Horizontal scroll product cards */}
+        <div
+          ref={scrollRef}
+          className="flex gap-3 overflow-x-auto pb-3 snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {products.slice(0, 8).map((product) => (
+            <div
+              key={product.id}
+              className="min-w-[155px] sm:min-w-[175px] snap-start flex-shrink-0"
+            >
+              <ProductCard product={product} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── Top Selling Products Section (Matching Reference Image 1) ──
+function BestSellersSection({ products, navigate }: {
+  products: Product[]
+  navigate: (page: PageName, params?: Record<string, unknown>) => void
+}) {
+  const addToCart = useAppStore((s) => s.addToCart)
+  const [loadingId, setLoadingId] = useState<string | null>(null)
+
+  if (products.length === 0) return null
+
+  return (
+    <AnimatedSection className="py-6 md:py-8 bg-stone-50">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
+        <SectionHeader title="Top Selling" onViewAll={() => navigate('products')} />
+
+        {/* 2-Column Grid of Horizontal Featured Cards (Reference Image 1) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
+          {products.slice(0, 4).map((p) => {
+            const hasDiscount = p.discountPrice != null && p.discountPrice < p.price
+            const effectivePrice = hasDiscount ? p.discountPrice! : p.price
+            const savingsAmount = hasDiscount ? p.price - p.discountPrice! : 0
+            const imageUrl = p.images?.[0]?.url || '/placeholder.png'
+            const outOfStock = p.stock <= 0
+
+            return (
+              <motion.div
+                key={p.id}
+                whileHover={{ y: -3 }}
+                className="relative bg-white dark:bg-card rounded-2xl p-4 shadow-sm border border-stone-200/80 dark:border-border/60 flex flex-col sm:flex-row items-center gap-4 transition-all hover:shadow-md cursor-pointer group"
+                onClick={() => navigate('product-detail', { id: p.id })}
+              >
+                {/* Top-Right Badge: Best Selling */}
+                <div className="absolute top-3 right-3 z-10">
+                  <span className="inline-flex items-center gap-1 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-sm">
+                    🔥 Best Selling
+                  </span>
+                </div>
+
+                {/* Left: Product Image */}
+                <div className="relative size-36 sm:size-40 shrink-0 bg-slate-50 dark:bg-slate-900/40 rounded-xl overflow-hidden p-2">
+                  <Image
+                    src={imageUrl}
+                    alt={p.name}
+                    fill
+                    className="object-contain p-1 transition-transform duration-500 group-hover:scale-105"
+                    sizes="160px"
+                  />
+                </div>
+
+                {/* Right: Info + Price + Dual Buttons */}
+                <div className="flex-1 min-w-0 space-y-2 text-left w-full">
+                  <h3 className="font-bold text-base md:text-lg text-foreground line-clamp-1 group-hover:text-amber-600 transition-colors">
+                    {p.name}
+                  </h3>
+
+                  {/* Price & Savings Badge */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xl font-extrabold text-amber-600">
+                      ৳{effectivePrice.toLocaleString()}
+                    </span>
+                    {hasDiscount && (
+                      <span className="text-sm text-muted-foreground line-through decoration-red-400">
+                        ৳{p.price.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                  {hasDiscount && (
+                    <span className="inline-block px-2.5 py-0.5 rounded-md bg-emerald-500 text-white text-[10px] font-bold">
+                      Save ৳{savingsAmount.toLocaleString()}
+                    </span>
+                  )}
+
+                  {/* Dual Action Buttons */}
+                  <div className="flex items-center gap-2 pt-2" onClick={(e) => e.stopPropagation()}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={outOfStock || loadingId === p.id}
+                      aria-label={outOfStock ? `${p.name} is out of stock` : `Add ${p.name} to cart`}
+                      className="h-9 px-3 text-xs font-bold rounded-xl border-amber-500 text-amber-600 hover:bg-amber-50 gap-1.5 flex-1"
+                      onClick={async () => {
+                        setLoadingId(p.id)
+                        try {
+                          await addToCart({
+                            productId: p.id,
+                            productName: p.name,
+                            price: p.price,
+                            discountPrice: p.discountPrice,
+                            quantity: 1,
+                            unit: p.unit,
+                            image: imageUrl,
+                            stock: p.stock,
+                          })
+                        } finally {
+                          setLoadingId(null)
+                        }
+                      }}
+                    >
+                      <ShoppingCart className="size-3.5 text-amber-500" />
+                      Add To Cart
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={outOfStock || loadingId === p.id}
+                      aria-label={outOfStock ? `${p.name} is out of stock` : `Buy ${p.name} now`}
+                      className="h-9 px-4 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-600 text-white shadow-sm gap-1.5 flex-1"
+                      onClick={async () => {
+                        setLoadingId(p.id)
+                        try {
+                          await addToCart({
+                            productId: p.id,
+                            productName: p.name,
+                            price: p.price,
+                            discountPrice: p.discountPrice,
+                            quantity: 1,
+                            unit: p.unit,
+                            image: imageUrl,
+                            stock: p.stock,
+                          })
+                          navigate('checkout')
+                        } finally {
+                          setLoadingId(null)
+                        }
+                      }}
+                    >
+                      <ShoppingCart className="size-3.5" />
+                      Buy now
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            )
+          })}
+        </div>
+      </div>
+    </AnimatedSection>
+  )
+}
+
+// ── New Arrivals Section ──
+function NewArrivalsSection({ products, navigate }: {
+  products: Product[]
+  navigate: (page: PageName, params?: Record<string, unknown>) => void
+}) {
+  if (products.length === 0) return null
+
+  return (
+    <AnimatedSection className="py-6 md:py-8 bg-white">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
+        <SectionHeader title="New Arrivals" onViewAll={() => navigate('products')} />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6">
+          {products.map((p) => (
+            <ProductCard key={p.id} product={p} />
+          ))}
+        </div>
+      </div>
+    </AnimatedSection>
+  )
+}
+
+// ── Recently Viewed Section ──
+// Uses a neutral slate accent (not emerald/amber) to distinguish from
+// Featured (emerald) and New Arrivals (amber). Powered by localStorage
+// via the Zustand persist store.
+function RecentlyViewedSection({ products, navigate }: {
+  products: Product[]
+  navigate: (page: PageName, params?: Record<string, unknown>) => void
+}) {
+  if (products.length === 0) return null
+
+  return (
+    <AnimatedSection className="py-6 md:py-8 bg-stone-50">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
+        <SectionHeader title="Recently Viewed" onViewAll={() => navigate('products')} />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6">
+          {products.map((p) => (
+            <ProductCard key={p.id} product={p} />
+          ))}
+        </div>
+      </div>
+    </AnimatedSection>
+  )
+}
+
+// ── Trust & Guarantees Section ──
+function TrustSection() {
+  const guarantees = [
+    {
+      icon: ShieldCheck,
+      title: '100% Authentic',
+      bengaliTitle: '১০০% খাঁটি',
+      description: 'Every product is verified for authenticity. We source directly from trusted Bangladeshi producers.',
+      color: 'emerald',
+    },
+    {
+      icon: Truck,
+      title: 'Fast Delivery',
+      bengaliTitle: 'দ্রুত ডেলিভারি',
+      description: 'Same-day delivery in Dhaka. Nationwide delivery within 2-3 business days.',
+      color: 'teal',
+    },
+    {
+      icon: RefreshCw,
+      title: 'Easy Returns',
+      bengaliTitle: 'সহজ রিটার্ন',
+      description: '7-day hassle-free return policy. If you\'re not satisfied, we\'ll make it right.',
+      color: 'amber',
+    },
+    {
+      icon: Leaf,
+      title: 'Organic & Natural',
+      bengaliTitle: 'জৈব ও প্রাকৃতিক',
+      description: 'Carefully selected organic products. No artificial preservatives or additives.',
+      color: 'green',
+    },
+  ]
+
+  const colorMap: Record<string, { bg: string; icon: string; ring: string }> = {
+    emerald: { bg: 'from-emerald-100 to-emerald-50', icon: 'text-emerald-600', ring: 'ring-emerald-200' },
+    teal: { bg: 'from-teal-100 to-teal-50', icon: 'text-teal-600', ring: 'ring-teal-200' },
+    amber: { bg: 'from-amber-100 to-amber-50', icon: 'text-amber-600', ring: 'ring-amber-200' },
+    green: { bg: 'from-green-100 to-green-50', icon: 'text-green-600', ring: 'ring-green-200' },
+  }
+
+  return (
+    <section className="py-8 bg-white relative">
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-200 to-transparent" />
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
+        <AnimatedSection>
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center gap-2 text-emerald-600 mb-2">
+              <ShieldCheck className="h-5 w-5" />
+              <span className="text-sm font-semibold uppercase tracking-wider">Our Promise</span>
+              <div className="h-[2px] w-8 bg-emerald-600/30" />
+            </div>
+            <h2 className="text-2xl md:text-3xl font-bold">Why Choose Khati Khadyo?</h2>
+            <p className="text-sm text-emerald-700/60 font-medium mt-1">কেন খাঁটি খাদ্য বেছে নেবেন?</p>
+          </div>
+        </AnimatedSection>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
+          {guarantees.map((item, idx) => {
+            const Icon = item.icon
+            const colors = colorMap[item.color]
+            return (
+              <AnimatedSection key={item.title} delay={idx * 0.1}>
+                <div className="group text-center p-5 md:p-6 rounded-2xl border border-border/30 hover:border-emerald-200 hover:shadow-xl transition-all duration-300 bg-white hover:-translate-y-1">
+                  <div className={`h-16 w-16 rounded-2xl bg-gradient-to-br ${colors.bg} flex items-center justify-center mx-auto mb-4 ring-2 ${colors.ring} group-hover:scale-110 transition-transform duration-300 relative`}>
+                    <Icon className={`h-8 w-8 ${colors.icon}`} />
+                    {/* Subtle pulse ring on hover */}
+                    <motion.div
+                      className="absolute inset-0 rounded-2xl ring-2 ring-current opacity-0 group-hover:opacity-20"
+                      animate={{ scale: [1, 1.2, 1] }}
+                      transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+                    />
+                  </div>
+                  <h3 className="font-bold text-sm md:text-base mb-0.5">{item.title}</h3>
+                  <p className="text-[11px] text-emerald-600/60 font-medium mb-2">{item.bengaliTitle}</p>
+                  <p className="text-xs md:text-sm text-muted-foreground leading-relaxed">{item.description}</p>
+                </div>
+              </AnimatedSection>
+            )
+          })}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── Seasonal Collection Section ──
+function SeasonalCollectionSection({ navigate }: { navigate: (page: PageName, params?: Record<string, unknown>) => void }) {
+  const collections = [
+    {
+      title: 'সুন্দরবনের প্রাকৃতিক মধু',
+      subtitle: 'Pure Sundarbans Wild Honey',
+      tag: 'Seasonal Special',
+      bg: 'from-amber-50 to-orange-50 border-amber-200',
+      icon: '🍯',
+      link: 'honey-jaggery',
+    },
+    {
+      title: 'কাঠের ঘানির সরিষার তেল',
+      subtitle: 'Cold-Pressed Mustard Oil',
+      tag: 'Traditional',
+      bg: 'from-yellow-50 to-amber-50 border-yellow-200',
+      icon: '🫒',
+      link: 'ghee-oils',
+    },
+    {
+      title: 'খাঁটি খেজুরের পাটালি গুড়',
+      subtitle: 'Pure Date Palm Jaggery',
+      tag: 'Winter Harvest',
+      bg: 'from-orange-50 to-amber-100/50 border-orange-200',
+      icon: '🪵',
+      link: 'honey-jaggery',
+    },
+    {
+      title: 'প্রিমিয়াম দেশি স্পেশাল কম্বো',
+      subtitle: 'Organic Family Gift Pack',
+      tag: 'Best Value',
+      bg: 'from-emerald-50 to-teal-50 border-emerald-200',
+      icon: '🎁',
+      link: 'special-combos',
+    },
+  ]
+
+  return (
+    <AnimatedSection className="py-8 bg-white border-t border-stone-100">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center max-w-2xl mx-auto mb-10">
+          <Badge className="bg-amber-100 text-amber-800 border-amber-200 mb-2 font-semibold">
+            বাংলাদেশি বিশেষ কালেকশন
+          </Badge>
+          <h2 className="text-2xl md:text-3xl font-extrabold text-foreground">
+            Seasonal & Signature Collections
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Handcrafted traditional food essentials prepared with care
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {collections.map((item) => (
+            <motion.div
+              key={item.title}
+              whileHover={{ y: -4 }}
+              className={`p-6 rounded-2xl bg-gradient-to-br ${item.bg} border shadow-sm hover:shadow-md transition-all flex flex-col justify-between cursor-pointer`}
+              onClick={() => navigate('products', { category: item.link })}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-3xl">{item.icon}</span>
+                  <Badge variant="outline" className="bg-white/80 backdrop-blur-sm text-[10px] font-bold">
+                    {item.tag}
+                  </Badge>
+                </div>
+                <h3 className="font-bold text-lg text-foreground line-clamp-1">{item.title}</h3>
+                <p className="text-xs text-muted-foreground mt-0.5 font-medium">{item.subtitle}</p>
+              </div>
+              <div className="mt-6 flex items-center gap-1 text-xs font-bold text-emerald-800">
+                Explore Collection <ArrowRight className="h-3.5 w-3.5" />
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </AnimatedSection>
+  )
+}
+
+// ── Customer Reviews Section (Authentic Database Reviews Only) ──
+interface ApprovedReviewItem {
   id: string
   rating: number
   comment?: string | null
@@ -70,514 +1234,373 @@ interface ReviewItem {
   } | null
 }
 
-// ── 1. Hero Section ──
-function HeroSection({ banners, navigate }: {
-  banners: Banner[]
-  navigate: (page: PageName, params?: Record<string, unknown>) => void
-}) {
-  const [index, setIndex] = useState(0)
+function CustomerReviewsSection() {
+  const [reviews, setReviews] = useState<ApprovedReviewItem[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (banners.length <= 1) return
-    const timer = setInterval(() => {
-      setIndex((prev) => (prev + 1) % banners.length)
-    }, 5500)
-    return () => clearInterval(timer)
-  }, [banners.length])
+    let isMounted = true
+    async function fetchReviews() {
+      try {
+        const res = await fetch('/api/reviews?limit=6')
+        if (res.ok) {
+          const json = await res.json()
+          const items = extractItems<ApprovedReviewItem>(json)
+          if (isMounted) {
+            setReviews(items.filter((r) => r.comment && r.comment.trim()))
+          }
+        }
+      } catch {
+        if (isMounted) setReviews([])
+      } finally {
+        if (isMounted) setLoading(false)
+      }
+    }
+    fetchReviews()
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
-  if (banners.length === 0) {
-    // Clean default brand hero
-    return (
-      <section className="relative overflow-hidden bg-gradient-to-br from-emerald-950 via-emerald-900 to-stone-900 text-white py-14 md:py-20">
-        <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="max-w-2xl space-y-5">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-800/80 text-emerald-200 text-xs font-semibold border border-emerald-700/60">
-              <Leaf className="h-3.5 w-3.5 text-emerald-300" /> খাঁটি ও প্রাকৃতিক খাদ্য পণ্য
-            </span>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight leading-tight">
-              সরাসরি খামার থেকে <br />
-              <span className="text-emerald-300">বিশুদ্ধ খাদ্য সামগ্রী</span>
-            </h1>
-            <p className="text-sm sm:text-base text-emerald-100/90 leading-relaxed max-w-xl">
-              খাঁটি মধু, কাঠের ঘানির সরিষার তেল, গাওয়া ঘি এবং প্রিমিয়াম দেশি মশলা — স্বাস্থ্যসম্মত উপায়ে আপনার ঘরে পৌঁছে দিচ্ছি।
-            </p>
-            <div className="pt-2">
-              <Button
-                size="lg"
-                onClick={() => navigate('products')}
-                className="bg-emerald-500 hover:bg-emerald-600 text-stone-950 font-bold px-7 h-12 rounded-full shadow-lg transition-transform hover:scale-[1.02]"
-              >
-                সব পণ্য দেখুন <ArrowRight className="h-4 w-4 ml-1.5" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
-    )
-  }
-
-  const current = banners[index]
+  // If loading or no approved reviews exist, render nothing (no fake filler or empty placeholders)
+  if (loading || reviews.length === 0) return null
 
   return (
-    <section className="relative h-64 sm:h-80 md:h-[420px] lg:h-[480px] overflow-hidden bg-stone-900">
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={current.id || index}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.6 }}
-          className="absolute inset-0"
-        >
-          {current.desktopImage ? (
-            <Image
-              src={current.desktopImage}
-              alt={current.title}
-              fill
-              priority
-              className="object-cover object-center"
-              sizes="100vw"
-            />
-          ) : (
-            <div
-              className="w-full h-full"
-              style={{ backgroundColor: current.bgColor || '#064e3b' }}
-            />
-          )}
-          {/* Subtle contrast gradient */}
-          <div className="absolute inset-0 bg-gradient-to-r from-stone-950/85 via-stone-950/60 to-transparent" />
-          
-          {/* Content */}
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="max-w-xl text-white space-y-4">
-                <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold tracking-tight leading-tight line-clamp-2 drop-shadow-md">
-                  {current.title}
-                </h1>
-                {current.subtitle && (
-                  <p className="text-xs sm:text-base md:text-lg text-stone-200 line-clamp-2 drop-shadow max-w-md">
-                    {current.subtitle}
-                  </p>
-                )}
-                <div>
-                  <Button
-                    size="lg"
-                    onClick={() => {
-                      if (current.ctaLink && current.ctaLink.startsWith('http')) {
-                        window.open(current.ctaLink, '_blank')
-                      } else {
-                        navigate('products')
-                      }
-                    }}
-                    className="bg-emerald-500 hover:bg-emerald-600 text-stone-950 font-bold px-6 h-11 sm:h-12 rounded-full shadow-lg"
-                  >
-                    {current.ctaText || 'অর্ডার করুন'} <ArrowRight className="h-4 w-4 ml-1.5" />
-                  </Button>
+    <AnimatedSection className="py-8 bg-stone-50">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center max-w-xl mx-auto mb-10">
+          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 mb-2 font-semibold">
+            গ্রাহকদের সন্তুষ্টি
+          </Badge>
+          <h2 className="text-2xl md:text-3xl font-extrabold text-foreground">
+            Customer Reviews
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Authentic verified feedback from our community
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {reviews.map((r) => (
+            <div key={r.id} className="p-6 rounded-2xl bg-white border border-stone-200/80 shadow-sm flex flex-col justify-between space-y-4">
+              <div className="space-y-3">
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: r.rating || 5 }).map((_, idx) => (
+                    <Star key={idx} className="h-4 w-4 fill-amber-400 text-amber-400" />
+                  ))}
                 </div>
+                <p className="text-sm text-foreground/90 italic leading-relaxed">&ldquo;{r.comment}&rdquo;</p>
+              </div>
+              <div className="flex items-center justify-between pt-3 border-t border-stone-100">
+                <div>
+                  <h3 className="font-bold text-sm text-foreground flex items-center gap-1">
+                    {r.user?.name || 'Verified Customer'}
+                    {r.isVerified && (
+                      <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                        <ShieldCheck className="h-3 w-3 text-emerald-600" /> Verified
+                      </span>
+                    )}
+                  </h3>
+                </div>
+                <span className="text-[10px] text-muted-foreground bg-stone-100 px-2 py-0.5 rounded-full">
+                  {new Date(r.createdAt).toLocaleDateString()}
+                </span>
               </div>
             </div>
-          </div>
-        </motion.div>
-      </AnimatePresence>
-
-      {/* Slide Navigation Controls */}
-      {banners.length > 1 && (
-        <div className="absolute bottom-4 right-4 z-20 flex items-center gap-2">
-          <button
-            onClick={() => setIndex((prev) => (prev - 1 + banners.length) % banners.length)}
-            aria-label="Previous slide"
-            className="h-8 w-8 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center backdrop-blur-sm transition-colors"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setIndex((prev) => (prev + 1) % banners.length)}
-            aria-label="Next slide"
-            className="h-8 w-8 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center backdrop-blur-sm transition-colors"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-      )}
-    </section>
-  )
-}
-
-// ── 2. Key Categories ──
-function CategoriesSection({ categories, navigate }: {
-  categories: Category[]
-  navigate: (page: PageName, params?: Record<string, unknown>) => void
-}) {
-  if (categories.length === 0) return null
-
-  return (
-    <section className="py-8 md:py-12 bg-white dark:bg-stone-900 border-b border-stone-100 dark:border-stone-800">
-      <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-stone-900 dark:text-white tracking-tight">
-              জনপ্রিয় ক্যাটাগরি
-            </h2>
-            <p className="text-xs text-stone-500 mt-0.5">প্রাকৃতিক ও বিশুদ্ধ পণ্যের সমাহার</p>
-          </div>
-          <Link
-            href="/products"
-            className="text-xs sm:text-sm font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-600 rounded"
-          >
-            সব দেখুন <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
-
-        {/* Categories Grid */}
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3 sm:gap-4">
-          {categories.slice(0, 8).map((cat) => (
-            <Link
-              key={cat.id}
-              href={`/products?category=${encodeURIComponent(cat.slug)}`}
-              className="group flex flex-col items-center text-center p-3 rounded-2xl bg-stone-50 dark:bg-stone-800/60 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 border border-stone-200/60 dark:border-stone-800 hover:border-emerald-200 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
-            >
-              <div className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-xl overflow-hidden bg-white dark:bg-stone-800 p-2 mb-2 shadow-xs group-hover:scale-105 transition-transform flex items-center justify-center">
-                {cat.image ? (
-                  <Image
-                    src={cat.image}
-                    alt={cat.name}
-                    fill
-                    className="object-contain p-1"
-                    sizes="64px"
-                  />
-                ) : (
-                  <span className="text-2xl">🍯</span>
-                )}
-              </div>
-              <span className="text-xs font-bold text-stone-800 dark:text-stone-200 group-hover:text-emerald-700 transition-colors line-clamp-1">
-                {cat.name}
-              </span>
-            </Link>
           ))}
         </div>
       </div>
-    </section>
+    </AnimatedSection>
   )
 }
 
-// ── 3. Flash Sale (Conditional) ──
-function FlashSaleSection({ products, navigate, siteConfig }: {
-  products: Product[]
-  navigate: (page: PageName, params?: Record<string, unknown>) => void
-  siteConfig: any
-}) {
-  if (products.length === 0) return null
+// ── FAQ Section ──
+function FAQSection() {
+  const [openIndex, setOpenIndex] = useState<number | null>(0)
 
-  return (
-    <section className="py-8 bg-stone-900 text-white">
-      <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-2">
-            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500 text-stone-950 text-xs font-bold">
-              <Flame className="h-3.5 w-3.5" /> স্পেশাল অফার
-            </span>
-            <span className="text-sm font-semibold text-stone-300 hidden sm:inline">সীমিত সময়ের বিশেষ মূল্যছাড়</span>
-          </div>
-          <Link
-            href="/products"
-            className="text-xs font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1"
-          >
-            অফারের সব পণ্য <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {products.slice(0, 5).map((p) => (
-            <ProductCard key={p.id} product={p} />
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-// ── 4. Brand & Trust Pillars (1 Single Concise Section) ──
-function TrustPillarsSection() {
-  const pillars = [
+  const faqs = [
     {
-      icon: ShieldCheck,
-      title: '১০০% খাঁটি ও নিরাপদ',
-      desc: 'কোনো কৃত্রিম রং বা ক্ষতিকর প্রিজারভেটিভ নেই। সরাসরি বিশ্বস্ত উৎপাদনকারী থেকে সংগৃহীত।',
+      q: 'পণ্যের ১০০% খাঁটি হওয়ার নিশ্চয়তা কী?',
+      a: 'আমরা সরাসরি নিবন্ধিত কৃষক ও বিশ্বস্ত প্রস্তুতকারকদের কাছ থেকে পণ্য সংগ্রহ করি। ক্ষতিকারক কেমিক্যাল বা ভেজালমুক্ত তা নিশ্চিত করতে নিজস্ব কোয়ালিটি কন্ট্রোল টিম কাজ করে।',
     },
     {
-      icon: Truck,
-      title: 'দ্রুত ও নিরাপদ ডেলিভারি',
-      desc: 'ঢাকা ও সারাদেশের যেকোনো প্রান্তে দ্রুত এবং যত্নসহকারে পণ্য ডেলিভারি সম্পন্ন করা হয়।',
+      q: 'ডেলিভারি চার্জ এবং সময় কতদিন?',
+      a: 'ঢাকা সিটিতে ২৪–৪৮ ঘণ্টার মধ্যে হোম ডেলিভারি এবং ঢাকার বাইরে ২–৩ কার্যদিবসের মধ্যে পৌঁছায়। ৳১,৫০০ বা তার বেশি অর্ডারে সারা বাংলাদেশে ডেলিভারি একদম ফ্রি!',
     },
     {
-      icon: RotateCcw,
-      title: 'সহজ রিটার্ন গ্যারান্টি',
-      desc: 'পণ্যের গুণমানে কোনো সংশয় থাকলে দ্রুত অভিযোগ গ্রহণ ও সমাধানের নিশ্চয়তা।',
+      q: 'ক্যাশ অন ডেলিভারিতে পণ্য দেখে মূল্য পরিশোধ করা যাবে?',
+      a: 'হ্যাঁ, আমাদের প্রতিটি অর্ডারে ক্যাশ অন ডেলিভারি (Cash on Delivery) সুবিধা রয়েছে। পণ্য হাতে পেয়ে চেক করে নেওয়ার সুযোগ রয়েছে।',
     },
     {
-      icon: CheckCircle2,
-      title: 'সহজ ও নিরাপদ পেমেন্ট',
-      desc: 'ক্যাশ অন ডেলিভারিতে দেখে মূল্য পরিশোধ অথবা নিরাপদ ডিজিটাল পেমেন্ট সুবিধা।',
+      q: 'পণ্য পছন্দ না হলে বা কোন সমস্যা থাকলে কীভাবে রিটার্ন করব?',
+      a: 'পণ্য রিসিভ করার ২৪ ঘণ্টার মধ্যে আমাদের হেল্পলাইন বা ফেসবুক পেজে জানালে দ্রুততম সময়ে বিনামূল্যে পণ্য রিপ্লেস বা রিফান্ড দেয়া হয়।',
     },
   ]
 
   return (
-    <section className="py-10 md:py-14 bg-stone-50 dark:bg-stone-950/60 border-y border-stone-200/60 dark:border-stone-800">
-      <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center max-w-xl mx-auto mb-8 sm:mb-10">
-          <h2 className="text-xl sm:text-2xl font-bold text-stone-900 dark:text-white tracking-tight">
-            কেন খাঁটি খাদ্য বেছে নেবেন?
+    <AnimatedSection className="py-8 bg-white border-t border-stone-100">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 max-w-3xl">
+        <div className="text-center mb-10">
+          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 mb-2 font-semibold">
+            সাধারণ প্রশ্ন উত্তর
+          </Badge>
+          <h2 className="text-2xl md:text-3xl font-extrabold text-foreground">
+            Frequently Asked Questions
           </h2>
-          <p className="text-xs sm:text-sm text-stone-500 mt-1">
-            পরিবারের সুস্থতা ও পুষ্টি নিশ্চিত করতে আমাদের বিশেষ অঙ্গীকার
-          </p>
+          <p className="text-sm text-muted-foreground mt-1">Everything you need to know about shopping with us</p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {pillars.map((item, i) => {
-            const Icon = item.icon
+        <div className="space-y-3">
+          {faqs.map((faq, i) => {
+            const isOpen = openIndex === i
             return (
               <div
                 key={i}
-                className="p-5 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 shadow-xs flex flex-col items-center text-center space-y-2.5"
+                className="border border-stone-200 rounded-xl overflow-hidden bg-stone-50/50 transition-colors"
               >
-                <div className="h-12 w-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 flex items-center justify-center">
-                  <Icon className="h-6 w-6" />
-                </div>
-                <h3 className="font-bold text-sm sm:text-base text-stone-900 dark:text-white">
-                  {item.title}
-                </h3>
-                <p className="text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
-                  {item.desc}
-                </p>
+                <button
+                  type="button"
+                  className="w-full p-4 text-left font-bold text-sm md:text-base text-foreground flex items-center justify-between gap-4"
+                  onClick={() => setOpenIndex(isOpen ? null : i)}
+                >
+                  <span>{faq.q}</span>
+                  <span className={`h-6 w-6 rounded-full bg-white flex items-center justify-center border text-xs transition-transform ${isOpen ? 'rotate-180 bg-emerald-50 text-emerald-700' : ''}`}>
+                    ▼
+                  </span>
+                </button>
+                <AnimatePresence>
+                  {isOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="p-4 pt-0 text-sm text-muted-foreground leading-relaxed border-t border-stone-200/60 bg-white">
+                        {faq.a}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             )
           })}
         </div>
       </div>
-    </section>
+    </AnimatedSection>
   )
 }
 
-// ── 5. Real Customer Reviews (Zero Fake Reviews) ──
-function CustomerReviewsSection() {
-  const [reviews, setReviews] = useState<ReviewItem[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let active = true
-    async function loadReviews() {
-      try {
-        const res = await fetch('/api/reviews?limit=3')
-        if (res.ok) {
-          const json = await res.json()
-          const items = extractItems<ReviewItem>(json).filter((r) => r.comment && r.comment.trim())
-          if (active) setReviews(items)
-        }
-      } catch {
-        if (active) setReviews([])
-      } finally {
-        if (active) setLoading(false)
-      }
-    }
-    loadReviews()
-    return () => {
-      active = false
-    }
-  }, [])
-
-  // If no approved real reviews exist in database, do not render this section (strict no fake reviews rule)
-  if (loading || reviews.length === 0) return null
-
+// ── Loading Skeleton ──
+function HomeLoadingSkeleton() {
   return (
-    <section className="py-10 md:py-14 bg-white dark:bg-stone-900 border-b border-stone-200/60 dark:border-stone-800">
-      <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center max-w-xl mx-auto mb-8">
-          <h2 className="text-xl sm:text-2xl font-bold text-stone-900 dark:text-white tracking-tight">
-            গ্রাহকদের সন্তুষ্টি ও মতামত
-          </h2>
-          <p className="text-xs sm:text-sm text-stone-500 mt-1">আমাদের নিয়মিত গ্রাহকদের প্রকৃত অভিজ্ঞতা</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {reviews.map((r) => (
-            <div
-              key={r.id}
-              className="p-5 rounded-2xl bg-stone-50 dark:bg-stone-800/40 border border-stone-200/80 dark:border-stone-800 flex flex-col justify-between space-y-4"
-            >
-              <div className="space-y-2">
-                <div className="flex gap-0.5 text-amber-400">
-                  {Array.from({ length: r.rating || 5 }).map((_, idx) => (
-                    <Star key={idx} className="h-4 w-4 fill-amber-400" />
-                  ))}
-                </div>
-                <p className="text-xs sm:text-sm text-stone-700 dark:text-stone-300 italic leading-relaxed">
-                  &ldquo;{r.comment}&rdquo;
-                </p>
+    <div className="space-y-0">
+      {/* Announcement bar skeleton */}
+      <Skeleton className="h-9 w-full rounded-none" />
+      {/* Hero skeleton */}
+      <Skeleton className="h-64 md:h-[440px] w-full rounded-none" />
+      {/* Search skeleton */}
+      <div className="py-8 px-4">
+        <Skeleton className="h-12 max-w-2xl mx-auto rounded-full" />
+      </div>
+      {/* Category skeleton */}
+      <div className="py-14">
+        <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex gap-5 overflow-hidden">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex flex-col items-center gap-2 shrink-0">
+                <Skeleton className="h-20 w-20 md:h-24 md:w-24 rounded-2xl" />
+                <Skeleton className="h-4 w-16" />
               </div>
-              <div className="pt-3 border-t border-stone-200/60 dark:border-stone-700/60 text-xs font-semibold text-stone-900 dark:text-white">
-                {r.user?.name || 'ভেরিফাইড ক্রেতা'}
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
-    </section>
-  )
-}
-
-// ── 6. Compact Final CTA Banner ──
-function FinalCtaSection({ navigate }: { navigate: (page: PageName) => void }) {
-  return (
-    <section className="py-10 bg-emerald-950 text-white">
-      <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-4">
-        <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-          খাঁটি খাদ্যের নিশ্চয়তা আপনার দরজায়
-        </h2>
-        <p className="text-xs sm:text-sm text-emerald-200/80 max-w-lg mx-auto">
-          আজই অর্ডার করুন এবং উপভোগ করুন ১০০% বিশুদ্ধ দেশি খাদ্যপণ্যের আসল স্বাদ ও পুষ্টি।
-        </p>
-        <div className="pt-2">
-          <Button
-            size="lg"
-            onClick={() => navigate('products')}
-            className="bg-emerald-500 hover:bg-emerald-600 text-stone-950 font-bold px-8 h-12 rounded-full shadow-lg"
-          >
-            পণ্যসমূহ দেখুন ও অর্ডার করুন <ArrowRight className="h-4 w-4 ml-1.5" />
-          </Button>
+      {/* Flash sale skeleton */}
+      <Skeleton className="h-72 w-full rounded-none" />
+      {/* Products skeleton */}
+      <div className="py-14">
+        <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-72 rounded-xl" />
+            ))}
+          </div>
         </div>
       </div>
-    </section>
+    </div>
   )
 }
 
-// ── Main HomePage Component ──
+// ── Main Component ──
 export default function HomePage() {
-  const { navigate, siteConfig } = useAppStore()
-  const [banners, setBanners] = useState<Banner[]>([])
+  const [allFetchedProducts, setAllFetchedProducts] = useState<Product[]>([])
+  const { navigate, setSearchQuery, siteConfig } = useAppStore()
+  const recentlyViewed = useAppStore((s) => s.recentlyViewed || [])
+  const [heroBanners, setHeroBanners] = useState<Banner[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [discountProducts, setDiscountProducts] = useState<Product[]>([])
+  const [flashSaleProducts, setFlashSaleProducts] = useState<Product[]>([])
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([])
-  const [flashProducts, setFlashProducts] = useState<Product[]>([])
+  const [bestSellers, setBestSellers] = useState<Product[]>([])
+  const [newArrivals, setNewArrivals] = useState<Product[]>([])
+  const [recentProducts, setRecentProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    let active = true
-    async function loadData() {
+    async function loadAll() {
       try {
         const [bannersRes, catsRes, prodsRes] = await Promise.all([
-          fetch('/api/banners?isActive=true'),
-          fetch('/api/categories?isActive=true&limit=12'),
-          fetch('/api/products?limit=24&status=active'),
+          fetch('/api/banners'),
+          fetch('/api/categories'),
+          fetch('/api/products?limit=50'),
         ])
 
-        if (bannersRes.ok && active) {
-          const b = await bannersRes.json()
-          setBanners(extractItems<Banner>(b))
+        if (bannersRes.ok) {
+          const bData = await bannersRes.json()
+          setHeroBanners(extractItems<Banner>(bData))
         }
-        if (catsRes.ok && active) {
-          const c = await catsRes.json()
-          setCategories(extractItems<Category>(c))
+        if (catsRes.ok) {
+          const cData = await catsRes.json()
+          setCategories(extractItems<Category>(cData))
         }
-        if (prodsRes.ok && active) {
-          const p = await prodsRes.json()
-          const items = extractItems<Product>(p)
-          setFeaturedProducts(items.slice(0, 10))
+        if (prodsRes.ok) {
+          const pData = await prodsRes.json()
+          const allProds = extractItems<Product>(pData)
+          setAllFetchedProducts(allProds)
 
-          // Flash sale parsing
-          if (siteConfig?.flash_sale) {
-            try {
-              const cfg = JSON.parse(siteConfig.flash_sale)
-              if (cfg.enabled && cfg.productIds?.length > 0) {
-                const flash = cfg.productIds
-                  .map((id: string) => items.find((prod) => prod.id === id))
-                  .filter(Boolean) as Product[]
-                setFlashProducts(flash)
-              }
-            } catch {
-              setFlashProducts([])
-            }
-          }
+          setFeaturedProducts(allProds.filter((p) => p.isFeatured || p.status === 'active').slice(0, 8))
+          setDiscountProducts(allProds.filter((p) => p.discountPrice != null && p.discountPrice < p.price))
+          // setFlashSaleProducts handled in separate effect
+          setBestSellers(allProds.filter((p) => p.isBestSeller).slice(0, 8))
+          setNewArrivals(allProds.filter((p) => p.isNewArrival).slice(0, 8))
         }
-      } catch (e) {
-        console.error('Home load error:', e)
+      } catch (error) {
+        console.error('Failed to load homepage data:', error)
       } finally {
-        if (active) setLoading(false)
+        setLoading(false)
       }
     }
+    loadAll()
+  }, [])
 
-    loadData()
-    return () => {
-      active = false
+  useEffect(() => {
+    if (!recentlyViewed || recentlyViewed.length === 0) {
+      setRecentProducts([])
+      return
     }
-  }, [siteConfig?.flash_sale])
+    let cancelled = false
+    const ids = recentlyViewed.slice(0, 4)
+    Promise.allSettled(
+      ids.map((id) =>
+        fetch(`/api/products/${id}`)
+          .then((r) => r.json())
+          .then((d) => (d?.data ?? d) as Product | null)
+      )
+    ).then((results) => {
+      if (cancelled) return
+      const valid = results
+        .filter((r): r is PromiseFulfilledResult<Product> =>
+          r.status === 'fulfilled' && Boolean(r.value)
+        )
+        .map((r) => r.value)
+      setRecentProducts(valid)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [recentlyViewed])
+
+  useEffect(() => {
+    if (allFetchedProducts.length === 0) return;
+    
+    let flashSaleProds: Product[] = [];
+    if (siteConfig?.flash_sale) {
+      try {
+        const flashConfig = JSON.parse(siteConfig.flash_sale);
+        if (flashConfig.enabled && flashConfig.productIds?.length > 0) {
+          flashSaleProds = flashConfig.productIds
+            .map((id: string) => allFetchedProducts.find(p => p.id === id))
+            .filter(Boolean) as Product[];
+        }
+      } catch (e) {}
+    } else {
+      // No legacy fallback
+      flashSaleProds = [];
+    }
+    setFlashSaleProducts(flashSaleProds);
+  }, [allFetchedProducts, siteConfig?.flash_sale]);
+
+  const handleSearchSubmit = (query: string) => {
+    setSearchQuery(query)
+    navigate('products')
+  }
+
+  const dealProduct = useMemo<Product | null>(() => {
+    if (discountProducts.length > 0) {
+      const discountPct = (p: Product) =>
+        p.discountPrice != null && p.discountPrice < p.price
+          ? (p.price - p.discountPrice) / p.price
+          : 0
+      return [...discountProducts].sort(
+        (a, b) => discountPct(b) - discountPct(a)
+      )[0]
+    }
+    if (featuredProducts.length > 0) return featuredProducts[0]
+    return null
+  }, [discountProducts, featuredProducts])
 
   if (loading) {
-    return (
-      <div className="w-full max-w-[1400px] mx-auto px-4 py-8 space-y-8 animate-pulse">
-        <Skeleton className="h-64 sm:h-80 w-full rounded-2xl" />
-        <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 rounded-xl" />
-          ))}
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-64 rounded-xl" />
-          ))}
-        </div>
-      </div>
-    )
+    return <HomeLoadingSkeleton />
   }
 
   return (
-    <div className="min-h-screen bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 flex flex-col">
-      {/* 1. Clean Hero Section */}
-      <HeroSection banners={banners} navigate={navigate} />
+    <div className="min-h-screen bg-white text-foreground">
+      {/* ── 1. Hero Banner Carousel ── */}
+      <HeroBannerCarousel banners={heroBanners} navigate={navigate} />
 
-      {/* 2. Key Categories */}
-      <CategoriesSection categories={categories} navigate={navigate} />
+      {/* ── 4. Featured Categories (Large Premium Cards, Bengali Primary) ── */}
+      <CategorySection categories={categories} navigate={navigate} />
 
-      {/* 3. Flash Sale (if active) */}
-      {flashProducts.length > 0 && (
-        <FlashSaleSection products={flashProducts} navigate={navigate} siteConfig={siteConfig} />
+      {/* ── 5. Flash Sale (Elegantly Redesigned Dark Forest Theme) ── */}
+      {flashSaleProducts.length > 0 && (
+        <FlashSaleSection products={flashSaleProducts} navigate={navigate} siteConfig={siteConfig} />
       )}
 
-      {/* 4. Featured / Best Selling Products */}
+      {/* ── 6. Featured Products ── */}
       {featuredProducts.length > 0 && (
-        <section className="py-8 md:py-14 bg-white dark:bg-stone-900">
-          <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-xl sm:text-2xl font-bold text-stone-900 dark:text-white tracking-tight">
-                  জনপ্রিয় ও নির্বাচিত পণ্য
-                </h2>
-                <p className="text-xs text-stone-500 mt-0.5">আমাদের সর্বাধিক সমাদৃত খাঁটি খাদ্য সামগ্রী</p>
-              </div>
-              <Link
-                href="/products"
-                className="text-xs sm:text-sm font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-600 rounded"
-              >
-                সব পণ্য দেখুন <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4 md:gap-5">
-              {featuredProducts.map((p) => (
+        <AnimatedSection className="py-6 md:py-8 bg-white">
+          <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
+            <SectionHeader title="Featured Products" onViewAll={() => navigate('products')} />
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6">
+              {featuredProducts.map((p: Product) => (
                 <ProductCard key={p.id} product={p} />
               ))}
             </div>
           </div>
-        </section>
+        </AnimatedSection>
       )}
 
-      {/* 5. One Concise Trust Pillars Section */}
-      <TrustPillarsSection />
+      {/* ── 7. Best Sellers ── */}
+      <BestSellersSection products={bestSellers} navigate={navigate} />
 
-      {/* 6. Real Customer Reviews (Zero fake reviews) */}
+      {/* ── 8. Deal of the Day ── */}
+      {dealProduct && (
+        <DealOfTheDaySection product={dealProduct} navigate={navigate} />
+      )}
+
+      {/* ── 9. Seasonal Collection ── */}
+      <SeasonalCollectionSection navigate={navigate} />
+
+      {/* ── 10. Why Choose Khati Khadyo (Trust Pillars) ── */}
+      <TrustSection />
+
+      {/* ── 11. Customer Reviews ── */}
       <CustomerReviewsSection />
 
-      {/* 7. Compact Final CTA */}
-      <FinalCtaSection navigate={navigate} />
+      {/* ── 12. Frequently Asked Questions (FAQ Accordion) ── */}
+      <FAQSection />
+
     </div>
   )
 }

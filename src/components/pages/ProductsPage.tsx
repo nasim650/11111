@@ -786,6 +786,13 @@ export default function ProductsPage({ initialCategorySlug }: { initialCategoryS
                   <X className="h-4 w-4 text-muted-foreground" />
                 </button>
               )}
+              <button
+                onClick={() => toast.info('Voice search coming soon! 🎤')}
+                className="p-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 rounded-full transition-colors mr-1"
+                aria-label="Voice search"
+              >
+                <Mic className="h-4 w-4 text-emerald-600" />
+              </button>
               <Button
                 onClick={handleSearchSubmit}
                 className="h-12 rounded-none px-6 bg-emerald-600 hover:bg-emerald-700 transition-colors"
@@ -920,9 +927,9 @@ export default function ProductsPage({ initialCategorySlug }: { initialCategoryS
               <div className="absolute inset-x-0 bottom-0 p-5 md:p-7">
                 <div className="flex items-end justify-between gap-3">
                   <div className="min-w-0">
-                    <h1 className="text-2xl md:text-3xl font-bold text-white mb-1.5 drop-shadow-md">
+                    <h2 className="text-2xl md:text-3xl font-bold text-white mb-1.5 drop-shadow-md">
                       {activeCategory.name}
-                    </h1>
+                    </h2>
                     {activeCategory.description && (
                       <p className="text-sm md:text-base text-white/80 line-clamp-2 max-w-2xl drop-shadow">
                         {activeCategory.description}
