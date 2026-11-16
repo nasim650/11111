@@ -720,6 +720,13 @@ export default function Navbar() {
             href="/"
             className="flex items-center gap-2 shrink-0 group transition-transform hover:scale-[1.02] active:scale-[0.98]"
             aria-label={`${siteName} - Go to homepage`}
+            onClick={(event) => {
+              event.preventDefault()
+              navigate('home')
+              if (window.location.pathname !== '/') {
+                router.push('/')
+              }
+            }}
           >
             {siteConfig?.logo ? (
               <img
