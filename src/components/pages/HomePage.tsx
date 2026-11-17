@@ -1062,77 +1062,53 @@ function TrustSection() {
     {
       icon: ShieldCheck,
       title: '100% Authentic',
-      bengaliTitle: '১০০% খাঁটি',
-      description: 'Every product is verified for authenticity. We source directly from trusted Bangladeshi producers.',
+      description: 'Sourced directly from verified Bangladeshi producers.',
       color: 'emerald',
     },
     {
       icon: Truck,
       title: 'Fast Delivery',
-      bengaliTitle: 'দ্রুত ডেলিভারি',
-      description: 'Same-day delivery in Dhaka. Nationwide delivery within 2-3 business days.',
+      description: 'Dhaka: 24–48h. Nationwide: 2–3 business days.',
       color: 'teal',
     },
     {
       icon: RefreshCw,
       title: 'Easy Returns',
-      bengaliTitle: 'সহজ রিটার্ন',
-      description: '7-day hassle-free return policy. If you\'re not satisfied, we\'ll make it right.',
+      description: '7-day return policy. Not satisfied? We make it right.',
       color: 'amber',
     },
     {
       icon: Leaf,
-      title: 'Organic & Natural',
-      bengaliTitle: 'জৈব ও প্রাকৃতিক',
-      description: 'Carefully selected organic products. No artificial preservatives or additives.',
+      title: 'Natural Quality',
+      description: 'No artificial preservatives or additives.',
       color: 'green',
     },
   ]
 
-  const colorMap: Record<string, { bg: string; icon: string; ring: string }> = {
-    emerald: { bg: 'from-emerald-100 to-emerald-50', icon: 'text-emerald-600', ring: 'ring-emerald-200' },
-    teal: { bg: 'from-teal-100 to-teal-50', icon: 'text-teal-600', ring: 'ring-teal-200' },
-    amber: { bg: 'from-amber-100 to-amber-50', icon: 'text-amber-600', ring: 'ring-amber-200' },
-    green: { bg: 'from-green-100 to-green-50', icon: 'text-green-600', ring: 'ring-green-200' },
+  const colorMap: Record<string, { icon: string; bg: string }> = {
+    emerald: { icon: 'text-emerald-600', bg: 'bg-emerald-50' },
+    teal: { icon: 'text-teal-600', bg: 'bg-teal-50' },
+    amber: { icon: 'text-amber-600', bg: 'bg-amber-50' },
+    green: { icon: 'text-green-600', bg: 'bg-green-50' },
   }
 
   return (
-    <section className="py-8 bg-white relative">
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-200 to-transparent" />
+    <section className="py-6 bg-stone-50/80 border-t border-stone-100" aria-label="Why choose us">
       <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
-        <AnimatedSection>
-          <div className="text-center mb-10">
-            <div className="inline-flex items-center gap-2 text-emerald-600 mb-2">
-              <ShieldCheck className="h-5 w-5" />
-              <span className="text-sm font-semibold uppercase tracking-wider">Our Promise</span>
-              <div className="h-[2px] w-8 bg-emerald-600/30" />
-            </div>
-            <h2 className="text-2xl md:text-3xl font-bold">Why Choose Khati Khadyo?</h2>
-            <p className="text-sm text-emerald-700/60 font-medium mt-1">কেন খাঁটি খাদ্য বেছে নেবেন?</p>
-          </div>
-        </AnimatedSection>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
-          {guarantees.map((item, idx) => {
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+          {guarantees.map((item) => {
             const Icon = item.icon
-            const colors = colorMap[item.color]
+            const c = colorMap[item.color]
             return (
-              <AnimatedSection key={item.title} delay={idx * 0.1}>
-                <div className="group text-center p-5 md:p-6 rounded-2xl border border-border/30 hover:border-emerald-200 hover:shadow-xl transition-all duration-300 bg-white hover:-translate-y-1">
-                  <div className={`h-16 w-16 rounded-2xl bg-gradient-to-br ${colors.bg} flex items-center justify-center mx-auto mb-4 ring-2 ${colors.ring} group-hover:scale-110 transition-transform duration-300 relative`}>
-                    <Icon className={`h-8 w-8 ${colors.icon}`} />
-                    {/* Subtle pulse ring on hover */}
-                    <motion.div
-                      className="absolute inset-0 rounded-2xl ring-2 ring-current opacity-0 group-hover:opacity-20"
-                      animate={{ scale: [1, 1.2, 1] }}
-                      transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
-                    />
-                  </div>
-                  <h3 className="font-bold text-sm md:text-base mb-0.5">{item.title}</h3>
-                  <p className="text-[11px] text-emerald-600/60 font-medium mb-2">{item.bengaliTitle}</p>
-                  <p className="text-xs md:text-sm text-muted-foreground leading-relaxed">{item.description}</p>
+              <div key={item.title} className="flex items-start gap-3 p-3 md:p-4 rounded-xl bg-white border border-border/40 shadow-sm">
+                <div className={`h-9 w-9 rounded-lg ${c.bg} flex items-center justify-center flex-shrink-0`}>
+                  <Icon className={`h-5 w-5 ${c.icon}`} aria-hidden="true" />
                 </div>
-              </AnimatedSection>
+                <div className="min-w-0">
+                  <p className="text-xs md:text-sm font-bold text-foreground leading-tight">{item.title}</p>
+                  <p className="text-[11px] text-muted-foreground leading-snug mt-0.5 line-clamp-2">{item.description}</p>
+                </div>
+              </div>
             )
           })}
         </div>
@@ -1141,81 +1117,134 @@ function TrustSection() {
   )
 }
 
-// ── Seasonal Collection Section ──
+// ── Seasonal & Signature Collections — Database Driven ──
+interface SeasonalSectionItem {
+  id: string
+  title: string
+  subtitle: string | null
+  image: string | null
+  categoryId: string | null
+  content: string | null  // JSON: { link, tag }
+  sortOrder: number
+  category?: { id: string; name: string; slug: string } | null
+}
+
 function SeasonalCollectionSection({ navigate }: { navigate: (page: PageName, params?: Record<string, unknown>) => void }) {
-  const collections = [
-    {
-      title: 'সুন্দরবনের প্রাকৃতিক মধু',
-      subtitle: 'Pure Sundarbans Wild Honey',
-      tag: 'Seasonal Special',
-      bg: 'from-amber-50 to-orange-50 border-amber-200',
-      icon: '🍯',
-      link: 'honey-jaggery',
-    },
-    {
-      title: 'কাঠের ঘানির সরিষার তেল',
-      subtitle: 'Cold-Pressed Mustard Oil',
-      tag: 'Traditional',
-      bg: 'from-yellow-50 to-amber-50 border-yellow-200',
-      icon: '🫒',
-      link: 'ghee-oils',
-    },
-    {
-      title: 'খাঁটি খেজুরের পাটালি গুড়',
-      subtitle: 'Pure Date Palm Jaggery',
-      tag: 'Winter Harvest',
-      bg: 'from-orange-50 to-amber-100/50 border-orange-200',
-      icon: '🪵',
-      link: 'honey-jaggery',
-    },
-    {
-      title: 'প্রিমিয়াম দেশি স্পেশাল কম্বো',
-      subtitle: 'Organic Family Gift Pack',
-      tag: 'Best Value',
-      bg: 'from-emerald-50 to-teal-50 border-emerald-200',
-      icon: '🎁',
-      link: 'special-combos',
-    },
-  ]
+  const [collections, setCollections] = useState<SeasonalSectionItem[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let mounted = true
+    async function load() {
+      try {
+        const res = await fetch('/api/homepage-sections?type=seasonal&limit=8')
+        if (!res.ok) throw new Error('failed')
+        const data = await res.json()
+        if (mounted && data.success) {
+          const items = extractItems<SeasonalSectionItem>(data)
+          setCollections(items)
+        }
+      } catch {
+        // silent
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+    load()
+    return () => { mounted = false }
+  }, [])
+
+  // Hide if no active seasonal collections configured
+  if (loading || collections.length === 0) return null
 
   return (
     <AnimatedSection className="py-8 bg-white border-t border-stone-100">
       <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center max-w-2xl mx-auto mb-10">
+        <div className="text-center max-w-2xl mx-auto mb-8">
           <Badge className="bg-amber-100 text-amber-800 border-amber-200 mb-2 font-semibold">
             বাংলাদেশি বিশেষ কালেকশন
           </Badge>
           <h2 className="text-2xl md:text-3xl font-extrabold text-foreground">
-            Seasonal & Signature Collections
+            Seasonal &amp; Signature Collections
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
             Handcrafted traditional food essentials prepared with care
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {collections.map((item) => (
-            <motion.div
-              key={item.title}
-              whileHover={{ y: -4 }}
-              className={`p-6 rounded-2xl bg-gradient-to-br ${item.bg} border shadow-sm hover:shadow-md transition-all flex flex-col justify-between cursor-pointer`}
-              onClick={() => navigate('products', { category: item.link })}
-            >
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-3xl">{item.icon}</span>
-                  <Badge variant="outline" className="bg-white/80 backdrop-blur-sm text-[10px] font-bold">
-                    {item.tag}
-                  </Badge>
+        <div className={`grid gap-4 ${
+          collections.length === 1 ? 'grid-cols-1 max-w-md mx-auto' :
+          collections.length === 2 ? 'grid-cols-1 sm:grid-cols-2 max-w-2xl mx-auto' :
+          collections.length === 3 ? 'grid-cols-1 sm:grid-cols-3' :
+          'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
+        }`}>
+          {collections.map((item) => {
+            // Parse content JSON for extra metadata (tag, link override)
+            let parsed: Record<string, string> = {}
+            try { if (item.content) parsed = JSON.parse(item.content) } catch { /* ignore */ }
+            const tag = parsed.tag || null
+            // Destination: category slug > explicit link > categoryId > null
+            const categorySlug = item.category?.slug
+            const hasDestination = !!(categorySlug || parsed.link || item.categoryId)
+
+            const card = (
+              <motion.div
+                whileHover={hasDestination ? { y: -3 } : {}}
+                className={`group p-5 rounded-2xl border shadow-sm transition-all bg-gradient-to-br from-stone-50 to-stone-100/50 border-stone-200 ${
+                  hasDestination ? 'cursor-pointer hover:shadow-md hover:border-primary/30' : 'cursor-default'
+                } flex flex-col justify-between min-h-[140px]`}
+              >
+                {item.image ? (
+                  <div className="relative h-20 w-full mb-3 rounded-xl overflow-hidden bg-stone-200">
+                    <Image
+                      src={item.image}
+                      alt={item.title}
+                      fill
+                      className="object-cover"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                    />
+                  </div>
+                ) : null}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h3 className="font-bold text-sm md:text-base text-foreground line-clamp-2">{item.title}</h3>
+                    {item.subtitle && (
+                      <p className="text-xs text-muted-foreground mt-0.5 font-medium line-clamp-1">{item.subtitle}</p>
+                    )}
+                  </div>
+                  {tag && (
+                    <Badge variant="outline" className="text-[10px] font-bold bg-white/80 flex-shrink-0">
+                      {tag}
+                    </Badge>
+                  )}
                 </div>
-                <h3 className="font-bold text-lg text-foreground line-clamp-1">{item.title}</h3>
-                <p className="text-xs text-muted-foreground mt-0.5 font-medium">{item.subtitle}</p>
-              </div>
-              <div className="mt-6 flex items-center gap-1 text-xs font-bold text-emerald-800">
-                Explore Collection <ArrowRight className="h-3.5 w-3.5" />
-              </div>
-            </motion.div>
-          ))}
+                {hasDestination && (
+                  <div className="mt-4 flex items-center gap-1 text-xs font-bold text-primary group-hover:gap-2 transition-all">
+                    Explore <ArrowRight className="h-3.5 w-3.5" />
+                  </div>
+                )}
+              </motion.div>
+            )
+
+            if (!hasDestination) return <div key={item.id}>{card}</div>
+
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className="text-left"
+                onClick={() => {
+                  if (categorySlug) {
+                    navigate('products', { category: categorySlug })
+                  } else if (parsed.link) {
+                    navigate('products', { category: parsed.link })
+                  }
+                }}
+              >
+                {card}
+              </button>
+            )
+          })}
         </div>
       </div>
     </AnimatedSection>
@@ -1315,32 +1344,48 @@ function CustomerReviewsSection() {
 }
 
 // ── FAQ Section ──
-function FAQSection() {
-  const [openIndex, setOpenIndex] = useState<number | null>(0)
+// ── FAQ Section — Database Driven ──
+interface FAQItemData {
+  id: string
+  question: string
+  answer: string
+  category: string | null
+  sortOrder: number
+}
 
-  const faqs = [
-    {
-      q: 'পণ্যের ১০০% খাঁটি হওয়ার নিশ্চয়তা কী?',
-      a: 'আমরা সরাসরি নিবন্ধিত কৃষক ও বিশ্বস্ত প্রস্তুতকারকদের কাছ থেকে পণ্য সংগ্রহ করি। ক্ষতিকারক কেমিক্যাল বা ভেজালমুক্ত তা নিশ্চিত করতে নিজস্ব কোয়ালিটি কন্ট্রোল টিম কাজ করে।',
-    },
-    {
-      q: 'ডেলিভারি চার্জ এবং সময় কতদিন?',
-      a: 'ঢাকা সিটিতে ২৪–৪৮ ঘণ্টার মধ্যে হোম ডেলিভারি এবং ঢাকার বাইরে ২–৩ কার্যদিবসের মধ্যে পৌঁছায়। ৳১,৫০০ বা তার বেশি অর্ডারে সারা বাংলাদেশে ডেলিভারি একদম ফ্রি!',
-    },
-    {
-      q: 'ক্যাশ অন ডেলিভারিতে পণ্য দেখে মূল্য পরিশোধ করা যাবে?',
-      a: 'হ্যাঁ, আমাদের প্রতিটি অর্ডারে ক্যাশ অন ডেলিভারি (Cash on Delivery) সুবিধা রয়েছে। পণ্য হাতে পেয়ে চেক করে নেওয়ার সুযোগ রয়েছে।',
-    },
-    {
-      q: 'পণ্য পছন্দ না হলে বা কোন সমস্যা থাকলে কীভাবে রিটার্ন করব?',
-      a: 'পণ্য রিসিভ করার ২৪ ঘণ্টার মধ্যে আমাদের হেল্পলাইন বা ফেসবুক পেজে জানালে দ্রুততম সময়ে বিনামূল্যে পণ্য রিপ্লেস বা রিফান্ড দেয়া হয়।',
-    },
-  ]
+function FAQSection() {
+  const [openId, setOpenId] = useState<string | null>(null)
+  const [faqs, setFaqs] = useState<FAQItemData[]>([])
+  const [faqLoading, setFaqLoading] = useState(true)
+
+  useEffect(() => {
+    let mounted = true
+    async function load() {
+      try {
+        const res = await fetch('/api/faq?limit=20')
+        if (!res.ok) throw new Error('fetch failed')
+        const data = await res.json()
+        if (mounted && data.success) {
+          const items = extractItems<FAQItemData>(data)
+          setFaqs(items)
+          if (items.length > 0) setOpenId(items[0].id)
+        }
+      } catch {
+        // silent — no fake fallback
+      } finally {
+        if (mounted) setFaqLoading(false)
+      }
+    }
+    load()
+    return () => { mounted = false }
+  }, [])
+
+  if (faqLoading || faqs.length === 0) return null
 
   return (
     <AnimatedSection className="py-8 bg-white border-t border-stone-100">
-      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 max-w-3xl">
-        <div className="text-center mb-10">
+      <div className="w-full max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center mb-8">
           <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 mb-2 font-semibold">
             সাধারণ প্রশ্ন উত্তর
           </Badge>
@@ -1350,34 +1395,47 @@ function FAQSection() {
           <p className="text-sm text-muted-foreground mt-1">Everything you need to know about shopping with us</p>
         </div>
 
-        <div className="space-y-3">
-          {faqs.map((faq, i) => {
-            const isOpen = openIndex === i
+        <div className="space-y-2" role="list">
+          {faqs.map((faq) => {
+            const isOpen = openId === faq.id
+            const panelId = `faq-panel-${faq.id}`
+            const btnId = `faq-btn-${faq.id}`
             return (
               <div
-                key={i}
-                className="border border-stone-200 rounded-xl overflow-hidden bg-stone-50/50 transition-colors"
+                key={faq.id}
+                role="listitem"
+                className="border border-stone-200 rounded-xl overflow-hidden bg-stone-50/50"
               >
                 <button
+                  id={btnId}
                   type="button"
-                  className="w-full p-4 text-left font-bold text-sm md:text-base text-foreground flex items-center justify-between gap-4"
-                  onClick={() => setOpenIndex(isOpen ? null : i)}
+                  aria-expanded={isOpen}
+                  aria-controls={panelId}
+                  className="w-full p-4 text-left font-semibold text-sm md:text-base text-foreground flex items-center justify-between gap-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                  onClick={() => setOpenId(isOpen ? null : faq.id)}
                 >
-                  <span>{faq.q}</span>
-                  <span className={`h-6 w-6 rounded-full bg-white flex items-center justify-center border text-xs transition-transform ${isOpen ? 'rotate-180 bg-emerald-50 text-emerald-700' : ''}`}>
+                  <span>{faq.question}</span>
+                  <span
+                    aria-hidden="true"
+                    className={`h-6 w-6 flex-shrink-0 rounded-full bg-white flex items-center justify-center border text-emerald-700 transition-transform duration-200 ${isOpen ? 'rotate-180 bg-emerald-50' : ''}`}
+                  >
                     ▼
                   </span>
                 </button>
                 <AnimatePresence>
                   {isOpen && (
                     <motion.div
+                      id={panelId}
+                      role="region"
+                      aria-labelledby={btnId}
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
                       className="overflow-hidden"
                     >
-                      <div className="p-4 pt-0 text-sm text-muted-foreground leading-relaxed border-t border-stone-200/60 bg-white">
-                        {faq.a}
+                      <div className="px-4 pb-4 text-sm text-muted-foreground leading-relaxed border-t border-stone-200/60 bg-white pt-3">
+                        {faq.answer}
                       </div>
                     </motion.div>
                   )}

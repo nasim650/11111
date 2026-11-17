@@ -39,6 +39,7 @@ export type PageName =
   | 'admin-media'
   | 'admin-payments'
   | 'admin-contact-messages'
+  | 'admin-homepage-content'
 
 export interface CartItem {
   id: string

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   CreditCard, Truck, MapPin, ChevronRight, Loader2, ShieldCheck,
@@ -54,6 +54,7 @@ interface Address {
 
 export default function CheckoutPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { cartItems, subtotal, totalItems, navigate, isAuthenticated, user, setUser, siteConfig, clearCart, updateQuantity, removeFromCart } = useAppStore()
 
   // Safe redirect to /cart when cart is empty
@@ -87,6 +88,28 @@ export default function CheckoutPage() {
 
   // Mobile summary sheet
   const [mobileSummaryOpen, setMobileSummaryOpen] = useState(false)
+
+  // Payment gateway callback banner (shown when user returns from gateway with ?payment=cancel or ?payment=fail)
+  const [paymentCallbackBanner, setPaymentCallbackBanner] = useState<'cancel' | 'fail' | null>(null)
+
+  // On mount: detect gateway return params to show contextual banner
+  useEffect(() => {
+    const paymentParam = searchParams.get('payment')
+    if (paymentParam === 'cancel') {
+      setPaymentCallbackBanner('cancel')
+      toast.error('Payment Cancelled', {
+        description: 'Your payment was cancelled. Please try again or choose Cash on Delivery.',
+        duration: 8000,
+      })
+    } else if (paymentParam === 'fail') {
+      setPaymentCallbackBanner('fail')
+      toast.error('Payment Failed', {
+        description: 'Your payment could not be processed. Please retry or choose a different payment method.',
+        duration: 8000,
+      })
+    }
+    // Note: no DB state mutation here — that is IPN's responsibility only
+  }, [])
 
   // Phone OTP Verification State for logged-in accounts
   const [otpPhone, setOtpPhone] = useState(user?.phone || '')
@@ -800,6 +823,39 @@ export default function CheckoutPage() {
       {/* Main Container */}
       <div className="flex-1 container mx-auto px-4 py-6 sm:py-8">
         <h1 className="sr-only">Checkout - Complete Your Order</h1>
+
+        {/* Gateway Callback Banner */}
+        {paymentCallbackBanner && (
+          <div
+            role="alert"
+            className={`mb-5 flex items-start gap-3 rounded-2xl border p-4 text-sm ${
+              paymentCallbackBanner === 'fail'
+                ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300'
+                : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300'
+            }`}
+          >
+            <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="font-semibold mb-0.5">
+                {paymentCallbackBanner === 'fail' ? 'Payment Failed' : 'Payment Cancelled'}
+              </p>
+              <p className="text-xs opacity-90">
+                {paymentCallbackBanner === 'fail'
+                  ? 'Your payment could not be processed. Please review your details and try again, or choose Cash on Delivery.'
+                  : 'You cancelled the payment. No charge has been made. You can retry or choose Cash on Delivery.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPaymentCallbackBanner(null)}
+              aria-label="Dismiss"
+              className="text-current opacity-60 hover:opacity-100 transition-opacity"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
         <div className="grid lg:grid-cols-3 gap-6">
 
           {/* Left Column: Checkout Step Forms */}
@@ -1048,8 +1104,9 @@ export default function CheckoutPage() {
                                   setEditingAddressId(null)
                                   setShowAddAddress(true)
                                 }}
-                                className="w-full h-11 border-dashed border-2 rounded-xl text-primary hover:bg-primary/5 font-semibold text-xs"
+                                className="w-full h-12 border-dashed border-2 rounded-xl border-primary/40 text-primary hover:bg-primary/5 hover:border-primary font-semibold text-sm flex items-center gap-2 justify-center transition-all"
                               >
+                                <MapPin className="h-4 w-4" />
                                 + Add New Smart Address
                               </Button>
                             </div>
@@ -1177,7 +1234,7 @@ export default function CheckoutPage() {
                           </div>
                         </div>
 
-                        {onlinePaymentEnabled && (
+                        {onlinePaymentEnabled ? (
                           <div
                             onClick={() => setPaymentMethod('online')}
                             className={`rounded-xl p-4 border-2 cursor-pointer transition-all ${
@@ -1193,6 +1250,22 @@ export default function CheckoutPage() {
                                 Online Payment
                               </Label>
                             </div>
+                          </div>
+                        ) : (
+                          <div
+                            aria-disabled="true"
+                            className="rounded-xl p-4 border-2 border-dashed border-muted-foreground/20 bg-muted/30 opacity-70 cursor-not-allowed select-none"
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <Wallet className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-bold text-sm text-muted-foreground">Online Payment</span>
+                              <Badge variant="outline" className="ml-auto text-[10px] border-muted-foreground/30 text-muted-foreground">
+                                Unavailable
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground leading-snug ml-6">
+                              Online payment is currently unavailable. Please use Cash on Delivery.
+                            </p>
                           </div>
                         )}
                       </RadioGroup>

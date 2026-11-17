@@ -37,7 +37,8 @@ import {
   ArrowLeft,
   ChevronDown,
   Mail,
-Flame,} from 'lucide-react'
+Flame,
+  Home as HomeIcon,} from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,6 +59,7 @@ import AdminMediaPage from './admin/AdminMediaPage'
 import AdminPaymentsPage from './admin/AdminPaymentsPage'
 import AdminContactMessagesPage from './admin/AdminContactMessagesPage'
 import AdminFlashSalePage from './admin/AdminFlashSalePage'
+import AdminHomepageContentPage from './admin/AdminHomepageContentPage'
 
 interface NavItem {
   label: string
@@ -81,6 +83,7 @@ const mainNav: NavItem[] = [
   { label: 'Media Library', page: 'admin-media', icon: Camera },
   { label: 'Messages', page: 'admin-contact-messages', icon: Mail },
   { label: 'Site Settings', page: 'admin-settings', icon: Settings },
+  { label: 'Homepage Content', page: 'admin-homepage-content', icon: HomeIcon },
 ]
 
 function renderPage(page: PageName) {
@@ -113,6 +116,8 @@ function renderPage(page: PageName) {
       return <AdminMediaPage />
     case 'admin-contact-messages':
       return <AdminContactMessagesPage />
+    case 'admin-homepage-content':
+      return <AdminHomepageContentPage />
     default:
       return <DashboardHome />
   }
