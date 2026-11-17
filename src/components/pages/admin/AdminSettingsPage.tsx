@@ -184,6 +184,35 @@ export default function AdminSettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [passwordErrors, setPasswordErrors] = useState<FormErrors>({})
   const [tabLoading, setTabLoading] = useState<Record<string, boolean>>({})
+  const [retentionRunning, setRetentionRunning] = useState(false)
+  const [retentionResult, setRetentionResult] = useState<{
+    dryRun: boolean
+    cutoffDate: string
+    expiredOtpChallengesCleaned: number
+    guestOrdersAnonymized: number
+    hardDeleteEnabled: boolean
+  } | null>(null)
+
+  async function handleRunRetentionPreview() {
+    setRetentionRunning(true)
+    try {
+      const res = await authFetch('/api/cron/retention?dryRun=true&daysOld=180', {
+        method: 'POST',
+      })
+      if (!res.ok) throw new Error('Failed to run retention preview')
+      const json = await res.json()
+      if (json.success) {
+        setRetentionResult(json.data)
+        toast.success('Retention dry-run completed successfully')
+      } else {
+        toast.error(json.error || 'Retention preview failed')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Retention preview failed')
+    } finally {
+      setRetentionRunning(false)
+    }
+  }
 
   const fetchConfig = useCallback(async () => {
     try {
@@ -961,6 +990,88 @@ export default function AdminSettingsPage() {
                   />
                   {errors.sessionTimeout && <p className="text-xs text-destructive flex items-center gap-1"><AlertCircle className="size-3" />{errors.sessionTimeout}</p>}
                   <p className="text-xs text-muted-foreground">Admin session will expire after this period of inactivity</p>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Six-Month Data Retention Policy (Part E) */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="font-medium text-base flex items-center gap-2">
+                      <Database className="size-4 text-primary" />
+                      Six-Month Data Retention & Privacy Policy
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Automatic lifecycle cleanup for temporary authentication challenges and guest customer PII.
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="border-emerald-300 text-emerald-800 bg-emerald-50 text-xs">
+                    Hard Delete Locked
+                  </Badge>
+                </div>
+
+                <div className="rounded-lg border p-4 space-y-4 bg-muted/20">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                    <div className="p-3 bg-card border rounded-md">
+                      <p className="font-semibold text-foreground mb-1">Financial & Order Safety</p>
+                      <p className="text-muted-foreground">Orders, payments, invoices, items, and audit logs are permanently preserved.</p>
+                    </div>
+                    <div className="p-3 bg-card border rounded-md">
+                      <p className="font-semibold text-foreground mb-1">OTP Challenges (&gt; 180 Days)</p>
+                      <p className="text-muted-foreground">Expired and consumed OTP verification codes are safely purged.</p>
+                    </div>
+                    <div className="p-3 bg-card border rounded-md">
+                      <p className="font-semibold text-foreground mb-1">Guest Privacy Anonymization</p>
+                      <p className="text-muted-foreground">Guest orders older than 180 days have phone masked and email/address cleared.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                    <div className="text-xs text-muted-foreground">
+                      <span>Protection Guard: </span>
+                      <code className="bg-muted px-1.5 py-0.5 rounded text-[11px] font-mono">RETENTION_HARD_DELETE_ENABLED=false</code>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRunRetentionPreview}
+                      disabled={retentionRunning}
+                      className="gap-2"
+                    >
+                      <RefreshCw className={`size-3.5 ${retentionRunning ? 'animate-spin' : ''}`} />
+                      {retentionRunning ? 'Running Preview...' : 'Run Dry-Run Preview'}
+                    </Button>
+                  </div>
+
+                  {retentionResult && (
+                    <div className="mt-3 p-3 rounded-md bg-card border text-xs space-y-1.5">
+                      <div className="flex items-center justify-between font-semibold">
+                        <span>Preview Result (Dry Run)</span>
+                        <Badge variant="secondary" className="text-[10px]">Preview Mode Only</Badge>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-muted-foreground">
+                        <div>
+                          <span>Cutoff Date:</span>
+                          <p className="font-mono text-foreground">{new Date(retentionResult.cutoffDate).toLocaleDateString()}</p>
+                        </div>
+                        <div>
+                          <span>Eligible OTPs:</span>
+                          <p className="font-semibold text-foreground">{retentionResult.expiredOtpChallengesCleaned}</p>
+                        </div>
+                        <div>
+                          <span>Eligible Guest Orders:</span>
+                          <p className="font-semibold text-foreground">{retentionResult.guestOrdersAnonymized}</p>
+                        </div>
+                        <div>
+                          <span>Hard Deletions:</span>
+                          <p className="font-semibold text-emerald-700">0 (Locked)</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>

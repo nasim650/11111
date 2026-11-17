@@ -40,30 +40,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (order.userId) {
-      if (!authUser || (!isAdmin(authUser.role) && authUser.userId !== order.userId)) {
-        return NextResponse.json(
-          { success: false, error: 'Forbidden' },
-          { status: 403 }
-        )
-      }
+    // Authorization: owner user, admin/manager, or valid guest access token
+    let isAuthorized = false
+    if (authUser && (isAdmin(authUser.role) || (order.userId && authUser.userId === order.userId))) {
+      isAuthorized = true
     } else {
-      // Guest order authorization check
-      const isAdminUser = Boolean(authUser && isAdmin(authUser.role))
-      if (!isAdminUser) {
-        const guestAccessToken =
-          (typeof body.guestAccessToken === 'string' && body.guestAccessToken) ||
-          request.cookies.get(`guest_order_${order.orderNumber}`)?.value ||
-          request.cookies.get('guest_order_access')?.value ||
-          null
+      const guestAccessToken =
+        (typeof body.guestAccessToken === 'string' && body.guestAccessToken) ||
+        request.cookies.get(`guest_order_${order.orderNumber}`)?.value ||
+        request.cookies.get('guest_order_access')?.value ||
+        null
 
-        if (!guestAccessToken || !order.guestAccessTokenHash) {
-          return NextResponse.json(
-            { success: false, error: 'Forbidden' },
-            { status: 403 }
-          )
-        }
-
+      if (guestAccessToken && order.guestAccessTokenHash) {
         const receivedHash = crypto.createHash('sha256').update(guestAccessToken).digest('hex')
         const hashMatches =
           receivedHash.length === order.guestAccessTokenHash.length &&
@@ -72,13 +60,17 @@ export async function POST(request: NextRequest) {
         const isNotExpired =
           !order.guestAccessExpiresAt || new Date(order.guestAccessExpiresAt) > new Date()
 
-        if (!hashMatches || !isNotExpired) {
-          return NextResponse.json(
-            { success: false, error: 'Forbidden' },
-            { status: 403 }
-          )
+        if (hashMatches && isNotExpired) {
+          isAuthorized = true
         }
       }
+    }
+
+    if (!isAuthorized) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
+      )
     }
 
     if (order.paymentStatus === 'paid') {

@@ -26,6 +26,82 @@ export async function POST(request: NextRequest) {
       : null
 
     if (existingUser) {
+      // Part C: Guest-to-account claim flow
+      // If a guest profile exists with matching phone and password === null, allow claiming via OTP
+      const isUnclaimedGuestProfile = phone && existingUser.phone === phone && existingUser.password === null
+
+      if (isUnclaimedGuestProfile) {
+        // If an email was provided, ensure it isn't already taken by another registered user
+        if (email && existingUser.email !== email) {
+          const emailUser = await db.user.findFirst({ where: { email, id: { not: existingUser.id } } })
+          if (emailUser) {
+            return NextResponse.json(
+              { success: false, error: 'User already exists with this email' },
+              { status: 409 }
+            )
+          }
+        }
+
+        const otpCode = body.otpCode ? String(body.otpCode).trim() : null
+
+        if (!otpCode) {
+          // Issue verification OTP to claim this guest profile
+          const { issueOtp } = await import('@/lib/otp')
+          await issueOtp(phone, 'phone_verification')
+          return NextResponse.json({
+            success: true,
+            data: {
+              requiresOtp: true,
+              claimProfile: true,
+              message: 'এই ফোন নম্বরে একটি গেস্ট প্রোফাইল রয়েছে। অ্যাকাউন্ট নিশ্চিত করতে ওটিপি কোড দিন। (A guest profile exists with this phone. Please enter the OTP code to claim your account.)',
+            },
+          }, { status: 200 })
+        }
+
+        // Verify provided OTP
+        const { verifyOtp } = await import('@/lib/otp')
+        const verifyResult = await verifyOtp(phone, 'phone_verification', otpCode)
+        if (!verifyResult.ok) {
+          return NextResponse.json(
+            { success: false, error: verifyResult.error || 'Invalid or expired OTP code' },
+            { status: 400 }
+          )
+        }
+
+        // OTP verified! Claim and upgrade the profile with password and verified status
+        const hashedPassword = await hashPassword(password)
+        const updatedUser = await db.user.update({
+          where: { id: existingUser.id },
+          data: {
+            name: name || existingUser.name,
+            email: email || existingUser.email,
+            password: hashedPassword,
+            isVerified: true,
+          },
+        })
+
+        const token = await generateToken(updatedUser.id, updatedUser.sessionVersion)
+        const { password: _, ...userWithoutPassword } = updatedUser
+
+        const response = NextResponse.json({
+          success: true,
+          data: {
+            user: userWithoutPassword,
+            token,
+            claimed: true,
+            requiresVerification: false,
+          },
+        }, { status: 200 })
+        response.cookies.set('auth_token', token, {
+          httpOnly: true,
+          sameSite: 'lax',
+          secure: process.env.NODE_ENV === 'production',
+          path: '/',
+          maxAge: 7 * 24 * 60 * 60,
+        })
+        return response
+      }
+
       return NextResponse.json(
         { success: false, error: 'User already exists with this email/phone' },
         { status: 409 }

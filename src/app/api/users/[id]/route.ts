@@ -29,6 +29,7 @@ export async function GET(
         email: true,
         phone: true,
         role: true,
+        password: true,
         isVerified: true,
         avatar: true,
         isActive: true,
@@ -45,6 +46,10 @@ export async function GET(
         { status: 404 }
       )
     }
+
+    const hasPassword = user.password !== null
+    const identityStatus = hasPassword ? 'registered_account' : 'guest_profile'
+    const { password: _, ...userWithoutPassword } = user
 
     // Get order statistics
     const orderStats = await db.order.aggregate({
@@ -70,10 +75,85 @@ export async function GET(
       take: 5,
     })
 
+    // Part D: Six-month customer activity analysis for admin/manager
+    let sixMonthActivity: Record<string, unknown> | null = null
+    if (isAdmin(role)) {
+      const sixMonthsAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000)
+      const sixMonthOrders = await db.order.findMany({
+        where: {
+          createdAt: { gte: sixMonthsAgo },
+          OR: [
+            { userId: id },
+            ...(user.phone ? [{ guestPhone: user.phone }] : []),
+          ],
+        },
+        include: {
+          items: {
+            select: {
+              id: true,
+              productName: true,
+              quantity: true,
+              price: true,
+              unit: true,
+            },
+          },
+          payment: {
+            select: {
+              method: true,
+              status: true,
+              amount: true,
+              gateway: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+
+      let deliveredCount = 0
+      let cancelledOrFailedCount = 0
+      let totalPaid = 0
+      let totalCod = 0
+
+      for (const ord of sixMonthOrders) {
+        if (ord.orderStatus === 'delivered') deliveredCount++
+        if (ord.orderStatus === 'cancelled' || ord.paymentStatus === 'failed') cancelledOrFailedCount++
+        if (ord.paymentStatus === 'paid') totalPaid += ord.totalAmount
+        if (ord.paymentMethod === 'cod') totalCod += ord.totalAmount
+      }
+
+      sixMonthActivity = {
+        since: sixMonthsAgo.toISOString(),
+        totalOrders: sixMonthOrders.length,
+        deliveredOrders: deliveredCount,
+        cancelledOrders: cancelledOrFailedCount,
+        totalPaid: Math.round(totalPaid * 100) / 100,
+        totalCod: Math.round(totalCod * 100) / 100,
+        orders: sixMonthOrders.map((o) => ({
+          id: o.id,
+          orderNumber: o.orderNumber,
+          createdAt: o.createdAt,
+          totalAmount: o.totalAmount,
+          orderStatus: o.orderStatus,
+          paymentStatus: o.paymentStatus,
+          paymentMethod: o.paymentMethod,
+          itemCount: o.items.reduce((s, it) => s + it.quantity, 0),
+          items: o.items.map((it) => ({
+            name: it.productName,
+            quantity: it.quantity,
+            price: it.price,
+            unit: it.unit,
+          })),
+        })),
+      }
+    }
+
     return NextResponse.json({
       success: true,
       data: {
-        ...user,
+        ...userWithoutPassword,
+        hasPassword,
+        identityStatus,
+        sixMonthActivity,
         stats: {
           orderCount,
           totalSpent: Math.round(totalSpent * 100) / 100,

@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
           email: true,
           phone: true,
           role: true,
+          password: true,
           isVerified: true,
           avatar: true,
           isActive: true,
@@ -49,9 +50,18 @@ export async function GET(request: NextRequest) {
       db.user.count({ where }),
     ])
 
+    const serializedUsers = users.map((u) => {
+      const { password, ...rest } = u
+      return {
+        ...rest,
+        hasPassword: password !== null,
+        identityStatus: password === null ? 'guest_profile' : 'registered_account',
+      }
+    })
+
     return NextResponse.json({
       success: true,
-      data: paginatedResponse(users, total, page, limit),
+      data: paginatedResponse(serializedUsers, total, page, limit),
     })
   } catch (error) {
     console.error('Get users error:', error)

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getPaginationParams, getUserRoleFromRequest, isAdmin, paginatedResponse } from '@/lib/utils'
 
-function sanitizeGatewayResponse(gatewayResponse: string | null): string | null {
+export function sanitizeGatewayResponse(gatewayResponse: string | null): string | null {
   if (!gatewayResponse) return null
   try {
     const parsed = JSON.parse(gatewayResponse) as {
@@ -46,12 +46,52 @@ export async function GET(request: NextRequest) {
 
     const url = new URL(request.url)
     const { page, limit, skip } = getPaginationParams(url)
+    const search = url.searchParams.get('search')?.trim()
     const status = url.searchParams.get('status')
     const gateway = url.searchParams.get('gateway')
+    const method = url.searchParams.get('method')
+    const dateFrom = url.searchParams.get('dateFrom')
+    const dateTo = url.searchParams.get('dateTo')
 
     const where: Record<string, unknown> = {}
     if (status && status !== 'all') where.status = status
-    if (gateway) where.gateway = gateway
+    if (gateway && gateway !== 'all') where.gateway = gateway
+    if (method && method !== 'all') where.method = method
+
+    // Date range filter
+    if (dateFrom || dateTo) {
+      const createdAtFilter: Record<string, Date> = {}
+      if (dateFrom) {
+        const fromDate = new Date(dateFrom)
+        if (!isNaN(fromDate.getTime())) {
+          createdAtFilter.gte = fromDate
+        }
+      }
+      if (dateTo) {
+        const toDate = new Date(dateTo)
+        if (!isNaN(toDate.getTime())) {
+          // Include full end date
+          toDate.setHours(23, 59, 59, 999)
+          createdAtFilter.lte = toDate
+        }
+      }
+      if (Object.keys(createdAtFilter).length > 0) {
+        where.createdAt = createdAtFilter
+      }
+    }
+
+    // Search by order number, transaction ID, customer phone or customer email
+    if (search) {
+      where.OR = [
+        { transactionId: { contains: search } },
+        { order: { orderNumber: { contains: search } } },
+        { order: { guestPhone: { contains: search } } },
+        { order: { guestEmail: { contains: search } } },
+        { order: { user: { phone: { contains: search } } } },
+        { order: { user: { email: { contains: search } } } },
+        { order: { user: { name: { contains: search } } } },
+      ]
+    }
 
     const [payments, total] = await Promise.all([
       db.payment.findMany({
@@ -64,6 +104,7 @@ export async function GET(request: NextRequest) {
               guestName: true,
               guestEmail: true,
               guestPhone: true,
+              paymentMethod: true,
               paymentStatus: true,
               orderStatus: true,
               totalAmount: true,
@@ -80,8 +121,38 @@ export async function GET(request: NextRequest) {
     ])
 
     const sanitizedPayments = payments.map((p) => ({
-      ...p,
+      id: p.id,
+      transactionId: p.transactionId || null,
+      status: p.status,
+      amount: p.amount ?? p.order?.totalAmount ?? 0,
+      method: p.method || p.order?.paymentMethod || 'cod',
+      gateway: p.gateway || (p.method === 'online' ? 'sslcommerz' : 'cod'),
+      paidAt: p.paidAt ? (p.paidAt instanceof Date ? p.paidAt.toISOString() : String(p.paidAt)) : null,
+      createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : String(p.createdAt),
+      updatedAt: p.updatedAt instanceof Date ? p.updatedAt.toISOString() : String(p.updatedAt),
       gatewayResponse: sanitizeGatewayResponse(p.gatewayResponse),
+      order: p.order
+        ? {
+            id: p.order.id,
+            orderNumber: p.order.orderNumber || 'N/A',
+            guestName: p.order.guestName || null,
+            guestEmail: p.order.guestEmail || null,
+            guestPhone: p.order.guestPhone || null,
+            paymentMethod: p.order.paymentMethod || p.method || 'cod',
+            paymentStatus: p.order.paymentStatus || p.status,
+            orderStatus: p.order.orderStatus || 'pending',
+            totalAmount: p.order.totalAmount ?? p.amount ?? 0,
+            createdAt: p.order.createdAt instanceof Date ? p.order.createdAt.toISOString() : String(p.order.createdAt),
+            user: p.order.user
+              ? {
+                  id: p.order.user.id,
+                  name: p.order.user.name || null,
+                  email: p.order.user.email || null,
+                  phone: p.order.user.phone || null,
+                }
+              : null,
+          }
+        : null,
     }))
 
     return NextResponse.json({

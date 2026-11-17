@@ -116,7 +116,7 @@ export async function getOrderForUser(
 
   // 1. Guest Order Authorization Check (via opaque one-time cookie access token)
   if (!user && guestAccessToken) {
-    if (order.userId === null && order.guestAccessTokenHash) {
+    if (order.guestAccessTokenHash) {
       const receivedHash = crypto.createHash('sha256').update(guestAccessToken).digest('hex')
       const hashMatches =
         receivedHash.length === order.guestAccessTokenHash.length &&

@@ -147,9 +147,11 @@ export async function handleSSLCommerzCallback(
     const reportedAmount = Number(payload.amount || payload.currency_amount || 0)
     const validatedAmount = Number(validation?.amount || validation?.currency_amount || reportedAmount)
     const amountMatches = Math.abs((validatedAmount || reportedAmount) - order.totalAmount) < 0.01
+    const reportedCurrency = String(payload.currency || validation?.currency_type || validation?.currency || 'BDT').trim().toUpperCase()
+    const currencyMatches = reportedCurrency === 'BDT'
     const isSuccessReported = isSuccessfulSSLCommerzStatus(reportedStatus)
     const isValidationSuccess = isSuccessfulSSLCommerzStatus(validationStatus)
-    const paymentConfirmedValid = signatureValid && Boolean(validation) && isSuccessReported && isValidationSuccess && amountMatches
+    const paymentConfirmedValid = signatureValid && Boolean(validation) && isSuccessReported && isValidationSuccess && amountMatches && currencyMatches
 
     if (paymentConfirmedValid) {
       // Authoritative validated payment: finalize order and lock reserved stock
@@ -193,6 +195,8 @@ export async function handleSSLCommerzCallback(
       ? 'IPN signature verification failed'
       : !amountMatches
       ? `IPN amount mismatch (expected ${order.totalAmount}, got ${validatedAmount || reportedAmount})`
+      : !currencyMatches
+      ? `IPN currency mismatch (expected BDT, got ${reportedCurrency})`
       : `IPN reported status: ${reportedStatus} (validation: ${validationStatus || 'none'})`
 
     const finalPaymentStatus = /cancel/i.test(reportedStatus) ? 'cancelled' : 'failed'

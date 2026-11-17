@@ -20,7 +20,48 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 import { extractItems, authFetch } from '@/lib/api'
 import { useAppStore } from '@/lib/store'
-import { Search, Users as UsersIcon, Eye, Pencil } from 'lucide-react'
+import {
+  Search,
+  Users as UsersIcon,
+  Eye,
+  Pencil,
+  ShieldCheck,
+  ShoppingBag,
+  CheckCircle2,
+  XCircle,
+  CreditCard,
+  Banknote,
+  Clock,
+} from 'lucide-react'
+
+interface ActivityOrderItem {
+  name: string
+  quantity: number
+  price: number
+  unit?: string
+}
+
+interface ActivityOrder {
+  id: string
+  orderNumber: string
+  createdAt: string
+  totalAmount: number
+  orderStatus: string
+  paymentStatus: string
+  paymentMethod: string
+  itemCount: number
+  items: ActivityOrderItem[]
+}
+
+interface SixMonthActivity {
+  since: string
+  totalOrders: number
+  deliveredOrders: number
+  cancelledOrders: number
+  totalPaid: number
+  totalCod: number
+  orders: ActivityOrder[]
+}
 
 interface Customer {
   id: string
@@ -29,9 +70,23 @@ interface Customer {
   phone?: string
   role: string
   isActive: boolean
+  isVerified?: boolean
+  hasPassword?: boolean
+  identityStatus?: 'guest_profile' | 'registered_account'
   avatar?: string
   createdAt: string
   _count?: { orders: number; reviews: number }
+}
+
+interface CustomerDetail extends Customer {
+  sixMonthActivity?: SixMonthActivity
+  stats?: {
+    orderCount: number
+    totalSpent: number
+    wishlistCount: number
+    cartCount: number
+    reviewCount: number
+  }
 }
 
 export default function AdminCustomersPage() {
@@ -40,6 +95,8 @@ export default function AdminCustomersPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+  const [customerDetail, setCustomerDetail] = useState<CustomerDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [editing, setEditing] = useState<Partial<Customer> | null>(null)
@@ -64,9 +121,24 @@ export default function AdminCustomersPage() {
 
   useEffect(() => { fetchCustomers() }, [fetchCustomers])
 
-  function openDetail(c: Customer) {
+  async function openDetail(c: Customer) {
     setSelectedCustomer(c)
+    setCustomerDetail(null)
     setDetailOpen(true)
+    setDetailLoading(true)
+    try {
+      const res = await authFetch(`/api/users/${c.id}`)
+      if (res.ok) {
+        const json = await res.json()
+        if (json.success && json.data) {
+          setCustomerDetail(json.data)
+        }
+      }
+    } catch {
+      toast.error('Failed to load customer details')
+    } finally {
+      setDetailLoading(false)
+    }
   }
 
   function openEdit(c: Customer) {
@@ -101,7 +173,7 @@ export default function AdminCustomersPage() {
           <div className="flex gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <Input placeholder="Search customers..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+              <Input placeholder="Search customers by name, phone, or email..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
             </div>
           </div>
         </CardContent>
@@ -122,9 +194,9 @@ export default function AdminCustomersPage() {
                 <TableRow>
                   <TableHead>Customer</TableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead>Phone</TableHead>
+                  <TableHead>Phone & Verification</TableHead>
+                  <TableHead>Identity</TableHead>
                   <TableHead>Orders</TableHead>
-                  <TableHead>Role</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Joined</TableHead>
                   <TableHead className="w-10" />
@@ -142,9 +214,26 @@ export default function AdminCustomersPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-sm">{c.email ?? '-'}</TableCell>
-                    <TableCell className="text-sm">{c.phone ?? '-'}</TableCell>
+                    <TableCell className="text-sm">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span>{c.phone ?? '-'}</span>
+                        {c.phone && (
+                          c.isVerified ? (
+                            <Badge className="bg-emerald-100 text-emerald-800 text-[10px] px-1.5 py-0 h-4">Verified</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-amber-700 border-amber-300 text-[10px] px-1.5 py-0 h-4">Unverified</Badge>
+                          )
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {c.identityStatus === 'guest_profile' ? (
+                        <Badge variant="secondary" className="bg-purple-100 text-purple-800 text-xs">Guest Profile</Badge>
+                      ) : (
+                        <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-xs">Registered</Badge>
+                      )}
+                    </TableCell>
                     <TableCell><Badge variant="secondary" className="text-xs">{c._count?.orders ?? 0}</Badge></TableCell>
-                    <TableCell><Badge variant="secondary" className="text-xs capitalize">{c.role}</Badge></TableCell>
                     <TableCell>
                       <Badge variant="secondary" className={c.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
                         {c.isActive ? 'Active' : 'Inactive'}
@@ -153,8 +242,8 @@ export default function AdminCustomersPage() {
                     <TableCell className="text-xs text-muted-foreground">{new Date(c.createdAt).toLocaleDateString()}</TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" className="size-7" onClick={() => openDetail(c)}><Eye className="size-3" /></Button>
-                        <Button variant="ghost" size="icon" className="size-7" onClick={() => openEdit(c)}><Pencil className="size-3" /></Button>
+                        <Button variant="ghost" size="icon" className="size-7" onClick={() => openDetail(c)} aria-label="View Details"><Eye className="size-3" /></Button>
+                        <Button variant="ghost" size="icon" className="size-7" onClick={() => openEdit(c)} aria-label="Edit Customer"><Pencil className="size-3" /></Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -167,26 +256,164 @@ export default function AdminCustomersPage() {
 
       {/* Detail Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Customer Details</DialogTitle></DialogHeader>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Customer Profile & Activity</DialogTitle></DialogHeader>
           {selectedCustomer && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="size-12 rounded-full bg-primary/10 flex items-center justify-center text-lg font-medium">
-                  {selectedCustomer.name?.charAt(0)?.toUpperCase() ?? '?'}
+            <div className="space-y-6">
+              {/* Profile Overview */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-lg bg-muted/40 border">
+                <div className="flex items-center gap-3">
+                  <div className="size-12 rounded-full bg-primary/10 flex items-center justify-center text-lg font-medium text-primary">
+                    {selectedCustomer.name?.charAt(0)?.toUpperCase() ?? '?'}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-base">{selectedCustomer.name ?? 'Guest / Customer'}</h3>
+                    <p className="text-xs text-muted-foreground">{selectedCustomer.email ?? 'No email provided'}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs font-mono">{selectedCustomer.phone ?? 'No phone'}</span>
+                      {selectedCustomer.phone && (
+                        selectedCustomer.isVerified ? (
+                          <Badge className="bg-emerald-100 text-emerald-800 text-[10px] px-1.5 py-0 h-4">Verified Phone</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-amber-700 border-amber-300 text-[10px] px-1.5 py-0 h-4">Unverified Phone</Badge>
+                        )
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-medium">{selectedCustomer.name ?? 'N/A'}</p>
-                  <p className="text-sm text-muted-foreground">{selectedCustomer.email ?? ''}</p>
+                <div className="flex flex-wrap sm:flex-col items-start sm:items-end gap-1.5 text-xs">
+                  {selectedCustomer.identityStatus === 'guest_profile' ? (
+                    <Badge variant="secondary" className="bg-purple-100 text-purple-800">Guest Phone Profile</Badge>
+                  ) : (
+                    <Badge variant="secondary" className="bg-blue-100 text-blue-800">Registered Account</Badge>
+                  )}
+                  <span className="text-muted-foreground">Joined: {new Date(selectedCustomer.createdAt).toLocaleDateString()}</span>
+                  <Badge variant="secondary" className={selectedCustomer.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
+                    {selectedCustomer.isActive ? 'Active' : 'Inactive'}
+                  </Badge>
                 </div>
               </div>
-              <div className="grid gap-2 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">Phone</span><span>{selectedCustomer.phone ?? '-'}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Role</span><span className="capitalize">{selectedCustomer.role}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Status</span><Badge variant="secondary" className={selectedCustomer.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>{selectedCustomer.isActive ? 'Active' : 'Inactive'}</Badge></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Orders</span><span>{selectedCustomer._count?.orders ?? 0}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Reviews</span><span>{selectedCustomer._count?.reviews ?? 0}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Joined</span><span>{new Date(selectedCustomer.createdAt).toLocaleDateString()}</span></div>
+
+              {/* 6-Month Activity Section (Part D) */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Clock className="size-4 text-primary" />
+                    <h4 className="font-semibold text-sm">6-Month Order Activity (Last 180 Days)</h4>
+                  </div>
+                  {customerDetail?.sixMonthActivity && (
+                    <span className="text-xs text-muted-foreground">
+                      Since {new Date(customerDetail.sixMonthActivity.since).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+
+                {detailLoading ? (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                      {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-16 w-full rounded" />)}
+                    </div>
+                    <Skeleton className="h-28 w-full rounded" />
+                  </div>
+                ) : customerDetail?.sixMonthActivity ? (
+                  <div className="space-y-4">
+                    {/* Summary Metrics */}
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                      <div className="p-3 rounded-lg border bg-card">
+                        <div className="flex items-center justify-between text-muted-foreground mb-1">
+                          <span className="text-xs">Total Orders</span>
+                          <ShoppingBag className="size-3.5" />
+                        </div>
+                        <p className="text-lg font-bold">{customerDetail.sixMonthActivity.totalOrders}</p>
+                      </div>
+
+                      <div className="p-3 rounded-lg border bg-card">
+                        <div className="flex items-center justify-between text-muted-foreground mb-1">
+                          <span className="text-xs text-emerald-700">Delivered</span>
+                          <CheckCircle2 className="size-3.5 text-emerald-600" />
+                        </div>
+                        <p className="text-lg font-bold text-emerald-700">{customerDetail.sixMonthActivity.deliveredOrders}</p>
+                      </div>
+
+                      <div className="p-3 rounded-lg border bg-card">
+                        <div className="flex items-center justify-between text-muted-foreground mb-1">
+                          <span className="text-xs text-rose-700">Cancelled/Fail</span>
+                          <XCircle className="size-3.5 text-rose-600" />
+                        </div>
+                        <p className="text-lg font-bold text-rose-700">{customerDetail.sixMonthActivity.cancelledOrders}</p>
+                      </div>
+
+                      <div className="p-3 rounded-lg border bg-card">
+                        <div className="flex items-center justify-between text-muted-foreground mb-1">
+                          <span className="text-xs text-blue-700">Total Paid</span>
+                          <CreditCard className="size-3.5 text-blue-600" />
+                        </div>
+                        <p className="text-base font-bold text-blue-700">৳{customerDetail.sixMonthActivity.totalPaid.toLocaleString()}</p>
+                      </div>
+
+                      <div className="p-3 rounded-lg border bg-card">
+                        <div className="flex items-center justify-between text-muted-foreground mb-1">
+                          <span className="text-xs text-amber-700">Total COD</span>
+                          <Banknote className="size-3.5 text-amber-600" />
+                        </div>
+                        <p className="text-base font-bold text-amber-700">৳{customerDetail.sixMonthActivity.totalCod.toLocaleString()}</p>
+                      </div>
+                    </div>
+
+                    {/* Orders Table */}
+                    <div className="border rounded-md overflow-hidden">
+                      {customerDetail.sixMonthActivity.orders.length === 0 ? (
+                        <div className="p-6 text-center text-sm text-muted-foreground">
+                          No orders placed in the last 6 months.
+                        </div>
+                      ) : (
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/30">
+                              <TableHead className="text-xs">Order #</TableHead>
+                              <TableHead className="text-xs">Date</TableHead>
+                              <TableHead className="text-xs">Items</TableHead>
+                              <TableHead className="text-xs">Total</TableHead>
+                              <TableHead className="text-xs">Payment</TableHead>
+                              <TableHead className="text-xs">Status</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {customerDetail.sixMonthActivity.orders.map((order) => (
+                              <TableRow key={order.id} className="text-xs">
+                                <TableCell className="font-mono font-medium">{order.orderNumber}</TableCell>
+                                <TableCell className="text-muted-foreground">{new Date(order.createdAt).toLocaleDateString()}</TableCell>
+                                <TableCell>
+                                  <div className="max-w-[200px] truncate" title={order.items.map(it => `${it.name} x${it.quantity}`).join(', ')}>
+                                    {order.items.map(it => `${it.name} x${it.quantity}`).join(', ')}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="font-semibold">৳{order.totalAmount.toLocaleString()}</TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-1">
+                                    <span className="uppercase text-[11px]">{order.paymentMethod}</span>
+                                    <Badge variant="outline" className={`text-[10px] px-1 py-0 ${order.paymentStatus === 'paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'text-amber-700 border-amber-300'}`}>
+                                      {order.paymentStatus}
+                                    </Badge>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="secondary" className="capitalize text-[10px]">
+                                    {order.orderStatus}
+                                  </Badge>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 border rounded-md text-xs text-muted-foreground text-center">
+                    No 6-month activity data available.
+                  </div>
+                )}
               </div>
             </div>
           )}

@@ -298,6 +298,11 @@ export async function POST(request: NextRequest) {
 
     const totalAmount = subtotal + deliveryCharge - discountAmount - loyaltyDiscount
 
+    // Log price manipulation attempt if client provided totalAmount that differs
+    if (body.totalAmount !== undefined && Math.abs(Number(body.totalAmount) - totalAmount) > 0.01) {
+      console.warn(`[SECURITY] Price manipulation attempt detected on checkout. Client sent ${body.totalAmount}, authoritative server total is ${totalAmount}`)
+    }
+
     // Validate total amount is positive
     if (totalAmount <= 0) {
       return NextResponse.json(
@@ -313,11 +318,50 @@ export async function POST(request: NextRequest) {
     let rawGuestToken: string | null = null
     let guestAccessTokenHash: string | null = null
     let guestAccessExpiresAt: Date | null = null
+    let effectiveUserId: string | null = userId || null
 
     if (!userId) {
       rawGuestToken = crypto.randomBytes(32).toString('hex')
       guestAccessTokenHash = crypto.createHash('sha256').update(rawGuestToken).digest('hex')
       guestAccessExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+
+      // Part C: Universal Phone Verification Identity
+      // Guest customer: phone OTP verified proof required at checkout.
+      // On verification, create/reuse phone identity customer profile (password: null, role: 'customer', isVerified: true).
+      // Link order to profile.
+      if (guestPhone) {
+        let phoneUser = await db.user.findFirst({
+          where: { phone: guestPhone },
+        })
+        if (phoneUser) {
+          effectiveUserId = phoneUser.id
+          if (!phoneUser.isVerified) {
+            await db.user.update({
+              where: { id: phoneUser.id },
+              data: { isVerified: true },
+            })
+          }
+        } else {
+          let safeEmail: string | null = null
+          if (guestEmail) {
+            const existingEmailUser = await db.user.findFirst({ where: { email: guestEmail } })
+            if (!existingEmailUser) {
+              safeEmail = guestEmail
+            }
+          }
+          const newPhoneUser = await db.user.create({
+            data: {
+              phone: guestPhone,
+              name: guestName || 'Guest Customer',
+              email: safeEmail,
+              password: null,
+              role: 'customer',
+              isVerified: true,
+            },
+          })
+          effectiveUserId = newPhoneUser.id
+        }
+      }
     }
 
     // Wrap order creation in transaction so stock deductions roll back on failure
@@ -345,7 +389,7 @@ export async function POST(request: NextRequest) {
         data: {
           orderNumber,
           invoiceNumber,
-          userId: userId || null,
+          userId: effectiveUserId,
           guestName: guestName || (shippingAddress?.name as string) || null,
           guestPhone: guestPhone || (shippingAddress?.phone as string) || null,
           guestEmail,
@@ -381,7 +425,7 @@ export async function POST(request: NextRequest) {
         await tx.payment.create({
           data: {
             orderId: order.id,
-            userId: userId || null,
+            userId: effectiveUserId,
             method: 'online',
             gateway: 'sslcommerz',
             status: 'pending',
