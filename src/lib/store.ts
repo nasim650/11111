@@ -1006,8 +1006,14 @@ export const useAppStore = create<AppStore>()(
             freeShippingThreshold: Number(configMap.freeShippingThreshold || configMap.free_shipping_threshold || configMap.free_delivery_min) || defaultSiteConfig.freeShippingThreshold,
             shippingCharge: Number(configMap.shippingCharge || configMap.standard_delivery_charge || configMap.delivery_charge) || defaultSiteConfig.shippingCharge,
             taxRate: Number(configMap.taxRate) || defaultSiteConfig.taxRate,
-            enableCod: configMap.cod_enabled === 'true' || defaultSiteConfig.enableCod,
-            enableOnlinePayment: configMap.enableOnlinePayment === 'true' || defaultSiteConfig.enableOnlinePayment,
+            enableCod: (() => {
+              const val = configMap.enableCod ?? configMap.cod_enabled ?? configMap.enable_cod
+              return val !== undefined ? val === 'true' : defaultSiteConfig.enableCod
+            })(),
+            enableOnlinePayment: (() => {
+              const val = configMap.enableOnlinePayment ?? configMap.online_payment_enabled ?? configMap.enable_online_payment
+              return val !== undefined ? val === 'true' : defaultSiteConfig.enableOnlinePayment
+            })(),
             minOrderAmount: Number(configMap.minOrderAmount) || defaultSiteConfig.minOrderAmount,
             returnWindowDays: Number(configMap.returnWindowDays) || defaultSiteConfig.returnWindowDays,
             deliveryZones: configMap.deliveryZones ? configMap.deliveryZones.split(',').map((z: string) => z.trim()) : defaultSiteConfig.deliveryZones,

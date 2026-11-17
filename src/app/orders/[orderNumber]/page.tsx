@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { notFound, redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import CustomerShell from '@/components/layout/CustomerShell'
 import { getServerSessionUser } from '@/lib/server-auth'
 import { getOrderForUser } from '@/lib/order-authorization'
@@ -34,19 +35,26 @@ export default async function OrderDetailRoute({
   const { payment: paymentCallbackStatus } = await searchParams
 
   const sessionUser = await getServerSessionUser()
+  const cookieStore = await cookies()
+  const guestToken =
+    cookieStore.get(`guest_order_${orderNumber}`)?.value ||
+    cookieStore.get('guest_order_access')?.value ||
+    null
 
   // 1. Unauthenticated Request: Safe Login Redirect
   if (!sessionUser) {
-    const rawTarget = paymentCallbackStatus
-      ? `/orders/${encodeURIComponent(orderNumber)}?payment=${encodeURIComponent(paymentCallbackStatus)}`
-      : `/orders/${encodeURIComponent(orderNumber)}`
+    if (!guestToken) {
+      const rawTarget = paymentCallbackStatus
+        ? `/orders/${encodeURIComponent(orderNumber)}?payment=${encodeURIComponent(paymentCallbackStatus)}`
+        : `/orders/${encodeURIComponent(orderNumber)}`
 
-    const safeNext = sanitizeInternalRedirect(rawTarget, '/')
-    redirect(`/login?next=${encodeURIComponent(safeNext)}`)
+      const safeNext = sanitizeInternalRedirect(rawTarget, '/')
+      redirect(`/login?next=${encodeURIComponent(safeNext)}`)
+    }
   }
 
   // 2. Fetch and Authorize Order
-  const result = await getOrderForUser(orderNumber, sessionUser)
+  const result = await getOrderForUser(orderNumber, sessionUser, undefined, guestToken)
 
   // 3. Unauthorized customer OR truly unknown order returns 404 (notFound())
   // This eliminates order existence enumeration attacks by returning identical HTTP 404
@@ -54,7 +62,7 @@ export default async function OrderDetailRoute({
     notFound()
   }
 
-  // 4. Authorized owner or admin/manager renders order details
+  // 4. Authorized owner, verified guest or admin/manager renders order details
   return (
     <CustomerShell>
       <OrderDetailView

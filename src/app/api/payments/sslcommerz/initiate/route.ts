@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { createAuditLog } from '@/lib/audit'
@@ -39,11 +40,45 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (order.userId && (!authUser || (!isAdmin(authUser.role) && authUser.userId !== order.userId))) {
-      return NextResponse.json(
-        { success: false, error: 'Forbidden' },
-        { status: 403 }
-      )
+    if (order.userId) {
+      if (!authUser || (!isAdmin(authUser.role) && authUser.userId !== order.userId)) {
+        return NextResponse.json(
+          { success: false, error: 'Forbidden' },
+          { status: 403 }
+        )
+      }
+    } else {
+      // Guest order authorization check
+      const isAdminUser = Boolean(authUser && isAdmin(authUser.role))
+      if (!isAdminUser) {
+        const guestAccessToken =
+          (typeof body.guestAccessToken === 'string' && body.guestAccessToken) ||
+          request.cookies.get(`guest_order_${order.orderNumber}`)?.value ||
+          request.cookies.get('guest_order_access')?.value ||
+          null
+
+        if (!guestAccessToken || !order.guestAccessTokenHash) {
+          return NextResponse.json(
+            { success: false, error: 'Forbidden' },
+            { status: 403 }
+          )
+        }
+
+        const receivedHash = crypto.createHash('sha256').update(guestAccessToken).digest('hex')
+        const hashMatches =
+          receivedHash.length === order.guestAccessTokenHash.length &&
+          crypto.timingSafeEqual(Buffer.from(receivedHash), Buffer.from(order.guestAccessTokenHash))
+
+        const isNotExpired =
+          !order.guestAccessExpiresAt || new Date(order.guestAccessExpiresAt) > new Date()
+
+        if (!hashMatches || !isNotExpired) {
+          return NextResponse.json(
+            { success: false, error: 'Forbidden' },
+            { status: 403 }
+          )
+        }
+      }
     }
 
     if (order.paymentStatus === 'paid') {

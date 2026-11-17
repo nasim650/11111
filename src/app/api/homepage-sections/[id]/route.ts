@@ -19,6 +19,7 @@ export async function PATCH(
     const body = await request.json()
     const data: Record<string, unknown> = {}
     if (typeof body.title === 'string') data.title = body.title.trim()
+    if (typeof body.type === 'string') data.type = body.type
     if (typeof body.subtitle === 'string') data.subtitle = body.subtitle.trim() || null
     if (typeof body.description === 'string') data.description = body.description.trim() || null
     if (typeof body.image === 'string') data.image = body.image.trim() || null

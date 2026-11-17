@@ -247,10 +247,12 @@ export function validateCheckout(body: Record<string, unknown>): ValidationResul
   addressId: string | null
   shippingMethod: string | null
   loyaltyPoints: number | null
+  checkoutProof: string | null
 }> {
   const errors: Record<string, string> = {}
   const userId = cleanOptionalText(body.userId, 80)
   const addressId = cleanOptionalText(body.addressId, 80)
+  const checkoutProof = typeof body.checkoutProof === 'string' ? body.checkoutProof.trim() : null
   const guestName = cleanText(body.guestName, 80)
   const guestPhone = normalizePhone(body.guestPhone)
   const guestEmail = normalizeEmail(body.guestEmail)
@@ -332,6 +334,7 @@ export function validateCheckout(body: Record<string, unknown>): ValidationResul
       addressId,
       shippingMethod,
       loyaltyPoints,
+      checkoutProof,
     },
   }
 }

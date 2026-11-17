@@ -11,17 +11,23 @@ export async function GET(request: NextRequest) {
     const productId = url.searchParams.get('productId')
     const userId = url.searchParams.get('userId')
     const isApproved = url.searchParams.get('isApproved')
+    const isActive = url.searchParams.get('isActive')
 
     const where: Record<string, unknown> = {}
     if (productId) where.productId = productId
     if (userId) where.userId = userId
+    if (isActive !== null) where.isActive = isActive === 'true'
+    else where.isActive = true // Default: only active
     if (isApproved !== null) where.isApproved = isApproved === 'true'
     else where.isApproved = true // Default: only approved
 
     const [reviews, total] = await Promise.all([
       db.review.findMany({
         where,
-        include: { user: { select: { id: true, name: true, avatar: true } } },
+        include: {
+          user: { select: { id: true, name: true, avatar: true } },
+          product: { select: { id: true, name: true, slug: true } },
+        },
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,

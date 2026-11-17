@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'crypto'
 import { db } from '@/lib/db'
 import { getUserRoleFromRequest, getUserIdFromRequest, getUserFromRequest, isAdmin, getPaginationParams, paginatedResponse, generateOrderNumber } from '@/lib/utils'
 import { validateCheckout, validationError } from '@/lib/validation'
 import { appendPaymentLog } from '@/lib/sslcommerz'
 import { getShippingSettings } from '@/lib/shipping'
 import { getReservationExpiry } from '@/lib/order-inventory'
+import { verifyCheckoutProof } from '@/lib/checkout-proof'
 
 export async function GET(request: NextRequest) {
   try {
@@ -76,6 +78,7 @@ export async function POST(request: NextRequest) {
       paymentMethod, orderNote, couponCode,
       addressId, shippingMethod,
       loyaltyPoints: loyaltyPointsToRedeem,
+      checkoutProof,
     } = validated.data
 
     if (userId) {
@@ -111,6 +114,21 @@ export async function POST(request: NextRequest) {
             { status: 403 }
           )
         }
+      }
+    } else {
+      // Guest Checkout Security Enforcement:
+      // Guest MUST provide valid, cryptographically verified checkout proof matching guestPhone
+      const isVerifiedGuest = Boolean(checkoutProof && verifyCheckoutProof(checkoutProof, guestPhone))
+      if (!isVerifiedGuest) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'অর্ডার সম্পন্ন করতে অনুগ্রহ করে মোবাইল নম্বর ওটিপি দিয়ে ভেরিফাই করুন। (Please verify your mobile number with OTP to complete your order)',
+            code: 'PHONE_UNVERIFIED',
+            requiresPhoneVerification: true,
+          },
+          { status: 403 }
+        )
       }
     }
 
@@ -291,6 +309,17 @@ export async function POST(request: NextRequest) {
     const orderNumber = generateOrderNumber()
     const invoiceNumber = `INV-${orderNumber}`
 
+    // Generate secure opaque guest access token if guest order
+    let rawGuestToken: string | null = null
+    let guestAccessTokenHash: string | null = null
+    let guestAccessExpiresAt: Date | null = null
+
+    if (!userId) {
+      rawGuestToken = crypto.randomBytes(32).toString('hex')
+      guestAccessTokenHash = crypto.createHash('sha256').update(rawGuestToken).digest('hex')
+      guestAccessExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    }
+
     // Wrap order creation in transaction so stock deductions roll back on failure
     const order = await db.$transaction(async (tx) => {
       // Deduct stock atomically for each item
@@ -321,6 +350,8 @@ export async function POST(request: NextRequest) {
           guestPhone: guestPhone || (shippingAddress?.phone as string) || null,
           guestEmail,
           guestAddress: guestAddress || (shippingAddress ? `${(shippingAddress as Record<string, string>).address}, ${(shippingAddress as Record<string, string>).city}` : null),
+          guestAccessTokenHash,
+          guestAccessExpiresAt,
           totalAmount,
           discountAmount,
           loyaltyDiscountAmount: loyaltyDiscount,
@@ -421,9 +452,34 @@ export async function POST(request: NextRequest) {
       return order
     })
 
+    const response = NextResponse.json(
+      {
+        success: true,
+        data: order,
+        ...(rawGuestToken ? { guestAccessToken: rawGuestToken } : {}),
+      },
+      { status: 201 }
+    )
 
+    if (rawGuestToken) {
+      const isProd = process.env.NODE_ENV === 'production'
+      response.cookies.set('guest_order_access', rawGuestToken, {
+        httpOnly: true,
+        secure: isProd,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 7 * 24 * 3600,
+      })
+      response.cookies.set(`guest_order_${order.orderNumber}`, rawGuestToken, {
+        httpOnly: true,
+        secure: isProd,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 7 * 24 * 3600,
+      })
+    }
 
-    return NextResponse.json({ success: true, data: order }, { status: 201 })
+    return response
   } catch (error) {
     console.error('Create order error:', error)
     return NextResponse.json(

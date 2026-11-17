@@ -1056,31 +1056,65 @@ function RecentlyViewedSection({ products, navigate }: {
   )
 }
 
-// ── Trust & Guarantees Section ──
+// ── Trust & Guarantees Section — Database Driven with Business-Approved Defaults ──
+interface TrustSectionItem {
+  id: string
+  title: string
+  subtitle?: string | null
+  description?: string | null
+  content?: string | null
+  sortOrder: number
+}
+
 function TrustSection() {
-  const guarantees = [
+  const [items, setItems] = useState<TrustSectionItem[]>([])
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    fetch('/api/homepage-sections?type=trust&limit=8')
+      .then((r) => r.json())
+      .then((data) => {
+        if (mounted && data.success) {
+          setItems(extractItems<TrustSectionItem>(data))
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) setLoaded(true)
+      })
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const defaultGuarantees = [
     {
+      id: 'default-1',
       icon: ShieldCheck,
-      title: '100% Authentic',
+      title: 'Authentic Products',
       description: 'Sourced directly from verified Bangladeshi producers.',
       color: 'emerald',
     },
     {
+      id: 'default-2',
       icon: Truck,
-      title: 'Fast Delivery',
+      title: 'Delivery Coverage',
       description: 'Dhaka: 24–48h. Nationwide: 2–3 business days.',
       color: 'teal',
     },
     {
+      id: 'default-3',
       icon: RefreshCw,
-      title: 'Easy Returns',
-      description: '7-day return policy. Not satisfied? We make it right.',
+      title: 'Returns Policy',
+      description: 'Easy 7-day hassle-free return and replacement policy.',
       color: 'amber',
     },
     {
-      icon: Leaf,
-      title: 'Natural Quality',
-      description: 'No artificial preservatives or additives.',
+      id: 'default-4',
+      icon: ShieldCheck,
+      title: 'Secure Payment',
+      description: 'Cash on delivery and encrypted secure payment.',
       color: 'green',
     },
   ]
@@ -1089,24 +1123,50 @@ function TrustSection() {
     emerald: { icon: 'text-emerald-600', bg: 'bg-emerald-50' },
     teal: { icon: 'text-teal-600', bg: 'bg-teal-50' },
     amber: { icon: 'text-amber-600', bg: 'bg-amber-50' },
-    green: { icon: 'text-green-600', bg: 'bg-green-50' },
+    green: { icon: 'text-emerald-600', bg: 'bg-emerald-50' },
   }
+  const defaultColors = ['emerald', 'teal', 'amber', 'green']
+
+  const resolveIcon = (title: string, contentStr?: string | null) => {
+    let iconHint = ''
+    try {
+      if (contentStr) {
+        const parsed = JSON.parse(contentStr)
+        if (parsed.icon) iconHint = parsed.icon.toLowerCase()
+      }
+    } catch {}
+    const text = (title + ' ' + iconHint).toLowerCase()
+    if (text.includes('deliver') || text.includes('truck') || text.includes('coverage')) return Truck
+    if (text.includes('return') || text.includes('refund') || text.includes('exchange')) return RefreshCw
+    if (text.includes('pay') || text.includes('secure') || text.includes('ssl')) return ShieldCheck
+    if (text.includes('natural') || text.includes('leaf') || text.includes('organic')) return Leaf
+    return ShieldCheck
+  }
+
+  // If DB items configured, use them; otherwise fallback to standard promises
+  const displayItems = items.length > 0 ? items : (loaded ? defaultGuarantees : [])
+  if (loaded && displayItems.length === 0) return null
 
   return (
     <section className="py-6 bg-stone-50/80 border-t border-stone-100" aria-label="Why choose us">
       <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-          {guarantees.map((item) => {
-            const Icon = item.icon
-            const c = colorMap[item.color]
+          {displayItems.map((item, idx) => {
+            const isDefault = 'icon' in item && typeof item.icon === 'function'
+            const Icon = isDefault ? (item as typeof defaultGuarantees[0]).icon : resolveIcon(item.title, item.content)
+            const colorName = isDefault ? (item as typeof defaultGuarantees[0]).color : defaultColors[idx % defaultColors.length]
+            const c = colorMap[colorName] || colorMap.emerald
+            const desc = item.description || item.subtitle || ''
             return (
-              <div key={item.title} className="flex items-start gap-3 p-3 md:p-4 rounded-xl bg-white border border-border/40 shadow-sm">
+              <div key={item.id || item.title} className="flex items-start gap-3 p-3 md:p-4 rounded-xl bg-white border border-border/40 shadow-sm">
                 <div className={`h-9 w-9 rounded-lg ${c.bg} flex items-center justify-center flex-shrink-0`}>
                   <Icon className={`h-5 w-5 ${c.icon}`} aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs md:text-sm font-bold text-foreground leading-tight">{item.title}</p>
-                  <p className="text-[11px] text-muted-foreground leading-snug mt-0.5 line-clamp-2">{item.description}</p>
+                  {desc && (
+                    <p className="text-[11px] text-muted-foreground leading-snug mt-0.5 line-clamp-2">{desc}</p>
+                  )}
                 </div>
               </div>
             )
@@ -1261,9 +1321,14 @@ interface ApprovedReviewItem {
   user?: {
     name?: string | null
   } | null
+  product?: {
+    id: string
+    name: string
+    slug: string
+  } | null
 }
 
-function CustomerReviewsSection() {
+function CustomerReviewsSection({ navigate }: { navigate: (page: PageName, params?: Record<string, unknown>) => void }) {
   const [reviews, setReviews] = useState<ApprovedReviewItem[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -1330,6 +1395,15 @@ function CustomerReviewsSection() {
                       </span>
                     )}
                   </h3>
+                  {r.product?.name && (
+                    <button
+                      type="button"
+                      onClick={() => r.product?.slug && navigate('product-detail', { slug: r.product.slug })}
+                      className="text-[11px] text-emerald-700 hover:underline font-medium truncate max-w-[180px] block mt-0.5 text-left"
+                    >
+                      {r.product.name}
+                    </button>
+                  )}
                 </div>
                 <span className="text-[10px] text-muted-foreground bg-stone-100 px-2 py-0.5 rounded-full">
                   {new Date(r.createdAt).toLocaleDateString()}
@@ -1654,7 +1728,7 @@ export default function HomePage() {
       <TrustSection />
 
       {/* ── 11. Customer Reviews ── */}
-      <CustomerReviewsSection />
+      <CustomerReviewsSection navigate={navigate} />
 
       {/* ── 12. Frequently Asked Questions (FAQ Accordion) ── */}
       <FAQSection />

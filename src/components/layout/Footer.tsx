@@ -56,9 +56,12 @@ export default function Footer() {
 
           {/* Brand Column */}
           <div className="space-y-4">
-            <button
-              type="button"
-              onClick={() => navigate('home')}
+            <Link
+              href="/"
+              onClick={(e) => {
+                e.preventDefault()
+                navigate('home')
+              }}
               aria-label={`${siteName} — Go to homepage`}
               className="inline-block"
             >
@@ -71,7 +74,7 @@ export default function Footer() {
               ) : (
                 <span className="text-xl font-bold text-white">{siteName}</span>
               )}
-            </button>
+            </Link>
             <p className="text-sm text-emerald-200/70 leading-relaxed max-w-xs">
               {tagline}
             </p>

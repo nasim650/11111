@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 import { db } from '@/lib/db'
 
 export interface SafeOrderItem {
@@ -61,7 +62,8 @@ export type OrderAuthResult =
 export async function getOrderForUser(
   orderNumber: string,
   user: { userId: string; role: string } | null,
-  prismaClient?: any
+  prismaClient?: any,
+  guestAccessToken?: string | null
 ): Promise<OrderAuthResult> {
   const prisma = prismaClient || db
 
@@ -112,6 +114,33 @@ export async function getOrderForUser(
     }
   }
 
+  // 1. Guest Order Authorization Check (via opaque one-time cookie access token)
+  if (!user && guestAccessToken) {
+    if (order.userId === null && order.guestAccessTokenHash) {
+      const receivedHash = crypto.createHash('sha256').update(guestAccessToken).digest('hex')
+      const hashMatches =
+        receivedHash.length === order.guestAccessTokenHash.length &&
+        crypto.timingSafeEqual(Buffer.from(receivedHash), Buffer.from(order.guestAccessTokenHash))
+
+      const isNotExpired =
+        !order.guestAccessExpiresAt || new Date(order.guestAccessExpiresAt) > new Date()
+
+      if (hashMatches && isNotExpired) {
+        return {
+          status: 200,
+          error: null,
+          order: serializeOrder(order),
+        }
+      }
+    }
+    // Invalid or expired guest access token returns 404 to eliminate order enumeration
+    return {
+      status: 404,
+      error: `Order #${orderNumber} not found`,
+      order: null,
+    }
+  }
+
   // Mandatory Server-side Authorization Check
   if (!user) {
     return {
@@ -133,7 +162,14 @@ export async function getOrderForUser(
     }
   }
 
-  // Sanitize items
+  return {
+    status: 200,
+    error: null,
+    order: serializeOrder(order),
+  }
+}
+
+function serializeOrder(order: any): SafeOrderDetails {
   const safeItems: SafeOrderItem[] = (order.items || []).map((item: any) => ({
     id: item.id,
     productId: item.productId,
@@ -183,9 +219,5 @@ export async function getOrderForUser(
       : null,
   }
 
-  return {
-    status: 200,
-    error: null,
-    order: safeOrder,
-  }
+  return safeOrder
 }

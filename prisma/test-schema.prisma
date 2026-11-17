@@ -307,6 +307,8 @@ model Order {
   reservationExpiresAt DateTime?              // Expiry timestamp for pending online checkout reservation (30 mins)
   stockReserved        Boolean   @default(true) // True while product inventory is reserved; False once restored or finalized
   couponReleased       Boolean   @default(false)// True once coupon usage reservation has been reversed/released
+  guestAccessTokenHash String?              // SHA-256 hash of opaque guest access token for order confirmation
+  guestAccessExpiresAt DateTime?            // Expiration timestamp for guest order view cookie (7 days)
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
@@ -328,6 +330,7 @@ model Order {
   @@index([createdAt])
   @@index([reservationExpiresAt])
   @@index([paymentStatus])
+  @@index([guestAccessTokenHash])
 }
 
 model OrderItem {
