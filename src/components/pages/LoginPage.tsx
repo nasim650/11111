@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Eye, EyeOff, LogIn, Mail, Phone, Lock, AlertCircle, Truck, ShieldCheck, Award, Heart, Zap, Check } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
@@ -10,9 +11,13 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Separator } from '@/components/ui/separator'
 import { useAppStore } from '@/lib/store'
+import { sanitizeInternalRedirect } from '@/lib/sanitize-redirect'
 import { toast } from 'sonner'
 
 export default function LoginPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const nextParam = searchParams?.get('next')
   const { login, navigate, siteConfig } = useAppStore()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
@@ -69,12 +74,19 @@ export default function LoginPage() {
       toast.success('Login successful!')
       setTimeout(() => {
         const state = useAppStore.getState()
+        if (nextParam) {
+          const safeNext = sanitizeInternalRedirect(nextParam, '')
+          if (safeNext) {
+            router.push(safeNext)
+            return
+          }
+        }
         if (state.user?.role === 'admin') {
           navigate('admin-dashboard')
         } else {
           navigate('home')
         }
-      }, 1500)
+      }, 1200)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed'
       setError(message)

@@ -60,7 +60,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableRow, TableCell } from '@/components/ui/table'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useAppStore, type CartItem, type WishlistItem } from '@/lib/store'
-import { extractItems } from '@/lib/api'
+import { extractItems, authFetch } from '@/lib/api'
 import ProductCard from '@/components/shared/ProductCard'
 import { toast } from 'sonner'
 
@@ -72,6 +72,15 @@ interface Review {
   comment?: string
   createdAt: string
   user?: { name?: string }
+}
+
+interface ReviewEligibility {
+  canReview: boolean
+  isAuthenticated: boolean
+  alreadyReviewed?: boolean
+  hasDeliveredOrder?: boolean
+  reason?: string
+  message?: string
 }
 
 interface ProductDetail {
@@ -322,6 +331,28 @@ export default function ProductDetailPage({ initialProduct }: { initialProduct?:
   const [reviewRating, setReviewRating] = useState(5)
   const [reviewComment, setReviewComment] = useState('')
   const [submittingReview, setSubmittingReview] = useState(false)
+  const [reviewEligibility, setReviewEligibility] = useState<ReviewEligibility | null>(null)
+
+  const checkReviewEligibility = useCallback(async (prodId: string) => {
+    if (!prodId) return
+    try {
+      const res = await authFetch(`/api/reviews?checkEligibility=true&productId=${encodeURIComponent(prodId)}`)
+      if (res.ok) {
+        const json = await res.json()
+        if (json.success && json.data) {
+          setReviewEligibility(json.data)
+        }
+      }
+    } catch {
+      // silently ignore
+    }
+  }, [])
+
+  useEffect(() => {
+    if (product?.id) {
+      void checkReviewEligibility(product.id)
+    }
+  }, [product?.id, isAuthenticated, user?.id, checkReviewEligibility])
 
   const mainCtaRef = useRef<HTMLDivElement>(null)
   const reviewsRef = useRef<HTMLDivElement>(null)
@@ -810,13 +841,17 @@ export default function ProductDetailPage({ initialProduct }: { initialProduct?:
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!isAuthenticated) {
-      toast.error('Please login to write a review')
+      toast.error('রিভিউ দিতে অনুগ্রহ করে লগইন করুন')
       navigate('login')
+      return
+    }
+    if (reviewEligibility && !reviewEligibility.canReview) {
+      toast.error(reviewEligibility.message || 'এই পণ্যটি আপনার কাছে সফলভাবে ডেলিভারি হওয়ার পর review দিতে পারবেন।')
       return
     }
     setSubmittingReview(true)
     try {
-      const res = await fetch('/api/reviews', {
+      const res = await authFetch('/api/reviews', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -826,14 +861,20 @@ export default function ProductDetailPage({ initialProduct }: { initialProduct?:
           comment: reviewComment,
         }),
       })
-      if (!res.ok) throw new Error('Failed to submit review')
-      toast.success('Review submitted successfully!')
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to submit review')
+      }
+      toast.success('ধন্যবাদ! আপনার রিভিউটি গ্রহণ করা হয়েছে এবং অনুমোদনের পর প্রদর্শিত হবে।')
       setReviewComment('')
       setReviewRating(5)
+      if (product?.id) {
+        void checkReviewEligibility(product.id)
+      }
       const reviewsData = await fetch(`/api/reviews?productId=${product.id}`).then((r) => r.json())
       setReviews(extractItems<Review>(reviewsData))
-    } catch {
-      toast.error('Failed to submit review')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to submit review')
     } finally {
       setSubmittingReview(false)
     }
@@ -1832,7 +1873,7 @@ export default function ProductDetailPage({ initialProduct }: { initialProduct?:
                       })}
                     </div>
 
-                    {isAuthenticated && (
+                    {isAuthenticated && reviewEligibility?.canReview && (
                       <Button
                         variant="outline"
                         className="w-full rounded-xl border-emerald-200 dark:border-emerald-800 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
@@ -1845,33 +1886,48 @@ export default function ProductDetailPage({ initialProduct }: { initialProduct?:
 
                   {/* Reviews List */}
                   <div className="lg:col-span-2 space-y-6">
-                    {/* Prominent "Write a Review" button at top */}
+                    {/* Prominent "Write a Review" button or status badge at top */}
                     <div className="flex items-center justify-between gap-3">
                       <h3 className="text-lg font-semibold">
                         {reviews.length > 0 ? `Customer Reviews (${reviews.length})` : 'Customer Reviews'}
                       </h3>
                       {isAuthenticated ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="rounded-full border-emerald-200 dark:border-emerald-800 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-                          onClick={() => document.getElementById('review-form')?.scrollIntoView({ behavior: 'smooth' })}
-                        >
-                          <MessageSquare className="h-4 w-4 mr-1.5" />
-                          Write a Review
-                        </Button>
+                        reviewEligibility?.canReview ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-full border-emerald-200 dark:border-emerald-800 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                            onClick={() => document.getElementById('review-form')?.scrollIntoView({ behavior: 'smooth' })}
+                          >
+                            <MessageSquare className="h-4 w-4 mr-1.5" />
+                            Write a Review
+                          </Button>
+                        ) : reviewEligibility?.alreadyReviewed ? (
+                          <Badge variant="outline" className="text-emerald-700 bg-emerald-50 border-emerald-200 text-xs py-1 px-3">
+                            <Check className="h-3.5 w-3.5 mr-1 text-emerald-600" />
+                            রিভিউ সম্পন্ন
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-stone-600 bg-stone-100 border-stone-200 text-xs py-1 px-3">
+                            <ShieldCheck className="h-3.5 w-3.5 mr-1 text-stone-500" />
+                            যাচাইকৃত ক্রেতা রিভিউ
+                          </Badge>
+                        )
                       ) : (
                         <Button
                           variant="outline"
                           size="sm"
                           className="rounded-full"
-                          onClick={() => navigate('login')}
+                          onClick={() => {
+                            const nextUrl = product?.slug ? `/products/${encodeURIComponent(product.slug)}` : '/products'
+                            window.location.href = `/login?next=${encodeURIComponent(nextUrl)}`
+                          }}
                         >
                           Login to Review
                         </Button>
                       )}
                     </div>
-                    {isAuthenticated && (
+                    {isAuthenticated && reviewEligibility?.canReview && (
                       <Card id="review-form" className="shadow-sm border-emerald-100 dark:border-emerald-900/30">
                         <CardContent className="p-4">
                           <h3 className="font-semibold mb-3">Write a Review</h3>
@@ -1904,10 +1960,42 @@ export default function ProductDetailPage({ initialProduct }: { initialProduct?:
                       </Card>
                     )}
 
+                    {isAuthenticated && reviewEligibility?.alreadyReviewed && (
+                      <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center gap-3">
+                        <Check className="h-5 w-5 text-emerald-600 flex-shrink-0" />
+                        <div>
+                          <p className="font-semibold text-sm">রিভিউ প্রদান সম্পন্ন হয়েছে</p>
+                          <p className="text-xs text-emerald-700 mt-0.5">আপনি ইতিমধ্যে এই পণ্যটিতে রিভিউ দিয়েছেন। আপনার মতামত আমাদের জন্য অত্যন্ত মূল্যবান!</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {isAuthenticated && !reviewEligibility?.canReview && !reviewEligibility?.alreadyReviewed && (
+                      <div className="p-4 rounded-xl bg-amber-50/90 border border-amber-200 text-amber-900 flex items-start gap-3">
+                        <ShieldCheck className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="font-semibold text-sm">যাচাইকৃত ক্রেতা রিভিউ</p>
+                          <p className="text-xs text-amber-800 mt-0.5 leading-relaxed font-medium">
+                            এই পণ্যটি আপনার কাছে সফলভাবে ডেলিভারি হওয়ার পর review দিতে পারবেন।
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     {!isAuthenticated && (
                       <div className="text-center py-4 px-6 rounded-xl bg-muted/30 border">
-                        <p className="text-sm text-muted-foreground mb-2">Please login to write a review</p>
-                        <Button variant="outline" size="sm" onClick={() => navigate('login')} className="rounded-full">Login</Button>
+                        <p className="text-sm text-muted-foreground mb-2">রিভিউ লেখার জন্য অনুগ্রহ করে লগইন করুন</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const nextUrl = product?.slug ? `/products/${encodeURIComponent(product.slug)}` : '/products'
+                            window.location.href = `/login?next=${encodeURIComponent(nextUrl)}`
+                          }}
+                          className="rounded-full"
+                        >
+                          লগইন করুন
+                        </Button>
                       </div>
                     )}
 

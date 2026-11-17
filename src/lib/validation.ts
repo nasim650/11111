@@ -10,8 +10,8 @@ export type ValidationResult<T> = {
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,254}$/
 const BD_PHONE_REGEX = /^(?:01\d{9}|\+8801\d{9})$/
-const NAME_REGEX = /^[\p{L}\p{M}\p{N}\s.'()&,+:;!?/_-]+$/u
-const ADDRESS_REGEX = /^[\p{L}\p{M}\p{N}\s.,'"()/#&+:;_|।—–-]+$/u
+const NAME_REGEX = /^[\p{L}\p{M}\p{N}\s.'’‘()&,+:;!?/_\\-]+$/u
+const ADDRESS_REGEX = /^[\p{L}\p{M}\p{N}\s.,'"’‘()/#&+:;_|।—–!?\\-]+$/u
 const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const COUPON_REGEX = /^[A-Z0-9_-]{3,32}$/
 
