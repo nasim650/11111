@@ -1,15 +1,23 @@
 import crypto from 'crypto'
 import { db } from '@/lib/db'
 import { normalizePhone } from '@/lib/validation'
-import { sendBulkSms, isBulkSmsConfigured, normalizeBulkSmsPhone, BulkSmsError } from '@/lib/bulksmsbd'
+import { sendBulkSms, isBulkSmsConfigured, BulkSmsError } from '@/lib/bulksmsbd'
+import { sendCloudSms, isCloudSmsConfigured, CloudSmsError } from '@/lib/cloudsmsbd'
 
 export type OtpPurpose = 'password_reset' | 'phone_verification'
+export type SmsProviderName = 'cloudsmsbd' | 'bulksmsbd' | 'generic'
 
 const OTP_TTL_MS = 5 * 60 * 1000
 const OTP_RESEND_COOLDOWN_MS = 60 * 1000
 const MAX_OTP_ATTEMPTS = 5
 
-export class OtpDeliveryUnavailableError extends Error {}
+export class OtpDeliveryUnavailableError extends Error {
+  constructor(message = 'এসএমএস সেবা সাময়িকভাবে অনুপলব্ধ। অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন।') {
+    super(message)
+    this.name = 'OtpDeliveryUnavailableError'
+  }
+}
+
 export class OtpCooldownError extends Error {
   readonly retryAfter: number
 
@@ -23,23 +31,72 @@ export class OtpCooldownError extends Error {
 function getOtpSecret(): string {
   const secret = process.env.OTP_SECRET
   if (!secret || secret.length < 32) {
-    throw new OtpDeliveryUnavailableError('OTP service is not configured')
+    throw new OtpDeliveryUnavailableError('এসএমএস সেবা সাময়িকভাবে অনুপলব্ধ। অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন।')
   }
   return secret
 }
 
+/**
+ * Resolves the configured SMS provider name.
+ * Throws a clear configuration error if an unknown provider name is supplied.
+ */
+export function getSmsProvider(): SmsProviderName | null {
+  const envProvider = process.env.SMS_PROVIDER?.trim().toLowerCase()
+  if (envProvider) {
+    if (envProvider === 'cloudsmsbd') return 'cloudsmsbd'
+    if (envProvider === 'bulksmsbd') return 'bulksmsbd'
+    if (envProvider === 'generic') return 'generic'
+    throw new OtpDeliveryUnavailableError(`Unknown SMS provider configured: ${process.env.SMS_PROVIDER}`)
+  }
+
+  // Backward compatibility when SMS_PROVIDER is not explicitly specified:
+  if (isCloudSmsConfigured()) return 'cloudsmsbd'
+  if (isBulkSmsConfigured()) return 'bulksmsbd'
+  if (process.env.SMS_GATEWAY_URL && process.env.SMS_GATEWAY_URL.trim()) return 'generic'
+
+  return null
+}
+
+/**
+ * Validates that OTP generation and SMS delivery prerequisites are met before creating challenges.
+ */
 export function ensureOtpDeliveryConfigured(): void {
   getOtpSecret()
-  // In test mode, allowed without live SMS provider
+
+  const envProvider = process.env.SMS_PROVIDER?.trim().toLowerCase()
+  if (envProvider) {
+    if (envProvider === 'cloudsmsbd') {
+      if (!isCloudSmsConfigured()) {
+        throw new OtpDeliveryUnavailableError('এসএমএস সেবা সাময়িকভাবে অনুপলব্ধ। অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন।')
+      }
+      return
+    }
+    if (envProvider === 'bulksmsbd') {
+      if (!isBulkSmsConfigured()) {
+        throw new OtpDeliveryUnavailableError('এসএমএস সেবা সাময়িকভাবে অনুপলব্ধ। অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন।')
+      }
+      return
+    }
+    if (envProvider === 'generic') {
+      if (!process.env.SMS_GATEWAY_URL?.trim()) {
+        throw new OtpDeliveryUnavailableError('এসএমএস সেবা সাময়িকভাবে অনুপলব্ধ। অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন।')
+      }
+      return
+    }
+    throw new OtpDeliveryUnavailableError(`Unknown SMS provider configured: ${process.env.SMS_PROVIDER}`)
+  }
+
+  // In test mode without explicit SMS_PROVIDER, allowed without live SMS provider
   if (process.env.NODE_ENV === 'test') {
     return
   }
 
+  const hasCloudSms = isCloudSmsConfigured()
   const hasBulkSms = isBulkSmsConfigured()
   const hasGenericGateway = Boolean(process.env.SMS_GATEWAY_URL && process.env.SMS_GATEWAY_URL.trim())
 
-  if (!hasBulkSms && !hasGenericGateway) {
-    throw new OtpDeliveryUnavailableError('SMS OTP delivery has not been configured')
+  if (!hasCloudSms && !hasBulkSms && !hasGenericGateway) {
+    throw new OtpDeliveryUnavailableError('এসএমএস সেবা সাময়িকভাবে অনুপলব্ধ। অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন।')
   }
 }
 
@@ -66,12 +123,32 @@ export function parseOtpPhone(value: unknown): string | null {
   return phone && /^01\d{9}$/.test(phone) ? phone : null
 }
 
+/**
+ * Dispatches the OTP SMS using the selected provider.
+ * Under NO circumstances does it automatically fall back to another provider upon failure,
+ * which strictly prevents sending duplicate or confusing OTP messages.
+ */
 async function deliverSmsOtp(phone: string, purpose: OtpPurpose, code: string): Promise<void> {
   const action = purpose === 'password_reset' ? 'reset your password' : 'verify your phone number'
   const message = `Your Khati Khadyo code to ${action} is ${code}. It expires in 5 minutes. Do not share this code.`
 
-  // 1. BulkSMSBD adapter (Primary & official contract)
-  if (isBulkSmsConfigured() || process.env.NODE_ENV === 'test') {
+  const provider = getSmsProvider()
+
+  // 1. Cloud SMS BD adapter (Official server-only contract)
+  if (provider === 'cloudsmsbd') {
+    try {
+      await sendCloudSms({ to: phone, message })
+      return
+    } catch (error) {
+      if (error instanceof CloudSmsError) {
+        throw new OtpDeliveryUnavailableError(error.safeMessage || 'এসএমএস সেবা সাময়িকভাবে অনুপলব্ধ।')
+      }
+      throw new OtpDeliveryUnavailableError('এসএমএস সেবা সাময়িকভাবে অনুপলব্ধ।')
+    }
+  }
+
+  // 2. BulkSMSBD adapter (Backward compatible)
+  if (provider === 'bulksmsbd') {
     try {
       await sendBulkSms({ to: phone, message })
       return
@@ -83,9 +160,12 @@ async function deliverSmsOtp(phone: string, purpose: OtpPurpose, code: string): 
     }
   }
 
-  // 2. Generic SMS Gateway Fallback (if BulkSMSBD not configured)
-  const endpoint = process.env.SMS_GATEWAY_URL
-  if (endpoint) {
+  // 3. Generic SMS Gateway Fallback
+  if (provider === 'generic') {
+    const endpoint = process.env.SMS_GATEWAY_URL
+    if (!endpoint) {
+      throw new OtpDeliveryUnavailableError('SMS OTP delivery has not been configured')
+    }
     const token = process.env.SMS_GATEWAY_TOKEN
     const sender = process.env.SMS_SENDER_ID
     let response: Response
@@ -112,7 +192,12 @@ async function deliverSmsOtp(phone: string, purpose: OtpPurpose, code: string): 
     return
   }
 
-  throw new OtpDeliveryUnavailableError('SMS OTP delivery has not been configured')
+  // In test mode without explicit provider, allow mock passthrough
+  if (process.env.NODE_ENV === 'test' && !process.env.SMS_PROVIDER) {
+    return
+  }
+
+  throw new OtpDeliveryUnavailableError('এসএমএস সেবা সাময়িকভাবে অনুপলব্ধ। অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন।')
 }
 
 export async function issueOtp(phone: string, purpose: OtpPurpose): Promise<{ expiresInSeconds: number }> {
@@ -195,4 +280,48 @@ export async function verifyOtp(phone: string, purpose: OtpPurpose, code: unknow
   return consumed.count === 1
     ? { ok: true }
     : { ok: false, error: 'This code has already been used' }
+}
+
+export interface SafeOtpDiagnostics {
+  providerName: string
+  providerConfigured: boolean
+  senderIdConfigured: boolean
+  otpSecretConfigured: boolean
+}
+
+/**
+ * Returns safe diagnostic metadata for administrator panels or health checks.
+ * NEVER leaks raw API keys, sender values, OTP codes, or secrets.
+ */
+export function getSafeOtpDiagnostics(): SafeOtpDiagnostics {
+  let provider: SmsProviderName | null = null
+  try {
+    provider = getSmsProvider()
+  } catch {
+    provider = null
+  }
+
+  const otpSecret = process.env.OTP_SECRET
+  const otpSecretConfigured = Boolean(otpSecret && otpSecret.length >= 32)
+
+  let providerConfigured = false
+  let senderIdConfigured = false
+
+  if (provider === 'cloudsmsbd') {
+    providerConfigured = Boolean(process.env.CLOUDSMSBD_API_KEY && process.env.CLOUDSMSBD_API_KEY.trim())
+    senderIdConfigured = Boolean(process.env.CLOUDSMSBD_SENDER_ID && process.env.CLOUDSMSBD_SENDER_ID.trim())
+  } else if (provider === 'bulksmsbd') {
+    providerConfigured = Boolean(process.env.BULKSMSBD_API_KEY && process.env.BULKSMSBD_API_KEY.trim())
+    senderIdConfigured = Boolean(process.env.BULKSMSBD_SENDER_ID && process.env.BULKSMSBD_SENDER_ID.trim())
+  } else if (provider === 'generic') {
+    providerConfigured = Boolean(process.env.SMS_GATEWAY_URL && process.env.SMS_GATEWAY_URL.trim())
+    senderIdConfigured = Boolean(process.env.SMS_SENDER_ID && process.env.SMS_SENDER_ID.trim())
+  }
+
+  return {
+    providerName: provider || 'none',
+    providerConfigured,
+    senderIdConfigured,
+    otpSecretConfigured,
+  }
 }

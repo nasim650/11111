@@ -5,7 +5,13 @@
 | `DATABASE_URL` | Yes | SQLite or PostgreSQL connection string | `file:../db/custom.db` or `postgresql://user:pass@host:5432/db` |
 | `JWT_SECRET` | Yes | Secret key used to sign authentication JWT tokens | `super-secret-jwt-key-2026` |
 | `OTP_SECRET` | Required for OTP | Separate 32+ character secret used to hash OTP codes | Generate a unique random value |
-| `SMS_GATEWAY_URL` | Required for OTP | SMS provider JSON endpoint. The app sends `{ to, from, message }`. | `https://provider.example/messages` |
+| `SMS_PROVIDER` | Recommended for OTP | Provider selection: `"cloudsmsbd"` (Cloud SMS BD) or `"bulksmsbd"` (BulkSMSBD) | `"cloudsmsbd"` |
+| `CLOUDSMSBD_API_KEY` | Required when `SMS_PROVIDER=cloudsmsbd` | Cloud SMS BD (`p1.cloudsmsbd.com`) API secret key (Server-only, never expose to client) | — (Secret, never commit) |
+| `CLOUDSMSBD_SENDER_ID` | Required when `SMS_PROVIDER=cloudsmsbd` | BTRC-approved Masking / Sender ID registered on Cloud SMS BD | `KHATIKHADYO` |
+| `CLOUDSMSBD_API_URL` | Optional | Custom endpoint URL for Cloud SMS BD | `https://p1.cloudsmsbd.com/api/sms` |
+| `BULKSMSBD_API_KEY` | Required when `SMS_PROVIDER=bulksmsbd` | BulkSMSBD API secret key | — (Secret, never commit) |
+| `BULKSMSBD_SENDER_ID` | Required when `SMS_PROVIDER=bulksmsbd` | Approved Sender ID registered on BulkSMSBD | `KHATI_KHADYO` |
+| `SMS_GATEWAY_URL` | Optional fallback | Generic SMS provider JSON endpoint. The app sends `{ to, from, message }`. | `https://provider.example/messages` |
 | `SMS_GATEWAY_TOKEN` | Required by most SMS providers | Bearer token sent to the SMS gateway | — |
 | `SMS_SENDER_ID` | Optional/provider-specific | Registered sender ID | `KHATIKHADYO` |
 | `REDIS_URL` | Required in production | Shared Redis instance for distributed rate limiting/cache | `rediss://...` |
