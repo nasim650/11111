@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { db } from '@/lib/db'
 import { getUserRoleFromRequest, getUserIdFromRequest, getUserFromRequest, isAdmin, getPaginationParams, paginatedResponse, generateOrderNumber } from '@/lib/utils'
-import { validateCheckout, validationError } from '@/lib/validation'
+import { validateCheckout, validationError, normalizePhone } from '@/lib/validation'
 import { appendPaymentLog } from '@/lib/sslcommerz'
 import { getShippingSettings } from '@/lib/shipping'
 import { getReservationExpiry } from '@/lib/order-inventory'
@@ -62,6 +62,92 @@ export async function GET(request: NextRequest) {
   }
 }
 
+export class OrderBusinessError extends Error {
+  statusCode: number
+  code: string
+  constructor(message: string, statusCode = 400, code = 'ORDER_BUSINESS_ERROR') {
+    super(message)
+    this.name = 'OrderBusinessError'
+    this.statusCode = statusCode
+    this.code = code
+  }
+}
+
+async function getOrCreateGuestUser(
+  rawGuestPhone: string,
+  guestName?: string | null,
+  guestEmail?: string | null
+): Promise<string | null> {
+  const normalizedPhone = normalizePhone(rawGuestPhone) || rawGuestPhone.trim()
+  if (!normalizedPhone) return null
+
+  try {
+    const existing = await db.user.findFirst({
+      where: { phone: normalizedPhone },
+    })
+
+    if (existing) {
+      if (!existing.isVerified) {
+        await db.user.update({
+          where: { id: existing.id },
+          data: { isVerified: true },
+        }).catch((err) => {
+          console.warn('Could not update guest user isVerified flag:', err)
+        })
+      }
+      return existing.id
+    }
+
+    let safeEmail: string | null = null
+    if (guestEmail && guestEmail.trim()) {
+      const normalizedEmail = guestEmail.trim().toLowerCase()
+      const existingEmail = await db.user.findFirst({
+        where: { email: normalizedEmail },
+      })
+      if (!existingEmail) {
+        safeEmail = normalizedEmail
+      }
+    }
+
+    const created = await db.user.create({
+      data: {
+        phone: normalizedPhone,
+        name: guestName?.trim() || 'Guest Customer',
+        email: safeEmail,
+        password: null,
+        role: 'customer',
+        isVerified: true,
+      },
+    })
+    return created.id
+  } catch (err: any) {
+    if (err?.code === 'P2002') {
+      try {
+        const found = await db.user.findFirst({
+          where: { phone: normalizedPhone },
+        })
+        if (found) return found.id
+
+        const fallback = await db.user.create({
+          data: {
+            phone: normalizedPhone,
+            name: guestName?.trim() || 'Guest Customer',
+            email: null,
+            password: null,
+            role: 'customer',
+            isVerified: true,
+          },
+        })
+        return fallback.id
+      } catch (fallbackErr) {
+        console.warn('Could not resolve guest user on P2002 collision:', fallbackErr)
+      }
+    }
+    console.error('Failed to get or create guest user profile:', err)
+    return null
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -81,6 +167,8 @@ export async function POST(request: NextRequest) {
       checkoutProof,
     } = validated.data
 
+    let customer: { id: string; name: string | null; email: string | null; phone: string | null; isVerified: boolean; role: string } | null = null
+
     if (userId) {
       const authUser = await getUserFromRequest(request)
       if (!authUser) {
@@ -97,11 +185,17 @@ export async function POST(request: NextRequest) {
       }
 
       // Checkout security rule: Logged-in customer must have a verified phone number
-      const customer = await db.user.findUnique({
+      customer = await db.user.findUnique({
         where: { id: userId },
-        select: { phone: true, isVerified: true, role: true },
+        select: { id: true, name: true, email: true, phone: true, isVerified: true, role: true },
       })
-      if (customer && customer.role === 'customer') {
+      if (!customer) {
+        return NextResponse.json(
+          { success: false, error: 'User account not found' },
+          { status: 404 }
+        )
+      }
+      if (customer.role === 'customer') {
         if (!customer.phone || !customer.isVerified) {
           return NextResponse.json(
             {
@@ -328,173 +422,173 @@ export async function POST(request: NextRequest) {
       // Part C: Universal Phone Verification Identity
       // Guest customer: phone OTP verified proof required at checkout.
       // On verification, create/reuse phone identity customer profile (password: null, role: 'customer', isVerified: true).
-      // Link order to profile.
+      // Link order to profile without crashing on unique collisions.
       if (guestPhone) {
-        let phoneUser = await db.user.findFirst({
-          where: { phone: guestPhone },
-        })
-        if (phoneUser) {
-          effectiveUserId = phoneUser.id
-          if (!phoneUser.isVerified) {
-            await db.user.update({
-              where: { id: phoneUser.id },
-              data: { isVerified: true },
-            })
-          }
-        } else {
-          let safeEmail: string | null = null
-          if (guestEmail) {
-            const existingEmailUser = await db.user.findFirst({ where: { email: guestEmail } })
-            if (!existingEmailUser) {
-              safeEmail = guestEmail
-            }
-          }
-          const newPhoneUser = await db.user.create({
-            data: {
-              phone: guestPhone,
-              name: guestName || 'Guest Customer',
-              email: safeEmail,
-              password: null,
-              role: 'customer',
-              isVerified: true,
-            },
-          })
-          effectiveUserId = newPhoneUser.id
-        }
+        effectiveUserId = await getOrCreateGuestUser(guestPhone, guestName, guestEmail)
       }
     }
 
+    // Resolve address and customer details cleanly for order & delivery label
+    let resolvedOrderAddress: string | null = null
+    if (guestAddress && guestAddress.trim()) {
+      resolvedOrderAddress = guestAddress.trim()
+    } else if (shippingAddress) {
+      const addrStr = (shippingAddress.address as string)?.trim() || ''
+      const cityStr = (shippingAddress.city as string)?.trim() || ''
+      if (addrStr.includes('__BDMETA__') || !cityStr) {
+        resolvedOrderAddress = addrStr
+      } else {
+        resolvedOrderAddress = `${addrStr}, ${cityStr}`
+      }
+    }
+
+    const resolvedCustomerName = (guestName?.trim() || (shippingAddress?.name as string) || customer?.name || 'Customer').trim()
+    const resolvedCustomerPhone = (guestPhone?.trim() || (shippingAddress?.phone as string) || customer?.phone || '').trim()
+
     // Wrap order creation in transaction so stock deductions roll back on failure
-    const order = await db.$transaction(async (tx) => {
-      // Deduct stock atomically for each item
-      for (const item of verifiedItems) {
-        const result = await tx.product.updateMany({
-          where: { id: item.productId, stock: { gte: item.quantity } },
-          data: { stock: { decrement: item.quantity } },
-        })
-        if (result.count === 0) {
-          throw new Error(`Insufficient stock for ${item.productName}`)
+    const order = await db.$transaction(
+      async (tx) => {
+        // Deduct stock atomically for each item
+        for (const item of verifiedItems) {
+          const result = await tx.product.updateMany({
+            where: { id: item.productId, stock: { gte: item.quantity } },
+            data: { stock: { decrement: item.quantity } },
+          })
+          if (result.count === 0) {
+            throw new OrderBusinessError(
+              `পণ্যের পর্যাপ্ত স্টক নেই (${item.productName}) / Insufficient stock for ${item.productName}`,
+              400,
+              'INSUFFICIENT_STOCK'
+            )
+          }
         }
-      }
 
-      // Increment coupon usage if applicable
-      if (validatedCouponCode) {
-        await tx.coupon.updateMany({
-          where: { code: validatedCouponCode, isActive: true },
-          data: { usedCount: { increment: 1 } },
-        })
-      }
+        // Increment coupon usage if applicable
+        if (validatedCouponCode) {
+          await tx.coupon.updateMany({
+            where: { code: validatedCouponCode, isActive: true },
+            data: { usedCount: { increment: 1 } },
+          })
+        }
 
-      const order = await tx.order.create({
-        data: {
-          orderNumber,
-          invoiceNumber,
-          userId: effectiveUserId,
-          guestName: guestName || (shippingAddress?.name as string) || null,
-          guestPhone: guestPhone || (shippingAddress?.phone as string) || null,
-          guestEmail,
-          guestAddress: guestAddress || (shippingAddress ? `${(shippingAddress as Record<string, string>).address}, ${(shippingAddress as Record<string, string>).city}` : null),
-          guestAccessTokenHash,
-          guestAccessExpiresAt,
-          totalAmount,
-          discountAmount,
-          loyaltyDiscountAmount: loyaltyDiscount,
-          deliveryCharge,
-          paymentMethod,
-          paymentStatus: 'pending',
-          reservationExpiresAt: getReservationExpiry(paymentMethod),
-          stockReserved: true,
-          couponReleased: false,
-          orderNote,
-          couponCode: validatedCouponCode,
-          items: {
-            create: verifiedItems.map((item) => ({
-              productId: item.productId,
-              productName: item.productName,
-              quantity: item.quantity,
-              unit: item.unit,
-              price: parseFloat(String(item.price)),
-              image: item.image || null,
-            })),
-          },
-        },
-        include: { items: true },
-      })
-
-      if (paymentMethod === 'online') {
-        await tx.payment.create({
+        const order = await tx.order.create({
           data: {
-            orderId: order.id,
+            orderNumber,
+            invoiceNumber,
             userId: effectiveUserId,
-            method: 'online',
-            gateway: 'sslcommerz',
-            status: 'pending',
-            amount: totalAmount,
-            gatewayResponse: appendPaymentLog(null, {
-              event: 'order_created',
-              status: 'pending',
-              message: 'Awaiting SSLCOMMERZ session initiation',
-            }),
+            guestName: resolvedCustomerName || null,
+            guestPhone: resolvedCustomerPhone || null,
+            guestEmail: guestEmail || customer?.email || null,
+            guestAddress: resolvedOrderAddress,
+            guestAccessTokenHash,
+            guestAccessExpiresAt,
+            totalAmount,
+            discountAmount,
+            loyaltyDiscountAmount: loyaltyDiscount,
+            deliveryCharge,
+            paymentMethod,
+            paymentStatus: 'pending',
+            reservationExpiresAt: getReservationExpiry(paymentMethod),
+            stockReserved: true,
+            couponReleased: false,
+            orderNote,
+            couponCode: validatedCouponCode,
+            items: {
+              create: verifiedItems.map((item) => ({
+                productId: item.productId,
+                productName: item.productName,
+                quantity: item.quantity,
+                unit: item.unit,
+                price: parseFloat(String(item.price)),
+                image: item.image || null,
+              })),
+            },
           },
-        })
-      }
-
-      // Clear cart for this user after order
-      if (userId) {
-        await tx.cartItem.deleteMany({ where: { userId } })
-      }
-
-      // Create delivery label
-      await tx.deliveryLabel.create({
-        data: {
-          orderId: order.id,
-          customerName: order.guestName || '',
-          phone: order.guestPhone || '',
-          address: order.guestAddress || '',
-          productSummary: order.items.map((i) => `${i.productName} x${i.quantity}`).join(', '),
-          totalAmount: order.totalAmount,
-          paymentMethod: order.paymentMethod,
-          paymentStatus: order.paymentStatus,
-        },
-      })
-      // Create initial status history entry
-      await tx.orderStatusHistory.create({
-        data: {
-          orderId: order.id,
-          status: 'pending',
-          note: 'Order placed successfully',
-          changedBy: userId || null,
-        },
-      })
-
-      // ─── Deduct loyalty points if redeemed at checkout ─────────────────
-      if (loyaltyRedeemedPoints > 0 && userId) {
-        const userBalance = await tx.user.findUnique({
-          where: { id: userId },
-          select: { loyaltyBalance: true },
+          include: { items: true },
         })
 
-        if (userBalance) {
-          const newBalance = userBalance.loyaltyBalance - loyaltyRedeemedPoints
-          await tx.loyaltyPoint.create({
+        if (paymentMethod === 'online') {
+          await tx.payment.create({
             data: {
-              userId,
-              points: -loyaltyRedeemedPoints,
-              balance: newBalance,
-              type: 'redeem',
-              description: `Redeemed ${loyaltyRedeemedPoints} points at checkout (৳${loyaltyRedeemedPoints} discount)`,
               orderId: order.id,
+              userId: effectiveUserId,
+              method: 'online',
+              gateway: 'sslcommerz',
+              status: 'pending',
+              amount: totalAmount,
+              gatewayResponse: appendPaymentLog(null, {
+                event: 'order_created',
+                status: 'pending',
+                message: 'Awaiting SSLCOMMERZ session initiation',
+              }),
             },
           })
-          await tx.user.update({
-            where: { id: userId },
-            data: { loyaltyBalance: newBalance },
-          })
         }
-      }
 
-      return order
-    })
+        // Clear cart for this user after order
+        if (userId) {
+          await tx.cartItem.deleteMany({ where: { userId } })
+        }
+
+        // Create delivery label
+        await tx.deliveryLabel.create({
+          data: {
+            orderId: order.id,
+            customerName: order.guestName || resolvedCustomerName || 'Customer',
+            phone: order.guestPhone || resolvedCustomerPhone || 'N/A',
+            address: order.guestAddress || resolvedOrderAddress || 'N/A',
+            productSummary: order.items && order.items.length > 0
+              ? order.items.map((i) => `${i.productName} x${i.quantity}`).join(', ')
+              : 'Order items',
+            totalAmount: order.totalAmount,
+            paymentMethod: order.paymentMethod,
+            paymentStatus: order.paymentStatus,
+          },
+        })
+
+        // Create initial status history entry
+        await tx.orderStatusHistory.create({
+          data: {
+            orderId: order.id,
+            status: 'pending',
+            note: 'Order placed successfully',
+            changedBy: userId || null,
+          },
+        })
+
+        // ─── Deduct loyalty points if redeemed at checkout ─────────────────
+        if (loyaltyRedeemedPoints > 0 && userId) {
+          const userBalance = await tx.user.findUnique({
+            where: { id: userId },
+            select: { loyaltyBalance: true },
+          })
+
+          if (userBalance) {
+            const newBalance = userBalance.loyaltyBalance - loyaltyRedeemedPoints
+            await tx.loyaltyPoint.create({
+              data: {
+                userId,
+                points: -loyaltyRedeemedPoints,
+                balance: newBalance,
+                type: 'redeem',
+                description: `Redeemed ${loyaltyRedeemedPoints} points at checkout (৳${loyaltyRedeemedPoints} discount)`,
+                orderId: order.id,
+              },
+            })
+            await tx.user.update({
+              where: { id: userId },
+              data: { loyaltyBalance: newBalance },
+            })
+          }
+        }
+
+        return order
+      },
+      {
+        maxWait: 10000,
+        timeout: 15000,
+      }
+    )
 
     const response = NextResponse.json(
       {
@@ -524,10 +618,111 @@ export async function POST(request: NextRequest) {
     }
 
     return response
-  } catch (error) {
-    console.error('Create order error:', error)
+  } catch (error: any) {
+    // 1. Business logic validation error thrown deliberately
+    if (error instanceof OrderBusinessError || error?.name === 'OrderBusinessError') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: error.message,
+          code: error.code || 'BUSINESS_ERROR',
+        },
+        { status: error.statusCode || 400 }
+      )
+    }
+
+    // Check if error message indicates insufficient stock
+    if (typeof error?.message === 'string' && error.message.includes('Insufficient stock')) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: error.message,
+          code: 'INSUFFICIENT_STOCK',
+        },
+        { status: 400 }
+      )
+    }
+
+    // 2. Prisma Known Request Errors
+    if (error?.code) {
+      console.error('[DATABASE ERROR in POST /api/orders]:', {
+        code: error.code,
+        meta: error.meta,
+        message: error.message,
+      })
+
+      switch (error.code) {
+        case 'P2002': {
+          // Unique constraint violation (e.g. orderNumber collision)
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'অর্ডার প্রক্রিয়াকরণে দ্বন্দ্ব তৈরি হয়েছে, অনুগ্রহ করে আবার চেষ্টা করুন। (Order conflict, please retry)',
+              code: 'ORDER_CONFLICT',
+              meta: error.meta?.target,
+            },
+            { status: 409 }
+          )
+        }
+        case 'P2028': {
+          // Transaction timeout (pool exhaustion or network latency)
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'সার্ভার ব্যস্ত রয়েছে, অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন। (Server busy, please retry in a moment)',
+              code: 'TRANSACTION_TIMEOUT',
+            },
+            { status: 503 }
+          )
+        }
+        case 'P2022': {
+          // Column missing in database (migration missing)
+          console.error(
+            '[DATABASE CONFIGURATION ERROR] A required column is missing in the database (P2022). ' +
+            'Please run "npx prisma migrate deploy" against the target database.\n' +
+            `Details: ${error.message}`
+          )
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'ডাটাবেজ কনফিগারেশন ত্রুটি, অ্যাডমিনের সাথে যোগাযোগ করুন। (Database schema error, please contact administrator)',
+              code: 'DATABASE_SCHEMA_ERROR',
+            },
+            { status: 500 }
+          )
+        }
+        case 'P2003': {
+          // Foreign key violation
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'অর্ডারের সাথে যুক্ত কোনো তথ্য খুঁজে পাওয়া যায়নি। (Referenced record not found)',
+              code: 'INVALID_REFERENCE',
+            },
+            { status: 400 }
+          )
+        }
+        case 'P2025': {
+          // Record not found
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'পণ্য বা রেকর্ড খুঁজে পাওয়া যায়নি। (Record not found)',
+              code: 'RECORD_NOT_FOUND',
+            },
+            { status: 404 }
+          )
+        }
+      }
+    }
+
+    console.error('Unhandled Create order error:', error)
     return NextResponse.json(
-      { success: false, error: 'Internal server error' },
+      {
+        success: false,
+        error: 'অর্ডার সম্পন্ন করতে সমস্যা হয়েছে, অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন। (Internal server error)',
+        code: 'INTERNAL_ERROR',
+      },
       { status: 500 }
     )
   }

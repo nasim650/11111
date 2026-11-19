@@ -23,3 +23,17 @@
 | `SSLCOMMERZ_STORE_ID` | Optional | SSLCOMMERZ Store ID | `khati001live` |
 | `SSLCOMMERZ_STORE_PASSWORD` | Optional | SSLCOMMERZ Store Password | `store_password_123` |
 | `SSLCOMMERZ_IS_LIVE` | Required for live gateway | Set to `"true"` only after SSLCommerz live approval | `"false"` |
+
+## 📦 Database Migrations Deployment
+
+When deploying to production (Vercel, Railway, Render, etc.), make sure all pending Prisma migrations are deployed to PostgreSQL so that all required schema columns (such as `reservationExpiresAt`, `stockReserved`, `couponReleased`, `guestAccessTokenHash`, and `guestAccessExpiresAt` on `Order`) exist:
+
+```bash
+# Apply all pending migrations to production DATABASE_URL
+npm run deploy:migrate
+# Or directly:
+npx prisma migrate deploy
+```
+
+> ⚠️ **Note:** If migrations are not applied, Prisma will return error `P2022` on order placement. `POST /api/orders` contains defensive logging to clearly identify `P2022` when schema migrations are missing.
+

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -123,6 +123,7 @@ export default function CheckoutPage() {
 
   // Guest Smart Address Data
   const [guestSmartData, setGuestSmartData] = useState<SmartAddressData | null>(null)
+  const isSubmittingOrderRef = useRef(false)
 
   // Phone OTP Verification State for logged-in accounts
   const [otpPhone, setOtpPhone] = useState(user?.phone || '')
@@ -558,7 +559,7 @@ export default function CheckoutPage() {
 
   // ─── Place Order ──────────────────────────────────────────────────────────
   const handlePlaceOrder = async () => {
-    if (placing) return // prevent duplicate submissions
+    if (placing || isSubmittingOrderRef.current) return // prevent duplicate submissions
 
     for (let s = 1; s <= 4; s++) {
       if (!validateStep(s)) {
@@ -574,6 +575,7 @@ export default function CheckoutPage() {
       return
     }
 
+    isSubmittingOrderRef.current = true
     setPlacing(true)
     try {
       const orderData: Record<string, unknown> = {
@@ -604,6 +606,11 @@ export default function CheckoutPage() {
         const packedGuest = packSmartAddress(guestSmartData)
         orderData.guestAddress = packedGuest.address
         orderData.checkoutProof = checkoutProof
+      } else {
+        orderData.guestName = guestName
+        orderData.guestPhone = guestPhone
+        orderData.guestEmail = guestEmail || undefined
+        orderData.checkoutProof = checkoutProof
       }
 
       const res = await fetch('/api/orders', {
@@ -618,7 +625,7 @@ export default function CheckoutPage() {
       })
 
       if (!res.ok) {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
         if (data.code === 'PHONE_UNVERIFIED') {
           setCurrentStep(1)
           setFormErrors((prev) => ({
@@ -627,7 +634,7 @@ export default function CheckoutPage() {
               data.error || 'অর্ডার করতে আপনার মোবাইল নম্বর ও ওটিপি ভেরিফাই করুন',
           }))
         }
-        throw new Error(data.error || 'অর্ডার সম্পন্ন করতে সমস্যা হয়েছে')
+        throw new Error(data.error || data.message || 'অর্ডার সম্পন্ন করতে সমস্যা হয়েছে')
       }
 
       const orderRes = await res.json()
@@ -650,13 +657,13 @@ export default function CheckoutPage() {
             ...(rawGuestToken ? { guestAccessToken: rawGuestToken } : {}),
           }),
         })
-        const initData = await initRes.json()
+        const initData = await initRes.json().catch(() => ({}))
 
         if (initData.success && initData.data?.gatewayPageURL) {
           window.location.href = initData.data.gatewayPageURL
           return
         } else {
-          throw new Error(initData.error || 'পেমেন্ট গেটওয়ে চালু করতে সমস্যা হয়েছে')
+          throw new Error(initData.error || initData.message || 'পেমেন্ট গেটওয়ে চালু করতে সমস্যা হয়েছে')
         }
       } else {
         await clearCart()
@@ -668,7 +675,14 @@ export default function CheckoutPage() {
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'অর্ডার নিশ্চিত করা যায়নি')
+      isSubmittingOrderRef.current = false
       setPlacing(false)
+    } finally {
+      // For COD or in case of errors, ensure lock is reset
+      if (paymentMethod !== 'online') {
+        isSubmittingOrderRef.current = false
+        setPlacing(false)
+      }
     }
   }
 

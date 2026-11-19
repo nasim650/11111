@@ -513,6 +513,9 @@ test('12. Missing SSLCommerz config gives safe fallback without secret leaks', a
   // Temporarily unset SSLCOMMERZ credentials
   const oldStore = process.env.SSLCOMMERZ_STORE_ID
   delete process.env.SSLCOMMERZ_STORE_ID
+  await testDb.siteConfig.deleteMany({
+    where: { key: { in: ['sslcommerzStoreId', 'sslcommerzStorePassword'] } },
+  })
 
   try {
     const initReq = makeReq('http://localhost:3000/api/payments/sslcommerz/initiate', {
