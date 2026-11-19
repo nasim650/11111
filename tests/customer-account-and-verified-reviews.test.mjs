@@ -144,9 +144,9 @@ test('1. Account registration with email + password returns 201 and sets auth_to
 
 test('2. Account registration with Bangladeshi phone issues verification OTP', async () => {
   let capturedSms = null
-  setBulkSmsMockTransport((payload) => {
+  setBulkSmsMockTransport(async (payload) => {
     capturedSms = payload
-    return { success: true, messageId: 'mock-reg-sms-1' }
+    return { success: true, messageId: 'mock-reg-sms-1', responseCode: 202 }
   })
 
   const req = makeJsonReq('http://localhost:3000/api/auth/register', 'POST', {
@@ -155,14 +155,35 @@ test('2. Account registration with Bangladeshi phone issues verification OTP', a
     password: 'Password123!',
   })
 
+  // Step 1: Request OTP for phone signup (returns 200 with requiresOtp: true, 0 users created)
   const res = await postRegister(req)
-  assert.equal(res.status, 201)
+  assert.equal(res.status, 200)
   const body = await res.json()
   assert.equal(body.success, true)
-  assert.equal(body.data.otpSent, true)
-  assert.equal(body.data.requiresVerification, true)
+  assert.equal(body.data.requiresOtp, true)
   assert.ok(capturedSms)
   assert.equal(capturedSms.number, '8801711000001')
+
+  const unverifiedCount = await testDb.user.count({ where: { phone: '01711000001' } })
+  assert.equal(unverifiedCount, 0, 'No user created before OTP verification')
+  assert.equal(res.headers.get('set-cookie'), null, 'No auth cookie set in Step 1')
+
+  // Step 2: Submit with OTP code to complete registration
+  const match = capturedSms.message.match(/(\d{6})/)
+  const otpCode = match ? match[1] : '123456'
+  const step2Req = makeJsonReq('http://localhost:3000/api/auth/register', 'POST', {
+    name: 'Jamal Ahmed',
+    phone: '01711000001',
+    password: 'Password123!',
+    otpCode,
+  })
+  const step2Res = await postRegister(step2Req)
+  assert.equal(step2Res.status, 201)
+  const step2Body = await step2Res.json()
+  assert.equal(step2Body.success, true)
+  assert.equal(step2Body.data.user.phone, '01711000001')
+  assert.equal(step2Body.data.user.isVerified, true)
+  assert.ok(step2Res.headers.get('set-cookie')?.includes('auth_token='))
 })
 
 test('3. Duplicate email or phone registration is rejected with HTTP 409', async () => {

@@ -157,7 +157,7 @@ export interface AppStore {
   isAuthenticated: boolean
   accessToken: string | null
   login: (credentials: { identifier?: string; email?: string; phone?: string; password: string }) => Promise<void>
-  register: (data: { name?: string; identifier?: string; email?: string; phone?: string; password: string }) => Promise<void>
+  register: (data: { name?: string; identifier?: string; email?: string; phone?: string; password: string; otpCode?: string }) => Promise<{ requiresOtp?: boolean; phone?: string; expiresInSeconds?: number; claimProfile?: boolean; message?: string; user?: User; token?: string } | void>
   logout: () => void
   setUser: (user: User | null) => void
   loadUser: () => void
@@ -346,22 +346,25 @@ export const useAppStore = create<AppStore>()(
           body: JSON.stringify(registerData),
         })
 
+        const data = await res.json()
         if (!res.ok) {
-          const data = await res.json()
           throw new Error(data.error || 'Registration failed')
         }
 
-        const data = await res.json()
+        // If Step 1 requires OTP verification, do NOT set authenticated state yet.
+        if (data.data?.requiresOtp) {
+          return data.data
+        }
+
         const user = (data.data?.user || data.user) as User
         const token = data.data?.token || data.accessToken || null
-        set({ user, accessToken: token, isAuthenticated: true })
+        if (user && token) {
+          set({ user, accessToken: token, isAuthenticated: true })
+          await get().loadCart()
+          await get().loadWishlist()
+        }
 
-        // Persist user and token for loadUser
-        // Removed manual localStorage set, Zustand persist handles this
-
-        // After registration, reload cart and wishlist
-        await get().loadCart()
-        await get().loadWishlist()
+        return data.data
       },
 
       logout: () => {

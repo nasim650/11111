@@ -23,7 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { useAppStore } from '@/lib/store'
+import { useAppStore, type User as StoreUser } from '@/lib/store'
 import { toast } from 'sonner'
 
 function getPasswordStrength(password: string): {
@@ -185,17 +185,17 @@ export default function RegisterPage() {
 
     setLoading(true)
     try {
-      await register({
+      const result = await register({
         name: name.trim(),
         identifier: identifier.trim(),
         password,
       })
 
-      if (!isEmail) {
-        setOtpPhone(identifier.trim())
+      if (!isEmail || result?.requiresOtp) {
+        setOtpPhone(result?.phone || identifier.trim())
         setShowOtpScreen(true)
         startResendTimer(60)
-        toast.success('আপনার মোবাইলে ভেরিফিকেশন কোড পাঠানো হয়েছে')
+        toast.success(result?.message || 'আপনার মোবাইলে ভেরিফিকেশন কোড পাঠানো হয়েছে')
       } else {
         setRegistered(true)
         toast.success('রেজিস্ট্রেশন সফল হয়েছে!')
@@ -256,14 +256,17 @@ export default function RegisterPage() {
     setOtpError('')
 
     try {
-      const token = useAppStore.getState().accessToken
-      const res = await fetch('/api/auth/verify-phone', {
+      const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ phone: otpPhone, code: otpValue }),
+        body: JSON.stringify({
+          name: name.trim(),
+          phone: otpPhone.trim() || identifier.trim(),
+          password,
+          otpCode: otpValue,
+        }),
       })
 
       const data = await res.json()
@@ -271,12 +274,15 @@ export default function RegisterPage() {
         throw new Error(data.error || 'ভেরিফিকেশন সম্পন্ন হয়নি')
       }
 
-      const curUser = useAppStore.getState().user
-      if (curUser) {
-        setUser({ ...curUser, isVerified: true })
+      const user = (data.data?.user || data.user) as StoreUser
+      const token = data.data?.token || data.accessToken || null
+      if (user && token) {
+        useAppStore.setState({ user, accessToken: token, isAuthenticated: true })
+        await useAppStore.getState().loadCart()
+        await useAppStore.getState().loadWishlist()
       }
 
-      toast.success('মোবাইল নম্বর সফলভাবে যাচাই হয়েছে!')
+      toast.success('অ্যাকাউন্ট সফলভাবে তৈরি ও যাচাই হয়েছে!')
       setRegistered(true)
       setTimeout(() => {
         navigate('home')
@@ -296,14 +302,16 @@ export default function RegisterPage() {
     setOtpError('')
 
     try {
-      const token = useAppStore.getState().accessToken
-      const res = await fetch('/api/auth/verify-phone/send', {
+      const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ phone: otpPhone }),
+        body: JSON.stringify({
+          name: name.trim(),
+          phone: otpPhone.trim() || identifier.trim(),
+          password,
+        }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -311,8 +319,12 @@ export default function RegisterPage() {
       }
       startResendTimer(60)
       toast.success('নতুন ওটিপি কোড পাঠানো হয়েছে')
-    } catch {
-      setOtpError('এসএমএস সার্ভিস সাময়িকভাবে ব্যস্ত। অনুগ্রহ করে একটু পর চেষ্টা করুন।')
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'এসএমএস সার্ভিস সাময়িকভাবে ব্যস্ত। অনুগ্রহ করে একটু পর চেষ্টা করুন।'
+      setOtpError(message)
     } finally {
       setOtpSending(false)
     }
@@ -654,6 +666,7 @@ export default function RegisterPage() {
                     type="button"
                     onClick={() => {
                       setShowOtpScreen(false)
+                      setOtpDigits(['', '', '', '', '', ''])
                       setOtpError('')
                     }}
                     className="inline-flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-800 transition-colors mb-3"
