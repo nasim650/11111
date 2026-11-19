@@ -21,7 +21,10 @@ const {
   maskPhoneNumber,
   isCloudSmsConfigured,
   setCloudSmsMockTransport,
+  setCloudSmsBalanceMockTransport,
   parseCloudSmsResponse,
+  parseCloudSmsBalanceResponse,
+  checkCloudSmsBalance,
   sendCloudSms,
   getSafeCloudSmsErrorMessage,
   CLOUD_SMS_SAFE_ERRORS,
@@ -166,10 +169,13 @@ test('7. Provider error codes (2, 3, 4, 5, 6, 7, 10, 11, 101, 405) map to safe u
     )
   }
 
-  // Verify safe messages directly
+  // Verify safe messages directly (matching official Cloud SMS BD error table)
   assert.equal(getSafeCloudSmsErrorMessage(4), 'সঠিক বাংলাদেশি মোবাইল নম্বর দিন')
-  assert.equal(getSafeCloudSmsErrorMessage(6), 'এসএমএস সেবা সাময়িকভাবে অনুপলব্ধ')
-  assert.equal(getSafeCloudSmsErrorMessage(11), 'অতিরিক্ত অনুরোধের কারণে এসএমএস সাময়িকভাবে স্থগিত। কিছুক্ষণ পর চেষ্টা করুন')
+  assert.equal(getSafeCloudSmsErrorMessage(5), 'সঠিক বাংলাদেশি মোবাইল নম্বর দিন')
+  assert.equal(getSafeCloudSmsErrorMessage(6), 'এসএমএস বার্তা ত্রুটিপূর্ণ')
+  assert.equal(getSafeCloudSmsErrorMessage(7), 'এসএমএস বার্তা এনকোডিং ত্রুটি')
+  assert.equal(getSafeCloudSmsErrorMessage(10), 'এসএমএস সেবা সাময়িকভাবে অনুপলব্ধ')
+  assert.equal(getSafeCloudSmsErrorMessage(11), 'এসএমএস সেবা সাময়িকভাবে অনুপলব্ধ')
   assert.equal(getSafeCloudSmsErrorMessage(101), 'এসএমএস গেটওয়ে সাময়িক বিভ্রাটে রয়েছে')
   assert.equal(getSafeCloudSmsErrorMessage(9999), 'এসএমএস সেবা সাময়িকভাবে অনুপলব্ধ। অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন।')
 })
@@ -486,6 +492,79 @@ test('15. Missing OTP_SECRET or Cloud SMS BD configuration returns HTTP 503 with
   } finally {
     process.env.CLOUDSMSBD_API_KEY = origKey
     process.env.OTP_SECRET = origSecret
+  }
+})
+
+test('16. Non-Masking numeric SenderID works cleanly and is detected as non-masking in admin diagnostics', async () => {
+  const origSender = process.env.CLOUDSMSBD_SENDER_ID
+  try {
+    process.env.CLOUDSMSBD_SENDER_ID = '8809617612345'
+
+    let capturedSender = null
+    setCloudSmsMockTransport(async (payload) => {
+      capturedSender = payload.SenderID
+      return { success: true, code: 1, messageId: 'non-masking-1' }
+    })
+
+    const res = await sendCloudSms({ to: '01711223344', message: 'Your OTP is 654321' })
+    assert.equal(res.success, true)
+    assert.equal(capturedSender, '8809617612345')
+
+    const adminUser = await testDb.user.create({
+      data: {
+        name: 'Admin Non-Masking Test',
+        email: 'admin_nonmasking@example.com',
+        phone: '01700112255',
+        role: 'admin',
+        sessionVersion: 1,
+      },
+    })
+    const adminToken = await generateToken(adminUser.id, adminUser.sessionVersion)
+    const diagReq = makeNextRequest('http://localhost:3000/api/admin/sms-diagnostics', {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${adminToken}` },
+    })
+    const diagRes = await getSmsDiagnostics(diagReq)
+    assert.equal(diagRes.status, 200)
+    const diagData = await diagRes.json()
+    assert.equal(diagData.success, true)
+    assert.equal(diagData.data.senderType, 'non-masking')
+    assert.equal(diagData.data.balance.ok, true)
+    assert.equal(diagData.data.balance.status, 'healthy')
+    assert.doesNotMatch(JSON.stringify(diagData), /8809617612345/)
+  } finally {
+    process.env.CLOUDSMSBD_SENDER_ID = origSender
+  }
+})
+
+test('17. Cloud SMS BD balance parser and checkCloudSmsBalance handle healthy, low, empty, and error responses', async () => {
+  const healthyPlain = parseCloudSmsBalanceResponse('125.50')
+  assert.equal(healthyPlain.ok, true)
+  assert.equal(healthyPlain.balance, 125.5)
+  assert.equal(healthyPlain.status, 'healthy')
+
+  const lowJson = parseCloudSmsBalanceResponse('{"balance": "25.00"}')
+  assert.equal(lowJson.ok, true)
+  assert.equal(lowJson.balance, 25)
+  assert.equal(lowJson.status, 'low')
+
+  const emptyPlain = parseCloudSmsBalanceResponse('0')
+  assert.equal(emptyPlain.ok, true)
+  assert.equal(emptyPlain.balance, 0)
+  assert.equal(emptyPlain.status, 'empty')
+
+  const invalidKey = parseCloudSmsBalanceResponse('2')
+  assert.equal(invalidKey.ok, false)
+  assert.equal(invalidKey.status, 'error')
+
+  try {
+    setCloudSmsBalanceMockTransport(async () => '{"Balance": "310.75"}')
+    const live = await checkCloudSmsBalance()
+    assert.equal(live.ok, true)
+    assert.equal(live.balance, 310.75)
+    assert.equal(live.status, 'healthy')
+  } finally {
+    setCloudSmsBalanceMockTransport(null)
   }
 })
 

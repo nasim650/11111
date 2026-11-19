@@ -192,6 +192,47 @@ export default function AdminSettingsPage() {
     guestOrdersAnonymized: number
     hardDeleteEnabled: boolean
   } | null>(null)
+  const [smsDiagLoading, setSmsDiagLoading] = useState(false)
+  const [smsDiagnostics, setSmsDiagnostics] = useState<{
+    providerName: string
+    providerConfigured: boolean
+    senderIdConfigured: boolean
+    otpSecretConfigured: boolean
+    senderType?: 'non-masking' | 'masking' | 'unknown'
+    balance?: {
+      ok: boolean
+      balance?: number
+      rawBalance?: string
+      status: 'healthy' | 'low' | 'empty' | 'unconfigured' | 'error'
+      error?: string
+      checkedAt: string
+    } | null
+  } | null>(null)
+
+  const fetchSmsDiagnostics = useCallback(async (showToast = false) => {
+    setSmsDiagLoading(true)
+    try {
+      const res = await authFetch('/api/admin/sms-diagnostics')
+      if (!res.ok) throw new Error('SMS স্ট্যাটাস লোড করা যায়নি')
+      const json = await res.json()
+      if (json.success && json.data) {
+        setSmsDiagnostics(json.data)
+        if (showToast) toast.success('SMS ব্যালেন্স ও স্ট্যাটাস আপডেট হয়েছে')
+      } else {
+        if (showToast) toast.error(json.error || 'SMS স্ট্যাটাস চেক করা যায়নি')
+      }
+    } catch (err) {
+      if (showToast) toast.error(err instanceof Error ? err.message : 'SMS স্ট্যাটাস চেক করা যায়নি')
+    } finally {
+      setSmsDiagLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (activeTab === 'notifications') {
+      fetchSmsDiagnostics(false)
+    }
+  }, [activeTab, fetchSmsDiagnostics])
 
   async function handleRunRetentionPreview() {
     setRetentionRunning(true)
@@ -834,6 +875,114 @@ export default function AdminSettingsPage() {
                     <Switch checked={config.systemAlertEmail ?? true} onCheckedChange={(c) => updateConfig({ systemAlertEmail: c })} disabled={!config.emailNotifications} />
                   </div>
                 </div>
+              </div>
+
+              <Separator />
+
+              {/* SMS Gateway & Live Balance Status */}
+              <div className="rounded-lg border bg-muted/20 p-4 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="font-medium flex items-center gap-2">
+                      <span className="size-2 rounded-full bg-emerald-500" />
+                      SMS Gateway &amp; Live Balance
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      লাইভ Cloud SMS BD ব্যালেন্স ও গেটওয়ে কনফিগারেশন স্ট্যাটাস
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fetchSmsDiagnostics(true)}
+                    disabled={smsDiagLoading}
+                    className="gap-1.5"
+                  >
+                    <RefreshCw className={`size-3.5 ${smsDiagLoading ? 'animate-spin' : ''}`} />
+                    {smsDiagLoading ? 'Checking...' : 'Refresh Balance'}
+                  </Button>
+                </div>
+
+                {smsDiagLoading && !smsDiagnostics ? (
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <Skeleton className="h-20 w-full" />
+                    <Skeleton className="h-20 w-full" />
+                    <Skeleton className="h-20 w-full" />
+                  </div>
+                ) : smsDiagnostics ? (
+                  <div className="space-y-3">
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="p-3 rounded-md border bg-card">
+                        <p className="text-xs text-muted-foreground">Active Provider</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="font-semibold uppercase text-sm">
+                            {smsDiagnostics.providerName === 'none' ? 'Not Set' : smsDiagnostics.providerName}
+                          </p>
+                          {smsDiagnostics.senderType && smsDiagnostics.senderType !== 'unknown' && (
+                            <Badge variant="secondary" className="text-[10px]">
+                              {smsDiagnostics.senderType === 'non-masking' ? 'Non-Masking' : 'Masking'}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-md border bg-card">
+                        <p className="text-xs text-muted-foreground">Live SMS Balance</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="font-bold text-lg">
+                            {smsDiagnostics.balance?.ok && smsDiagnostics.balance.balance !== undefined
+                              ? `৳${smsDiagnostics.balance.balance.toFixed(2)}`
+                              : '—'}
+                          </p>
+                          {smsDiagnostics.balance?.status === 'healthy' && (
+                            <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 text-[10px]">ব্যালেন্স ঠিক আছে</Badge>
+                          )}
+                          {smsDiagnostics.balance?.status === 'low' && (
+                            <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 text-[10px]">ব্যালেন্স কম</Badge>
+                          )}
+                          {smsDiagnostics.balance?.status === 'empty' && (
+                            <Badge variant="destructive" className="text-[10px]">ব্যালেন্স শেষ</Badge>
+                          )}
+                          {smsDiagnostics.balance?.status === 'unconfigured' && (
+                            <Badge variant="secondary" className="text-[10px]">কনফিগার নেই</Badge>
+                          )}
+                          {smsDiagnostics.balance?.status === 'error' && (
+                            <Badge variant="destructive" className="text-[10px]">চেক ব্যর্থ</Badge>
+                          )}
+                        </div>
+                        {smsDiagnostics.balance?.error && (
+                          <p className="text-[11px] text-destructive mt-1">{smsDiagnostics.balance.error}</p>
+                        )}
+                      </div>
+
+                      <div className="p-3 rounded-md border bg-card">
+                        <p className="text-xs text-muted-foreground">Configuration Health</p>
+                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                          <Badge variant={smsDiagnostics.providerConfigured ? 'default' : 'destructive'} className="text-[10px]">
+                            API Key: {smsDiagnostics.providerConfigured ? 'OK' : 'Missing'}
+                          </Badge>
+                          <Badge variant={smsDiagnostics.senderIdConfigured ? 'default' : 'destructive'} className="text-[10px]">
+                            SenderID: {smsDiagnostics.senderIdConfigured ? 'OK' : 'Missing'}
+                          </Badge>
+                          <Badge variant={smsDiagnostics.otpSecretConfigured ? 'default' : 'destructive'} className="text-[10px]">
+                            OTP Secret: {smsDiagnostics.otpSecretConfigured ? 'OK' : 'Missing'}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+
+                    {smsDiagnostics.balance?.checkedAt && (
+                      <p className="text-[11px] text-muted-foreground">
+                        Last checked: {new Date(smsDiagnostics.balance.checkedAt).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    SMS ব্যালেন্স দেখতে Refresh Balance বাটনে ক্লিক করুন।
+                  </p>
+                )}
               </div>
 
               <Separator />
