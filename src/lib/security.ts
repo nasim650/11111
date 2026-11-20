@@ -74,3 +74,12 @@ export function secureJson(data: unknown, init?: ResponseInit): NextResponse {
   response.headers.set('Cache-Control', 'no-store')
   return response
 }
+
+/**
+ * Strict internal redirect validator to eliminate Open Redirect vulnerabilities.
+ * Allows ONLY valid relative paths starting with a single '/' (e.g. '/orders/ORD-123').
+ * Strictly rejects protocol-relative URLs (//evil.com), backslash tricks (/\evil.com, /\\evil.com),
+ * external absolute URLs (https://...), javascript: schemes, control chars, and CRLF injection.
+ */
+export { sanitizeInternalRedirect } from '@/lib/sanitize-redirect'
+

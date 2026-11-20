@@ -2,6 +2,8 @@
 
 import { useEffect, useReducer, useState } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   Minus, Plus, Trash2, ShoppingCart, Tag, ArrowRight, ArrowLeft,
   ShieldCheck, Truck, ShoppingBag, Heart, X, AlertCircle,
@@ -31,6 +33,7 @@ interface SuggestedProduct {
 }
 
 export default function CartPage() {
+  const router = useRouter()
   const {
     cartItems,
     removeFromCart,
@@ -199,10 +202,25 @@ export default function CartPage() {
             Looks like you haven&apos;t added anything yet. Start exploring our authentic Bangladeshi food products!
           </p>
           <div className="flex flex-col sm:flex-row gap-3">
-            <Button onClick={() => navigate('products')} size="lg" className="h-12 px-8 rounded-xl">
+            <Button
+              onClick={() => {
+                router.push('/products')
+                navigate('products')
+              }}
+              size="lg"
+              className="h-12 px-8 rounded-xl"
+            >
               <ShoppingBag className="h-5 w-5 mr-2" /> Start Shopping
             </Button>
-            <Button variant="outline" onClick={() => navigate('products')} size="lg" className="h-12 px-8 rounded-xl">
+            <Button
+              variant="outline"
+              onClick={() => {
+                router.push('/products')
+                navigate('products')
+              }}
+              size="lg"
+              className="h-12 px-8 rounded-xl"
+            >
               <Tag className="h-5 w-5 mr-2" /> Check Offers
             </Button>
           </div>
@@ -577,7 +595,10 @@ export default function CartPage() {
                   <Button
                     className="w-full h-12 text-base rounded-xl font-semibold shadow-md shadow-primary/20"
                     size="lg"
-                    onClick={() => navigate('checkout')}
+                    onClick={() => {
+                      router.push('/checkout')
+                      navigate('checkout')
+                    }}
                   >
                     Proceed to Checkout <ArrowRight className="h-4 w-4 ml-2" />
                   </Button>
@@ -653,7 +674,10 @@ export default function CartPage() {
           </div>
           <Button
             className="h-11 px-6 rounded-xl font-semibold flex-shrink-0"
-            onClick={() => navigate('checkout')}
+            onClick={() => {
+              router.push('/checkout')
+              navigate('checkout')
+            }}
           >
             Checkout <ChevronRight className="h-4 w-4" />
           </Button>

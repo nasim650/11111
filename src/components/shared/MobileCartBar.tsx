@@ -2,6 +2,7 @@
 
 import { ShoppingCart, ArrowRight } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/lib/store'
 import { formatPrice } from '@/lib/utils'
@@ -24,6 +25,7 @@ import { formatPrice } from '@/lib/utils'
  * home indicators (iOS) or gesture nav (Android).
  */
 export default function MobileCartBar() {
+  const router = useRouter()
   const cartItems = useAppStore((s) => s.cartItems)
   const totalItems = useAppStore((s) => s.totalItems)
   const subtotal = useAppStore((s) => s.subtotal)
@@ -45,12 +47,16 @@ export default function MobileCartBar() {
         >
           {/* Clickable bar — navigates to cart page */}
           <div
-            onClick={() => navigate('cart')}
+            onClick={() => {
+              router.push('/cart')
+              navigate('cart')
+            }}
             role="button"
             tabIndex={0}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault()
+                router.push('/cart')
                 navigate('cart')
               }
             }}
@@ -81,6 +87,7 @@ export default function MobileCartBar() {
             <Button
               onClick={(e) => {
                 e.stopPropagation()
+                router.push('/checkout')
                 navigate('checkout')
               }}
               className="rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shrink-0 shadow-sm"

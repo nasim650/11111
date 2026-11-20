@@ -11,17 +11,121 @@ export async function GET(request: NextRequest) {
     const productId = url.searchParams.get('productId')
     const userId = url.searchParams.get('userId')
     const isApproved = url.searchParams.get('isApproved')
+    const isActive = url.searchParams.get('isActive')
+    const status = url.searchParams.get('status')
+    const checkEligibility = url.searchParams.get('checkEligibility')
 
+    // ── Eligibility Check for Product Detail Page ──
+    if (checkEligibility === 'true') {
+      if (!productId) {
+        return NextResponse.json(
+          { success: false, error: 'Product ID is required for eligibility check' },
+          { status: 400 }
+        )
+      }
+      const authUser = await getUserFromRequest(request)
+      if (!authUser) {
+        return NextResponse.json({
+          success: true,
+          data: {
+            canReview: false,
+            isAuthenticated: false,
+            reason: 'NOT_AUTHENTICATED',
+            message: 'রিভিউ লেখার জন্য অনুগ্রহ করে লগইন করুন।',
+          },
+        })
+      }
+
+      // Check if user has already reviewed this product
+      const existingReview = await db.review.findFirst({
+        where: { userId: authUser.userId, productId },
+      })
+      if (existingReview) {
+        return NextResponse.json({
+          success: true,
+          data: {
+            canReview: false,
+            isAuthenticated: true,
+            alreadyReviewed: true,
+            hasDeliveredOrder: true,
+            reason: 'ALREADY_REVIEWED',
+            message: 'আপনি ইতিমধ্যে এই পণ্যটিতে রিভিউ দিয়েছেন। আপনার মতামত আমাদের জন্য মূল্যবান!',
+          },
+        })
+      }
+
+      // Check if customer has an order for this product with terminal status 'delivered'
+      const deliveredOrder = await db.order.findFirst({
+        where: {
+          userId: authUser.userId,
+          orderStatus: 'delivered',
+          items: {
+            some: { productId },
+          },
+        },
+      })
+
+      if (!deliveredOrder) {
+        return NextResponse.json({
+          success: true,
+          data: {
+            canReview: false,
+            isAuthenticated: true,
+            alreadyReviewed: false,
+            hasDeliveredOrder: false,
+            reason: 'NOT_DELIVERED',
+            message: 'এই পণ্যটি আপনার কাছে সফলভাবে ডেলিভারি হওয়ার পর review দিতে পারবেন।',
+          },
+        })
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          canReview: true,
+          isAuthenticated: true,
+          alreadyReviewed: false,
+          hasDeliveredOrder: true,
+        },
+      })
+    }
+
+    // ── Standard Reviews Query ──
     const where: Record<string, unknown> = {}
     if (productId) where.productId = productId
     if (userId) where.userId = userId
-    if (isApproved !== null) where.isApproved = isApproved === 'true'
-    else where.isApproved = true // Default: only approved
+
+    const authUser = await getUserFromRequest(request)
+    const isAdminUser = Boolean(authUser && (authUser.role === 'admin' || authUser.role === 'manager'))
+
+    if (isAdminUser) {
+      if (status === 'approved') {
+        where.isApproved = true
+        where.isActive = true
+      } else if (status === 'pending') {
+        where.isApproved = false
+        where.isActive = true
+      } else if (status === 'rejected') {
+        where.isActive = false
+      } else if (status === 'all') {
+        // No filter on isApproved or isActive
+      } else {
+        if (isActive !== null) where.isActive = isActive === 'true'
+        if (isApproved !== null) where.isApproved = isApproved === 'true'
+      }
+    } else {
+      // Public / non-admin queries ONLY return approved and active reviews
+      where.isApproved = true
+      where.isActive = true
+    }
 
     const [reviews, total] = await Promise.all([
       db.review.findMany({
         where,
-        include: { user: { select: { id: true, name: true, avatar: true } } },
+        include: {
+          user: { select: { id: true, name: true, avatar: true } },
+          product: { select: { id: true, name: true, slug: true } },
+        },
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
@@ -57,7 +161,7 @@ export async function POST(request: NextRequest) {
     }
     const { userId, productId, rating, comment } = validated.data
 
-    // Ownership check: verify the userId matches authenticated user
+    // 1. Ownership & authentication check: verify userId matches authenticated user
     const authUser = await getUserFromRequest(request)
     if (!authUser) {
       return NextResponse.json(
@@ -72,50 +176,64 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if user already reviewed this product
+    // 2. Preflight duplicate check: single review per product per customer
     const existingReview = await db.review.findFirst({
       where: { userId, productId },
     })
     if (existingReview) {
       return NextResponse.json(
-        { error: 'You have already reviewed this product' },
-        { status: 409 }
+        { success: false, error: 'You have already reviewed this product' },
+        { status: 400 }
       )
     }
 
+    // 3. Verified Delivered Purchase check:
+    // Customer can review a product ONLY if they have an order for that product with status 'delivered'
+    // (terminal state; not just 'paid', so delivered COD orders qualify).
+    const isPrivileged = authUser.role === 'admin' || authUser.role === 'manager'
+    if (!isPrivileged) {
+      const deliveredOrder = await db.order.findFirst({
+        where: {
+          userId,
+          orderStatus: 'delivered',
+          items: {
+            some: {
+              productId,
+            },
+          },
+        },
+      })
+
+      if (!deliveredOrder) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'এই পণ্যটি আপনার কাছে সফলভাবে ডেলিভারি হওয়ার পর review দিতে পারবেন।',
+          },
+          { status: 403 }
+        )
+      }
+    }
+
+    // 4. Create review with defaults:
+    // isApproved=false (requires admin moderation), isActive=true, isVerified=true
     const review = await db.review.create({
       data: {
         userId,
         productId,
         rating,
         comment,
+        isApproved: false,
+        isActive: true,
+        isVerified: true,
       },
-      include: { user: { select: { id: true, name: true, avatar: true } } },
-    })
-
-    // Check if user has purchased the product (verified purchaser)
-    const hasPurchased = await db.orderItem.findFirst({
-      where: {
-        productId,
-        order: {
-          userId,
-          paymentStatus: 'paid',
-        },
+      include: {
+        user: { select: { id: true, name: true, avatar: true } },
+        product: { select: { id: true, name: true, slug: true } },
       },
     })
 
-    await db.review.update({
-      where: { id: review.id },
-      data: { isVerified: !!hasPurchased },
-    })
-
-    // Return the updated review with isVerified
-    const updatedReview = await db.review.findUnique({
-      where: { id: review.id },
-      include: { user: { select: { id: true, name: true, avatar: true } } },
-    })
-
-    return NextResponse.json({ success: true, data: updatedReview }, { status: 201 })
+    return NextResponse.json({ success: true, data: review }, { status: 201 })
   } catch (error) {
     console.error('Create review error:', error)
     return NextResponse.json(

@@ -125,7 +125,8 @@ function SectionHeader({
       {onViewAll && (
         <button
           onClick={onViewAll}
-          className="text-xs font-semibold text-amber-600 hover:text-amber-700 flex items-center gap-0.5 transition-colors"
+          aria-label={`View all ${title}`}
+          className="text-xs font-semibold text-amber-600 hover:text-amber-700 flex items-center gap-0.5 transition-colors focus-visible:outline-none focus-visible:underline"
         >
           View All <ArrowRight className="h-3.5 w-3.5" />
         </button>
@@ -506,6 +507,7 @@ function CategorySection({ categories, navigate }: {
           </h2>
           <button
             onClick={() => navigate('products')}
+            aria-label="View all categories"
             className="text-xs md:text-sm font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 transition-colors"
           >
             View All <ArrowRight className="h-3.5 w-3.5" />
@@ -517,6 +519,7 @@ function CategorySection({ categories, navigate }: {
           {displayCategories.map((cat, idx) => (
             <motion.button
               key={cat.id}
+              aria-label={`Browse ${cat.name}`}
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.03, duration: 0.3 }}
@@ -568,9 +571,6 @@ function DealOfTheDaySection({ product, navigate }: {
   const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 })
   const [adding, setAdding] = useState(false)
   const [added, setAdded] = useState(false)
-
-  // Stable "X% claimed" demo value (60–90%) picked once per mount
-  const claimedPct = useRef<number>(Math.floor(Math.random() * 31) + 60)
 
   // Live countdown — tick every second until 23:59:59.999 today
   useEffect(() => {
@@ -745,22 +745,24 @@ function DealOfTheDaySection({ product, navigate }: {
                   </div>
                 </div>
 
-                {/* Stock progress bar */}
-                <div>
-                  <div className="flex items-center justify-between text-xs mb-1.5">
-                    <span className="text-muted-foreground font-medium">Stock status</span>
-                    <span className="font-semibold text-amber-700">
-                      {claimedPct.current}% claimed
+                {/* Truthful Stock & Availability Status */}
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-muted-foreground font-medium">Availability:</span>
+                  {outOfStock ? (
+                    <span className="font-semibold text-stone-600 bg-stone-100 px-2.5 py-0.5 rounded-full border border-stone-200">
+                      Out of Stock
                     </span>
-                  </div>
-                  <div className="h-2.5 w-full rounded-full bg-amber-100 overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${claimedPct.current}%` }}
-                      transition={{ duration: 1, ease: 'easeOut' }}
-                      className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
-                    />
-                  </div>
+                  ) : product.stock <= 5 ? (
+                    <span className="font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                      <Flame className="h-3.5 w-3.5 text-rose-600" />
+                      Only {product.stock} {product.unit || 'units'} left!
+                    </span>
+                  ) : (
+                    <span className="font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                      <Check className="h-3.5 w-3.5 text-emerald-600" />
+                      In Stock ({product.stock} {product.unit || 'units'})
+                    </span>
+                  )}
                 </div>
 
                 {/* CTA buttons */}
@@ -948,6 +950,7 @@ function BestSellersSection({ products, navigate }: {
                       variant="outline"
                       size="sm"
                       disabled={outOfStock || loadingId === p.id}
+                      aria-label={outOfStock ? `${p.name} is out of stock` : `Add ${p.name} to cart`}
                       className="h-9 px-3 text-xs font-bold rounded-xl border-amber-500 text-amber-600 hover:bg-amber-50 gap-1.5 flex-1"
                       onClick={async () => {
                         setLoadingId(p.id)
@@ -973,6 +976,7 @@ function BestSellersSection({ products, navigate }: {
                     <Button
                       size="sm"
                       disabled={outOfStock || loadingId === p.id}
+                      aria-label={outOfStock ? `${p.name} is out of stock` : `Buy ${p.name} now`}
                       className="h-9 px-4 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-600 text-white shadow-sm gap-1.5 flex-1"
                       onClick={async () => {
                         setLoadingId(p.id)
@@ -1052,83 +1056,119 @@ function RecentlyViewedSection({ products, navigate }: {
   )
 }
 
-// ── Trust & Guarantees Section ──
+// ── Trust & Guarantees Section — Database Driven with Business-Approved Defaults ──
+interface TrustSectionItem {
+  id: string
+  title: string
+  subtitle?: string | null
+  description?: string | null
+  content?: string | null
+  sortOrder: number
+}
+
 function TrustSection() {
-  const guarantees = [
+  const [items, setItems] = useState<TrustSectionItem[]>([])
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    fetch('/api/homepage-sections?type=trust&limit=8')
+      .then((r) => r.json())
+      .then((data) => {
+        if (mounted && data.success) {
+          setItems(extractItems<TrustSectionItem>(data))
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) setLoaded(true)
+      })
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const defaultGuarantees = [
     {
+      id: 'default-1',
       icon: ShieldCheck,
-      title: '100% Authentic',
-      bengaliTitle: '১০০% খাঁটি',
-      description: 'Every product is verified for authenticity. We source directly from trusted Bangladeshi producers.',
+      title: 'Authentic Products',
+      description: 'Sourced directly from verified Bangladeshi producers.',
       color: 'emerald',
     },
     {
+      id: 'default-2',
       icon: Truck,
-      title: 'Fast Delivery',
-      bengaliTitle: 'দ্রুত ডেলিভারি',
-      description: 'Same-day delivery in Dhaka. Nationwide delivery within 2-3 business days.',
+      title: 'Delivery Coverage',
+      description: 'Dhaka: 24–48h. Nationwide: 2–3 business days.',
       color: 'teal',
     },
     {
+      id: 'default-3',
       icon: RefreshCw,
-      title: 'Easy Returns',
-      bengaliTitle: 'সহজ রিটার্ন',
-      description: '7-day hassle-free return policy. If you\'re not satisfied, we\'ll make it right.',
+      title: 'Returns Policy',
+      description: 'Easy 7-day hassle-free return and replacement policy.',
       color: 'amber',
     },
     {
-      icon: Leaf,
-      title: 'Organic & Natural',
-      bengaliTitle: 'জৈব ও প্রাকৃতিক',
-      description: 'Carefully selected organic products. No artificial preservatives or additives.',
+      id: 'default-4',
+      icon: ShieldCheck,
+      title: 'Secure Payment',
+      description: 'Cash on delivery and encrypted secure payment.',
       color: 'green',
     },
   ]
 
-  const colorMap: Record<string, { bg: string; icon: string; ring: string }> = {
-    emerald: { bg: 'from-emerald-100 to-emerald-50', icon: 'text-emerald-600', ring: 'ring-emerald-200' },
-    teal: { bg: 'from-teal-100 to-teal-50', icon: 'text-teal-600', ring: 'ring-teal-200' },
-    amber: { bg: 'from-amber-100 to-amber-50', icon: 'text-amber-600', ring: 'ring-amber-200' },
-    green: { bg: 'from-green-100 to-green-50', icon: 'text-green-600', ring: 'ring-green-200' },
+  const colorMap: Record<string, { icon: string; bg: string }> = {
+    emerald: { icon: 'text-emerald-600', bg: 'bg-emerald-50' },
+    teal: { icon: 'text-teal-600', bg: 'bg-teal-50' },
+    amber: { icon: 'text-amber-600', bg: 'bg-amber-50' },
+    green: { icon: 'text-emerald-600', bg: 'bg-emerald-50' },
+  }
+  const defaultColors = ['emerald', 'teal', 'amber', 'green']
+
+  const resolveIcon = (title: string, contentStr?: string | null) => {
+    let iconHint = ''
+    try {
+      if (contentStr) {
+        const parsed = JSON.parse(contentStr)
+        if (parsed.icon) iconHint = parsed.icon.toLowerCase()
+      }
+    } catch {}
+    const text = (title + ' ' + iconHint).toLowerCase()
+    if (text.includes('deliver') || text.includes('truck') || text.includes('coverage')) return Truck
+    if (text.includes('return') || text.includes('refund') || text.includes('exchange')) return RefreshCw
+    if (text.includes('pay') || text.includes('secure') || text.includes('ssl')) return ShieldCheck
+    if (text.includes('natural') || text.includes('leaf') || text.includes('organic')) return Leaf
+    return ShieldCheck
   }
 
-  return (
-    <section className="py-8 bg-white relative">
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-200 to-transparent" />
-      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
-        <AnimatedSection>
-          <div className="text-center mb-10">
-            <div className="inline-flex items-center gap-2 text-emerald-600 mb-2">
-              <ShieldCheck className="h-5 w-5" />
-              <span className="text-sm font-semibold uppercase tracking-wider">Our Promise</span>
-              <div className="h-[2px] w-8 bg-emerald-600/30" />
-            </div>
-            <h2 className="text-2xl md:text-3xl font-bold">Why Choose Khati Khadyo?</h2>
-            <p className="text-sm text-emerald-700/60 font-medium mt-1">কেন খাঁটি খাদ্য বেছে নেবেন?</p>
-          </div>
-        </AnimatedSection>
+  // If DB items configured, use them; otherwise fallback to standard promises
+  const displayItems = items.length > 0 ? items : (loaded ? defaultGuarantees : [])
+  if (loaded && displayItems.length === 0) return null
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
-          {guarantees.map((item, idx) => {
-            const Icon = item.icon
-            const colors = colorMap[item.color]
+  return (
+    <section className="py-6 bg-stone-50/80 border-t border-stone-100" aria-label="Why choose us">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+          {displayItems.map((item, idx) => {
+            const isDefault = 'icon' in item && typeof item.icon === 'function'
+            const Icon = isDefault ? (item as typeof defaultGuarantees[0]).icon : resolveIcon(item.title, item.content)
+            const colorName = isDefault ? (item as typeof defaultGuarantees[0]).color : defaultColors[idx % defaultColors.length]
+            const c = colorMap[colorName] || colorMap.emerald
+            const desc = item.description || item.subtitle || ''
             return (
-              <AnimatedSection key={item.title} delay={idx * 0.1}>
-                <div className="group text-center p-5 md:p-6 rounded-2xl border border-border/30 hover:border-emerald-200 hover:shadow-xl transition-all duration-300 bg-white hover:-translate-y-1">
-                  <div className={`h-16 w-16 rounded-2xl bg-gradient-to-br ${colors.bg} flex items-center justify-center mx-auto mb-4 ring-2 ${colors.ring} group-hover:scale-110 transition-transform duration-300 relative`}>
-                    <Icon className={`h-8 w-8 ${colors.icon}`} />
-                    {/* Subtle pulse ring on hover */}
-                    <motion.div
-                      className="absolute inset-0 rounded-2xl ring-2 ring-current opacity-0 group-hover:opacity-20"
-                      animate={{ scale: [1, 1.2, 1] }}
-                      transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
-                    />
-                  </div>
-                  <h3 className="font-bold text-sm md:text-base mb-0.5">{item.title}</h3>
-                  <p className="text-[11px] text-emerald-600/60 font-medium mb-2">{item.bengaliTitle}</p>
-                  <p className="text-xs md:text-sm text-muted-foreground leading-relaxed">{item.description}</p>
+              <div key={item.id || item.title} className="flex items-start gap-3 p-3 md:p-4 rounded-xl bg-white border border-border/40 shadow-sm">
+                <div className={`h-9 w-9 rounded-lg ${c.bg} flex items-center justify-center flex-shrink-0`}>
+                  <Icon className={`h-5 w-5 ${c.icon}`} aria-hidden="true" />
                 </div>
-              </AnimatedSection>
+                <div className="min-w-0">
+                  <p className="text-xs md:text-sm font-bold text-foreground leading-tight">{item.title}</p>
+                  {desc && (
+                    <p className="text-[11px] text-muted-foreground leading-snug mt-0.5 line-clamp-2">{desc}</p>
+                  )}
+                </div>
+              </div>
             )
           })}
         </div>
@@ -1137,112 +1177,187 @@ function TrustSection() {
   )
 }
 
-// ── Seasonal Collection Section ──
+// ── Seasonal & Signature Collections — Database Driven ──
+interface SeasonalSectionItem {
+  id: string
+  title: string
+  subtitle: string | null
+  image: string | null
+  categoryId: string | null
+  content: string | null  // JSON: { link, tag }
+  sortOrder: number
+  category?: { id: string; name: string; slug: string } | null
+}
+
 function SeasonalCollectionSection({ navigate }: { navigate: (page: PageName, params?: Record<string, unknown>) => void }) {
-  const collections = [
-    {
-      title: 'সুন্দরবনের প্রাকৃতিক মধু',
-      subtitle: 'Pure Sundarbans Wild Honey',
-      tag: 'Seasonal Special',
-      bg: 'from-amber-50 to-orange-50 border-amber-200',
-      icon: '🍯',
-      link: 'honey-jaggery',
-    },
-    {
-      title: 'কাঠের ঘানির সরিষার তেল',
-      subtitle: 'Cold-Pressed Mustard Oil',
-      tag: 'Traditional',
-      bg: 'from-yellow-50 to-amber-50 border-yellow-200',
-      icon: '🫒',
-      link: 'ghee-oils',
-    },
-    {
-      title: 'খাঁটি খেজুরের পাটালি গুড়',
-      subtitle: 'Pure Date Palm Jaggery',
-      tag: 'Winter Harvest',
-      bg: 'from-orange-50 to-amber-100/50 border-orange-200',
-      icon: '🪵',
-      link: 'honey-jaggery',
-    },
-    {
-      title: 'প্রিমিয়াম দেশি স্পেশাল কম্বো',
-      subtitle: 'Organic Family Gift Pack',
-      tag: 'Best Value',
-      bg: 'from-emerald-50 to-teal-50 border-emerald-200',
-      icon: '🎁',
-      link: 'special-combos',
-    },
-  ]
+  const [collections, setCollections] = useState<SeasonalSectionItem[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let mounted = true
+    async function load() {
+      try {
+        const res = await fetch('/api/homepage-sections?type=seasonal&limit=8')
+        if (!res.ok) throw new Error('failed')
+        const data = await res.json()
+        if (mounted && data.success) {
+          const items = extractItems<SeasonalSectionItem>(data)
+          setCollections(items)
+        }
+      } catch {
+        // silent
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+    load()
+    return () => { mounted = false }
+  }, [])
+
+  // Hide if no active seasonal collections configured
+  if (loading || collections.length === 0) return null
 
   return (
     <AnimatedSection className="py-8 bg-white border-t border-stone-100">
       <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center max-w-2xl mx-auto mb-10">
+        <div className="text-center max-w-2xl mx-auto mb-8">
           <Badge className="bg-amber-100 text-amber-800 border-amber-200 mb-2 font-semibold">
             বাংলাদেশি বিশেষ কালেকশন
           </Badge>
           <h2 className="text-2xl md:text-3xl font-extrabold text-foreground">
-            Seasonal & Signature Collections
+            Seasonal &amp; Signature Collections
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
             Handcrafted traditional food essentials prepared with care
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {collections.map((item) => (
-            <motion.div
-              key={item.title}
-              whileHover={{ y: -4 }}
-              className={`p-6 rounded-2xl bg-gradient-to-br ${item.bg} border shadow-sm hover:shadow-md transition-all flex flex-col justify-between cursor-pointer`}
-              onClick={() => navigate('products', { category: item.link })}
-            >
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-3xl">{item.icon}</span>
-                  <Badge variant="outline" className="bg-white/80 backdrop-blur-sm text-[10px] font-bold">
-                    {item.tag}
-                  </Badge>
+        <div className={`grid gap-4 ${
+          collections.length === 1 ? 'grid-cols-1 max-w-md mx-auto' :
+          collections.length === 2 ? 'grid-cols-1 sm:grid-cols-2 max-w-2xl mx-auto' :
+          collections.length === 3 ? 'grid-cols-1 sm:grid-cols-3' :
+          'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
+        }`}>
+          {collections.map((item) => {
+            // Parse content JSON for extra metadata (tag, link override)
+            let parsed: Record<string, string> = {}
+            try { if (item.content) parsed = JSON.parse(item.content) } catch { /* ignore */ }
+            const tag = parsed.tag || null
+            // Destination: category slug > explicit link > categoryId > null
+            const categorySlug = item.category?.slug
+            const hasDestination = !!(categorySlug || parsed.link || item.categoryId)
+
+            const card = (
+              <motion.div
+                whileHover={hasDestination ? { y: -3 } : {}}
+                className={`group p-5 rounded-2xl border shadow-sm transition-all bg-gradient-to-br from-stone-50 to-stone-100/50 border-stone-200 ${
+                  hasDestination ? 'cursor-pointer hover:shadow-md hover:border-primary/30' : 'cursor-default'
+                } flex flex-col justify-between min-h-[140px]`}
+              >
+                {item.image ? (
+                  <div className="relative h-20 w-full mb-3 rounded-xl overflow-hidden bg-stone-200">
+                    <Image
+                      src={item.image}
+                      alt={item.title}
+                      fill
+                      className="object-cover"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                    />
+                  </div>
+                ) : null}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h3 className="font-bold text-sm md:text-base text-foreground line-clamp-2">{item.title}</h3>
+                    {item.subtitle && (
+                      <p className="text-xs text-muted-foreground mt-0.5 font-medium line-clamp-1">{item.subtitle}</p>
+                    )}
+                  </div>
+                  {tag && (
+                    <Badge variant="outline" className="text-[10px] font-bold bg-white/80 flex-shrink-0">
+                      {tag}
+                    </Badge>
+                  )}
                 </div>
-                <h3 className="font-bold text-lg text-foreground line-clamp-1">{item.title}</h3>
-                <p className="text-xs text-muted-foreground mt-0.5 font-medium">{item.subtitle}</p>
-              </div>
-              <div className="mt-6 flex items-center gap-1 text-xs font-bold text-emerald-800">
-                Explore Collection <ArrowRight className="h-3.5 w-3.5" />
-              </div>
-            </motion.div>
-          ))}
+                {hasDestination && (
+                  <div className="mt-4 flex items-center gap-1 text-xs font-bold text-primary group-hover:gap-2 transition-all">
+                    Explore <ArrowRight className="h-3.5 w-3.5" />
+                  </div>
+                )}
+              </motion.div>
+            )
+
+            if (!hasDestination) return <div key={item.id}>{card}</div>
+
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className="text-left"
+                onClick={() => {
+                  if (categorySlug) {
+                    navigate('products', { category: categorySlug })
+                  } else if (parsed.link) {
+                    navigate('products', { category: parsed.link })
+                  }
+                }}
+              >
+                {card}
+              </button>
+            )
+          })}
         </div>
       </div>
     </AnimatedSection>
   )
 }
 
-// ── Customer Reviews Section ──
-function CustomerReviewsSection() {
-  const reviews = [
-    {
-      name: 'Dr. Rafiqul Islam',
-      location: 'Dhanmondi, Dhaka',
-      rating: 5,
-      comment: 'খাঁটি খাদ্যের আখের গুড় এবং সরিষার তেলের কোয়ালিটি সত্যিই দারুণ। পরিবারের জন্য নিয়মিত অর্ডার করি।',
-      date: '2 days ago',
-    },
-    {
-      name: 'Nusrat Jahan',
-      location: 'Gulshan, Dhaka',
-      rating: 5,
-      comment: 'Sundarbans honey is 100% pure! Fast delivery and exceptional customer support.',
-      date: '1 week ago',
-    },
-    {
-      name: 'Mahmudul Hasan',
-      location: 'Panchlaish, Chittagong',
-      rating: 5,
-      comment: 'পণ্য হাতে পাওয়ার পর দেখে টাকা দেয়ার সুবিধা সত্যিই ভরসা জাগায়। ঘি-এর অরিজিনাল ঘ্রাণ পাওয়া যায়।',
-      date: '2 weeks ago',
-    },
-  ]
+// ── Customer Reviews Section (Authentic Database Reviews Only) ──
+interface ApprovedReviewItem {
+  id: string
+  rating: number
+  comment?: string | null
+  createdAt: string
+  isVerified?: boolean
+  user?: {
+    name?: string | null
+  } | null
+  product?: {
+    id: string
+    name: string
+    slug: string
+  } | null
+}
+
+function CustomerReviewsSection({ navigate }: { navigate: (page: PageName, params?: Record<string, unknown>) => void }) {
+  const [reviews, setReviews] = useState<ApprovedReviewItem[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let isMounted = true
+    async function fetchReviews() {
+      try {
+        const res = await fetch('/api/reviews?limit=6')
+        if (res.ok) {
+          const json = await res.json()
+          const items = extractItems<ApprovedReviewItem>(json)
+          if (isMounted) {
+            setReviews(items.filter((r) => r.comment && r.comment.trim()))
+          }
+        }
+      } catch {
+        if (isMounted) setReviews([])
+      } finally {
+        if (isMounted) setLoading(false)
+      }
+    }
+    fetchReviews()
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  // If loading or no approved reviews exist, render nothing (no fake filler or empty placeholders)
+  if (loading || reviews.length === 0) return null
 
   return (
     <AnimatedSection className="py-8 bg-stone-50">
@@ -1252,19 +1367,19 @@ function CustomerReviewsSection() {
             গ্রাহকদের সন্তুষ্টি
           </Badge>
           <h2 className="text-2xl md:text-3xl font-extrabold text-foreground">
-            What Our Customers Say
+            Customer Reviews
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Over 10,000+ happy Bangladeshi families trust Khati Khadyo
+            Authentic verified feedback from our community
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {reviews.map((r, i) => (
-            <div key={i} className="p-6 rounded-2xl bg-white border border-stone-200/80 shadow-sm flex flex-col justify-between space-y-4">
+          {reviews.map((r) => (
+            <div key={r.id} className="p-6 rounded-2xl bg-white border border-stone-200/80 shadow-sm flex flex-col justify-between space-y-4">
               <div className="space-y-3">
                 <div className="flex items-center gap-1">
-                  {Array.from({ length: r.rating }).map((_, idx) => (
+                  {Array.from({ length: r.rating || 5 }).map((_, idx) => (
                     <Star key={idx} className="h-4 w-4 fill-amber-400 text-amber-400" />
                   ))}
                 </div>
@@ -1272,13 +1387,27 @@ function CustomerReviewsSection() {
               </div>
               <div className="flex items-center justify-between pt-3 border-t border-stone-100">
                 <div>
-                  <h4 className="font-bold text-sm text-foreground flex items-center gap-1">
-                    {r.name}
-                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                  </h4>
-                  <p className="text-[11px] text-muted-foreground">{r.location}</p>
+                  <h3 className="font-bold text-sm text-foreground flex items-center gap-1">
+                    {r.user?.name || 'Verified Customer'}
+                    {r.isVerified && (
+                      <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                        <ShieldCheck className="h-3 w-3 text-emerald-600" /> Verified
+                      </span>
+                    )}
+                  </h3>
+                  {r.product?.name && (
+                    <button
+                      type="button"
+                      onClick={() => r.product?.slug && navigate('product-detail', { slug: r.product.slug })}
+                      className="text-[11px] text-emerald-700 hover:underline font-medium truncate max-w-[180px] block mt-0.5 text-left"
+                    >
+                      {r.product.name}
+                    </button>
+                  )}
                 </div>
-                <span className="text-[10px] text-muted-foreground bg-stone-100 px-2 py-0.5 rounded-full">{r.date}</span>
+                <span className="text-[10px] text-muted-foreground bg-stone-100 px-2 py-0.5 rounded-full">
+                  {new Date(r.createdAt).toLocaleDateString()}
+                </span>
               </div>
             </div>
           ))}
@@ -1289,32 +1418,48 @@ function CustomerReviewsSection() {
 }
 
 // ── FAQ Section ──
-function FAQSection() {
-  const [openIndex, setOpenIndex] = useState<number | null>(0)
+// ── FAQ Section — Database Driven ──
+interface FAQItemData {
+  id: string
+  question: string
+  answer: string
+  category: string | null
+  sortOrder: number
+}
 
-  const faqs = [
-    {
-      q: 'পণ্যের ১০০% খাঁটি হওয়ার নিশ্চয়তা কী?',
-      a: 'আমরা সরাসরি নিবন্ধিত কৃষক ও বিশ্বস্ত প্রস্তুতকারকদের কাছ থেকে পণ্য সংগ্রহ করি। ক্ষতিকারক কেমিক্যাল বা ভেজালমুক্ত তা নিশ্চিত করতে নিজস্ব কোয়ালিটি কন্ট্রোল টিম কাজ করে।',
-    },
-    {
-      q: 'ডেলিভারি চার্জ এবং সময় কতদিন?',
-      a: 'ঢাকা সিটিতে ২৪–৪৮ ঘণ্টার মধ্যে হোম ডেলিভারি এবং ঢাকার বাইরে ২–৩ কার্যদিবসের মধ্যে পৌঁছায়। ৳১,৫০০ বা তার বেশি অর্ডারে সারা বাংলাদেশে ডেলিভারি একদম ফ্রি!',
-    },
-    {
-      q: 'ক্যাশ অন ডেলিভারিতে পণ্য দেখে মূল্য পরিশোধ করা যাবে?',
-      a: 'হ্যাঁ, আমাদের প্রতিটি অর্ডারে ক্যাশ অন ডেলিভারি (Cash on Delivery) সুবিধা রয়েছে। পণ্য হাতে পেয়ে চেক করে নেওয়ার সুযোগ রয়েছে।',
-    },
-    {
-      q: 'পণ্য পছন্দ না হলে বা কোন সমস্যা থাকলে কীভাবে রিটার্ন করব?',
-      a: 'পণ্য রিসিভ করার ২৪ ঘণ্টার মধ্যে আমাদের হেল্পলাইন বা ফেসবুক পেজে জানালে দ্রুততম সময়ে বিনামূল্যে পণ্য রিপ্লেস বা রিফান্ড দেয়া হয়।',
-    },
-  ]
+function FAQSection() {
+  const [openId, setOpenId] = useState<string | null>(null)
+  const [faqs, setFaqs] = useState<FAQItemData[]>([])
+  const [faqLoading, setFaqLoading] = useState(true)
+
+  useEffect(() => {
+    let mounted = true
+    async function load() {
+      try {
+        const res = await fetch('/api/faq?limit=20')
+        if (!res.ok) throw new Error('fetch failed')
+        const data = await res.json()
+        if (mounted && data.success) {
+          const items = extractItems<FAQItemData>(data)
+          setFaqs(items)
+          if (items.length > 0) setOpenId(items[0].id)
+        }
+      } catch {
+        // silent — no fake fallback
+      } finally {
+        if (mounted) setFaqLoading(false)
+      }
+    }
+    load()
+    return () => { mounted = false }
+  }, [])
+
+  if (faqLoading || faqs.length === 0) return null
 
   return (
     <AnimatedSection className="py-8 bg-white border-t border-stone-100">
-      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 max-w-3xl">
-        <div className="text-center mb-10">
+      <div className="w-full max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center mb-8">
           <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 mb-2 font-semibold">
             সাধারণ প্রশ্ন উত্তর
           </Badge>
@@ -1324,34 +1469,47 @@ function FAQSection() {
           <p className="text-sm text-muted-foreground mt-1">Everything you need to know about shopping with us</p>
         </div>
 
-        <div className="space-y-3">
-          {faqs.map((faq, i) => {
-            const isOpen = openIndex === i
+        <div className="space-y-2" role="list">
+          {faqs.map((faq) => {
+            const isOpen = openId === faq.id
+            const panelId = `faq-panel-${faq.id}`
+            const btnId = `faq-btn-${faq.id}`
             return (
               <div
-                key={i}
-                className="border border-stone-200 rounded-xl overflow-hidden bg-stone-50/50 transition-colors"
+                key={faq.id}
+                role="listitem"
+                className="border border-stone-200 rounded-xl overflow-hidden bg-stone-50/50"
               >
                 <button
+                  id={btnId}
                   type="button"
-                  className="w-full p-4 text-left font-bold text-sm md:text-base text-foreground flex items-center justify-between gap-4"
-                  onClick={() => setOpenIndex(isOpen ? null : i)}
+                  aria-expanded={isOpen}
+                  aria-controls={panelId}
+                  className="w-full p-4 text-left font-semibold text-sm md:text-base text-foreground flex items-center justify-between gap-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                  onClick={() => setOpenId(isOpen ? null : faq.id)}
                 >
-                  <span>{faq.q}</span>
-                  <span className={`h-6 w-6 rounded-full bg-white flex items-center justify-center border text-xs transition-transform ${isOpen ? 'rotate-180 bg-emerald-50 text-emerald-700' : ''}`}>
+                  <span>{faq.question}</span>
+                  <span
+                    aria-hidden="true"
+                    className={`h-6 w-6 flex-shrink-0 rounded-full bg-white flex items-center justify-center border text-emerald-700 transition-transform duration-200 ${isOpen ? 'rotate-180 bg-emerald-50' : ''}`}
+                  >
                     ▼
                   </span>
                 </button>
                 <AnimatePresence>
                   {isOpen && (
                     <motion.div
+                      id={panelId}
+                      role="region"
+                      aria-labelledby={btnId}
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
                       className="overflow-hidden"
                     >
-                      <div className="p-4 pt-0 text-sm text-muted-foreground leading-relaxed border-t border-stone-200/60 bg-white">
-                        {faq.a}
+                      <div className="px-4 pb-4 text-sm text-muted-foreground leading-relaxed border-t border-stone-200/60 bg-white pt-3">
+                        {faq.answer}
                       </div>
                     </motion.div>
                   )}
@@ -1570,7 +1728,7 @@ export default function HomePage() {
       <TrustSection />
 
       {/* ── 11. Customer Reviews ── */}
-      <CustomerReviewsSection />
+      <CustomerReviewsSection navigate={navigate} />
 
       {/* ── 12. Frequently Asked Questions (FAQ Accordion) ── */}
       <FAQSection />

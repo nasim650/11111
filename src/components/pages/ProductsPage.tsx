@@ -115,7 +115,7 @@ function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
 
 // ── Main Component ──
 
-export default function ProductsPage() {
+export default function ProductsPage({ initialCategorySlug }: { initialCategorySlug?: string } = {}) {
   const { navigate, pageParams, searchQuery, setSearchQuery, selectedCategory, setSelectedCategory } = useAppStore()
 
   // ── State ──
@@ -160,21 +160,45 @@ export default function ProductsPage() {
   const searchInputRef = useRef<HTMLInputElement>(null)
   const suggestionsRef = useRef<HTMLDivElement>(null)
 
-  // ── Initialize from page params ──
+  // ── Initialize from page params or props ──
   useEffect(() => {
-    if (pageParams?.category) {
-      setSelectedCategories([String(pageParams.category)])
-      setSelectedCategory(String(pageParams.category))
+    let categoryToSelect = initialCategorySlug || pageParams?.category
+    let subcategoryToSelect = pageParams?.subcategory
+    let sortToSelect = pageParams?.sort
+    let searchToSelect = pageParams?.search || searchQuery
+
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search)
+      if (!categoryToSelect && urlParams.get('category')) {
+        categoryToSelect = urlParams.get('category')!
+      }
+      if (!subcategoryToSelect && urlParams.get('subcategory')) {
+        subcategoryToSelect = urlParams.get('subcategory')!
+      }
+      if (!sortToSelect && urlParams.get('sort')) {
+        sortToSelect = urlParams.get('sort')!
+      }
+      if (!searchToSelect && urlParams.get('search')) {
+        searchToSelect = urlParams.get('search')!
+      }
     }
-    if (pageParams?.sort) {
-      setSort(String(pageParams.sort))
+
+    if (categoryToSelect) {
+      setSelectedCategories([String(categoryToSelect)])
+      setSelectedCategory(String(categoryToSelect))
     }
-    if (pageParams?.search || searchQuery) {
-      const q = String(pageParams.search || searchQuery)
+    if (subcategoryToSelect) {
+      setSelectedSubcategories([String(subcategoryToSelect)])
+    }
+    if (sortToSelect) {
+      setSort(String(sortToSelect))
+    }
+    if (searchToSelect) {
+      const q = String(searchToSelect)
       setSearchInput(q)
       setSearchQuery(q)
     }
-  }, [pageParams, searchQuery, setSearchQuery, setSelectedCategory])
+  }, [initialCategorySlug, pageParams, searchQuery, setSearchQuery, setSelectedCategory])
 
   // ── Load recent searches from localStorage ──
   useEffect(() => {

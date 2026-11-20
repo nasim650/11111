@@ -247,7 +247,7 @@ export default function OrdersPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
-  const ordersPerPage = 8
+  const ordersPerPage = 10
 
   useEffect(() => {
     // If not authenticated, skip fetching — the LoginPrompt is shown instead.
@@ -255,9 +255,8 @@ export default function OrdersPage() {
       return
     }
     // The /api/orders endpoint filters by the JWT token automatically for
-    // customers (and returns all orders for admins), so no userId query param
-    // is needed. We use authFetch to attach the Authorization header.
-    authFetch(`/api/orders`)
+    // customers (and returns all orders for admins). Fetch up to 100 recent orders.
+    authFetch(`/api/orders?limit=100`)
       .then((r) => r.json())
       .then((data) => {
         const ords = extractItems<Order>(data)

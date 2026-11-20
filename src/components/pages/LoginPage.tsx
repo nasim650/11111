@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Eye, EyeOff, LogIn, Mail, Phone, Lock, AlertCircle, Truck, ShieldCheck, Award, Heart, Zap, Check } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
@@ -9,9 +11,13 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Separator } from '@/components/ui/separator'
 import { useAppStore } from '@/lib/store'
+import { sanitizeInternalRedirect } from '@/lib/sanitize-redirect'
 import { toast } from 'sonner'
 
 export default function LoginPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const nextParam = searchParams?.get('next')
   const { login, navigate, siteConfig } = useAppStore()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
@@ -68,12 +74,19 @@ export default function LoginPage() {
       toast.success('Login successful!')
       setTimeout(() => {
         const state = useAppStore.getState()
+        if (nextParam) {
+          const safeNext = sanitizeInternalRedirect(nextParam, '')
+          if (safeNext) {
+            router.push(safeNext)
+            return
+          }
+        }
         if (state.user?.role === 'admin') {
           navigate('admin-dashboard')
         } else {
           navigate('home')
         }
-      }, 1500)
+      }, 1200)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed'
       setError(message)
@@ -241,18 +254,20 @@ export default function LoginPage() {
           </motion.div>
 
           {/* Brand Logo Area */}
-          <motion.div
-            initial={{ scale: 0, rotate: -90 }}
-            animate={{ scale: 1, rotate: 0 }}
-            transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.3 }}
-            className="w-24 h-24 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center mb-8 shadow-2xl ring-1 ring-white/20 overflow-hidden"
-          >
-            <img
-              src="/all_logo.png"
-              alt="Khati Khadyo"
-              className="h-20 w-auto object-contain"
-            />
-          </motion.div>
+          <Link href="/" aria-label="Khati Khadyo - Go to homepage">
+            <motion.div
+              initial={{ scale: 0, rotate: -90 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.3 }}
+              className="w-24 h-24 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center mb-8 shadow-2xl ring-1 ring-white/20 overflow-hidden hover:opacity-90 transition-opacity"
+            >
+              <img
+                src="/all_logo.png"
+                alt="Khati Khadyo"
+                className="h-20 w-auto object-contain"
+              />
+            </motion.div>
+          </Link>
           <motion.h1
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -312,13 +327,15 @@ export default function LoginPage() {
             </svg>
           </div>
           <div className="relative">
-            <div className="w-14 h-14 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center mx-auto mb-3 shadow-lg overflow-hidden">
-              <img
-                src="/all_logo.png"
-                alt="Khati Khadyo"
-                className="h-10 w-auto object-contain"
-              />
-            </div>
+            <Link href="/" aria-label="Khati Khadyo - Go to homepage">
+              <div className="w-14 h-14 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center mx-auto mb-3 shadow-lg overflow-hidden hover:opacity-90 transition-opacity">
+                <img
+                  src="/all_logo.png"
+                  alt="Khati Khadyo"
+                  className="h-10 w-auto object-contain"
+                />
+              </div>
+            </Link>
             <h1 className="text-xl font-bold">স্বাগতম!</h1>
             <p className="text-white/70 text-sm mt-1">খাঁটি খাদ্য — Authentic Bangladeshi Food</p>
           </div>

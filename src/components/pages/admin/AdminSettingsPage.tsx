@@ -184,6 +184,76 @@ export default function AdminSettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [passwordErrors, setPasswordErrors] = useState<FormErrors>({})
   const [tabLoading, setTabLoading] = useState<Record<string, boolean>>({})
+  const [retentionRunning, setRetentionRunning] = useState(false)
+  const [retentionResult, setRetentionResult] = useState<{
+    dryRun: boolean
+    cutoffDate: string
+    expiredOtpChallengesCleaned: number
+    guestOrdersAnonymized: number
+    hardDeleteEnabled: boolean
+  } | null>(null)
+  const [smsDiagLoading, setSmsDiagLoading] = useState(false)
+  const [smsDiagnostics, setSmsDiagnostics] = useState<{
+    providerName: string
+    providerConfigured: boolean
+    senderIdConfigured: boolean
+    otpSecretConfigured: boolean
+    senderType?: 'non-masking' | 'masking' | 'unknown'
+    balance?: {
+      ok: boolean
+      balance?: number
+      rawBalance?: string
+      status: 'healthy' | 'low' | 'empty' | 'unconfigured' | 'error'
+      error?: string
+      checkedAt: string
+    } | null
+  } | null>(null)
+
+  const fetchSmsDiagnostics = useCallback(async (showToast = false) => {
+    setSmsDiagLoading(true)
+    try {
+      const res = await authFetch('/api/admin/sms-diagnostics')
+      if (!res.ok) throw new Error('SMS স্ট্যাটাস লোড করা যায়নি')
+      const json = await res.json()
+      if (json.success && json.data) {
+        setSmsDiagnostics(json.data)
+        if (showToast) toast.success('SMS ব্যালেন্স ও স্ট্যাটাস আপডেট হয়েছে')
+      } else {
+        if (showToast) toast.error(json.error || 'SMS স্ট্যাটাস চেক করা যায়নি')
+      }
+    } catch (err) {
+      if (showToast) toast.error(err instanceof Error ? err.message : 'SMS স্ট্যাটাস চেক করা যায়নি')
+    } finally {
+      setSmsDiagLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (activeTab === 'notifications') {
+      fetchSmsDiagnostics(false)
+    }
+  }, [activeTab, fetchSmsDiagnostics])
+
+  async function handleRunRetentionPreview() {
+    setRetentionRunning(true)
+    try {
+      const res = await authFetch('/api/cron/retention?dryRun=true&daysOld=180', {
+        method: 'POST',
+      })
+      if (!res.ok) throw new Error('Failed to run retention preview')
+      const json = await res.json()
+      if (json.success) {
+        setRetentionResult(json.data)
+        toast.success('Retention dry-run completed successfully')
+      } else {
+        toast.error(json.error || 'Retention preview failed')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Retention preview failed')
+    } finally {
+      setRetentionRunning(false)
+    }
+  }
 
   const fetchConfig = useCallback(async () => {
     try {
@@ -809,6 +879,114 @@ export default function AdminSettingsPage() {
 
               <Separator />
 
+              {/* SMS Gateway & Live Balance Status */}
+              <div className="rounded-lg border bg-muted/20 p-4 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="font-medium flex items-center gap-2">
+                      <span className="size-2 rounded-full bg-emerald-500" />
+                      SMS Gateway &amp; Live Balance
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      লাইভ Cloud SMS BD ব্যালেন্স ও গেটওয়ে কনফিগারেশন স্ট্যাটাস
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fetchSmsDiagnostics(true)}
+                    disabled={smsDiagLoading}
+                    className="gap-1.5"
+                  >
+                    <RefreshCw className={`size-3.5 ${smsDiagLoading ? 'animate-spin' : ''}`} />
+                    {smsDiagLoading ? 'Checking...' : 'Refresh Balance'}
+                  </Button>
+                </div>
+
+                {smsDiagLoading && !smsDiagnostics ? (
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <Skeleton className="h-20 w-full" />
+                    <Skeleton className="h-20 w-full" />
+                    <Skeleton className="h-20 w-full" />
+                  </div>
+                ) : smsDiagnostics ? (
+                  <div className="space-y-3">
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="p-3 rounded-md border bg-card">
+                        <p className="text-xs text-muted-foreground">Active Provider</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="font-semibold uppercase text-sm">
+                            {smsDiagnostics.providerName === 'none' ? 'Not Set' : smsDiagnostics.providerName}
+                          </p>
+                          {smsDiagnostics.senderType && smsDiagnostics.senderType !== 'unknown' && (
+                            <Badge variant="secondary" className="text-[10px]">
+                              {smsDiagnostics.senderType === 'non-masking' ? 'Non-Masking' : 'Masking'}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-md border bg-card">
+                        <p className="text-xs text-muted-foreground">Live SMS Balance</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="font-bold text-lg">
+                            {smsDiagnostics.balance?.ok && smsDiagnostics.balance.balance !== undefined
+                              ? `৳${smsDiagnostics.balance.balance.toFixed(2)}`
+                              : '—'}
+                          </p>
+                          {smsDiagnostics.balance?.status === 'healthy' && (
+                            <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 text-[10px]">ব্যালেন্স ঠিক আছে</Badge>
+                          )}
+                          {smsDiagnostics.balance?.status === 'low' && (
+                            <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 text-[10px]">ব্যালেন্স কম</Badge>
+                          )}
+                          {smsDiagnostics.balance?.status === 'empty' && (
+                            <Badge variant="destructive" className="text-[10px]">ব্যালেন্স শেষ</Badge>
+                          )}
+                          {smsDiagnostics.balance?.status === 'unconfigured' && (
+                            <Badge variant="secondary" className="text-[10px]">কনফিগার নেই</Badge>
+                          )}
+                          {smsDiagnostics.balance?.status === 'error' && (
+                            <Badge variant="destructive" className="text-[10px]">চেক ব্যর্থ</Badge>
+                          )}
+                        </div>
+                        {smsDiagnostics.balance?.error && (
+                          <p className="text-[11px] text-destructive mt-1">{smsDiagnostics.balance.error}</p>
+                        )}
+                      </div>
+
+                      <div className="p-3 rounded-md border bg-card">
+                        <p className="text-xs text-muted-foreground">Configuration Health</p>
+                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                          <Badge variant={smsDiagnostics.providerConfigured ? 'default' : 'destructive'} className="text-[10px]">
+                            API Key: {smsDiagnostics.providerConfigured ? 'OK' : 'Missing'}
+                          </Badge>
+                          <Badge variant={smsDiagnostics.senderIdConfigured ? 'default' : 'destructive'} className="text-[10px]">
+                            SenderID: {smsDiagnostics.senderIdConfigured ? 'OK' : 'Missing'}
+                          </Badge>
+                          <Badge variant={smsDiagnostics.otpSecretConfigured ? 'default' : 'destructive'} className="text-[10px]">
+                            OTP Secret: {smsDiagnostics.otpSecretConfigured ? 'OK' : 'Missing'}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+
+                    {smsDiagnostics.balance?.checkedAt && (
+                      <p className="text-[11px] text-muted-foreground">
+                        Last checked: {new Date(smsDiagnostics.balance.checkedAt).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    SMS ব্যালেন্স দেখতে Refresh Balance বাটনে ক্লিক করুন।
+                  </p>
+                )}
+              </div>
+
+              <Separator />
+
               {/* SMS Notifications */}
               <div>
                 <h3 className="font-medium mb-3 flex items-center gap-2">
@@ -961,6 +1139,88 @@ export default function AdminSettingsPage() {
                   />
                   {errors.sessionTimeout && <p className="text-xs text-destructive flex items-center gap-1"><AlertCircle className="size-3" />{errors.sessionTimeout}</p>}
                   <p className="text-xs text-muted-foreground">Admin session will expire after this period of inactivity</p>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Six-Month Data Retention Policy (Part E) */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="font-medium text-base flex items-center gap-2">
+                      <Database className="size-4 text-primary" />
+                      Six-Month Data Retention & Privacy Policy
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Automatic lifecycle cleanup for temporary authentication challenges and guest customer PII.
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="border-emerald-300 text-emerald-800 bg-emerald-50 text-xs">
+                    Hard Delete Locked
+                  </Badge>
+                </div>
+
+                <div className="rounded-lg border p-4 space-y-4 bg-muted/20">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                    <div className="p-3 bg-card border rounded-md">
+                      <p className="font-semibold text-foreground mb-1">Financial & Order Safety</p>
+                      <p className="text-muted-foreground">Orders, payments, invoices, items, and audit logs are permanently preserved.</p>
+                    </div>
+                    <div className="p-3 bg-card border rounded-md">
+                      <p className="font-semibold text-foreground mb-1">OTP Challenges (&gt; 180 Days)</p>
+                      <p className="text-muted-foreground">Expired and consumed OTP verification codes are safely purged.</p>
+                    </div>
+                    <div className="p-3 bg-card border rounded-md">
+                      <p className="font-semibold text-foreground mb-1">Guest Privacy Anonymization</p>
+                      <p className="text-muted-foreground">Guest orders older than 180 days have phone masked and email/address cleared.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                    <div className="text-xs text-muted-foreground">
+                      <span>Protection Guard: </span>
+                      <code className="bg-muted px-1.5 py-0.5 rounded text-[11px] font-mono">RETENTION_HARD_DELETE_ENABLED=false</code>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRunRetentionPreview}
+                      disabled={retentionRunning}
+                      className="gap-2"
+                    >
+                      <RefreshCw className={`size-3.5 ${retentionRunning ? 'animate-spin' : ''}`} />
+                      {retentionRunning ? 'Running Preview...' : 'Run Dry-Run Preview'}
+                    </Button>
+                  </div>
+
+                  {retentionResult && (
+                    <div className="mt-3 p-3 rounded-md bg-card border text-xs space-y-1.5">
+                      <div className="flex items-center justify-between font-semibold">
+                        <span>Preview Result (Dry Run)</span>
+                        <Badge variant="secondary" className="text-[10px]">Preview Mode Only</Badge>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-muted-foreground">
+                        <div>
+                          <span>Cutoff Date:</span>
+                          <p className="font-mono text-foreground">{new Date(retentionResult.cutoffDate).toLocaleDateString()}</p>
+                        </div>
+                        <div>
+                          <span>Eligible OTPs:</span>
+                          <p className="font-semibold text-foreground">{retentionResult.expiredOtpChallengesCleaned}</p>
+                        </div>
+                        <div>
+                          <span>Eligible Guest Orders:</span>
+                          <p className="font-semibold text-foreground">{retentionResult.guestOrdersAnonymized}</p>
+                        </div>
+                        <div>
+                          <span>Hard Deletions:</span>
+                          <p className="font-semibold text-emerald-700">0 (Locked)</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>

@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search,
@@ -57,7 +59,7 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from '@/components/ui/accordion'
-import { useAppStore, type PageName } from '@/lib/store'
+import { useAppStore, setAppRouter, type PageName } from '@/lib/store'
 import { formatPrice } from '@/lib/utils'
 import { extractItems } from '@/lib/api'
 
@@ -167,6 +169,7 @@ function mapUrlToPage(url: string): { page: PageName; params?: Record<string, un
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Navbar() {
+  const router = useRouter()
   const {
     siteConfig,
     loadSiteConfig,
@@ -211,8 +214,11 @@ export default function Navbar() {
   // and differ between server (0) and client (persisted). Render 0 on first paint
   // to keep SSR HTML identical to the first client render, then swap to real values.
   const [mounted, setMounted] = useState(false)
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { setMounted(true) }, [])
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true)
+    setAppRouter(router)
+  }, [router])
 
   const searchRef = useRef<HTMLDivElement>(null)
   const megaMenuTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -481,12 +487,11 @@ export default function Navbar() {
               Categories
             </p>
             {suggestionCategories.map((cat) => (
-              <button
+              <Link
                 key={cat.id}
-                type="button"
+                href={`/categories/${cat.slug}`}
                 className="w-full text-left px-3 py-2 text-sm hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors flex items-center gap-3 rounded-lg group"
                 onClick={() => {
-                  navigate('products', { category: cat.slug })
                   setShowSearchDropdown(false)
                   setShowSuggestions(false)
                 }}
@@ -500,7 +505,7 @@ export default function Navbar() {
                 </div>
                 <span className="font-medium group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">{cat.name}</span>
                 <ChevronRight className="size-3 text-muted-foreground ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
-              </button>
+              </Link>
             ))}
           </div>
         )}
@@ -615,13 +620,15 @@ export default function Navbar() {
             <Button
               size="sm"
               variant="outline"
+              asChild
               className="mt-3 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
-              onClick={() => {
-                navigate('products')
-                setShowSearchDropdown(false)
-              }}
             >
-              Browse All Products
+              <Link
+                href="/products"
+                onClick={() => setShowSearchDropdown(false)}
+              >
+                Browse All Products
+              </Link>
             </Button>
           </div>
         )}
@@ -712,12 +719,17 @@ export default function Navbar() {
           compactMode ? 'py-1.5' : 'py-3'
         }`}>
           {/* ── Logo ── */}
-          <motion.button
-            onClick={() => navigate('home')}
-            className="flex items-center gap-2 shrink-0 group"
+          <Link
+            href="/"
+            className="flex items-center gap-2 shrink-0 group transition-transform hover:scale-[1.02] active:scale-[0.98]"
             aria-label={`${siteName} - Go to homepage`}
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.98 }}
+            onClick={(event) => {
+              event.preventDefault()
+              navigate('home')
+              if (window.location.pathname !== '/') {
+                router.push('/')
+              }
+            }}
           >
             {siteConfig?.logo ? (
               <img
@@ -741,7 +753,7 @@ export default function Navbar() {
             }`}>
               {siteName}
             </span>
-          </motion.button>
+          </Link>
 
           {/* ── Search Bar (Desktop) ── */}
           <div className="hidden md:flex items-center flex-1 max-w-2xl mx-4 relative" ref={searchRef}>
@@ -813,6 +825,7 @@ export default function Navbar() {
                 ref={searchInputRef}
                 type="search"
                 placeholder="Search for products..."
+                aria-label="Search products"
                 value={searchQuery}
                 onChange={(e) => handleSearchInputChange(e.target.value)}
                 onFocus={() => {
@@ -826,6 +839,7 @@ export default function Navbar() {
               {/* Search button */}
               <Button
                 type="submit"
+                aria-label="Submit search"
                 className={`rounded-r-xl rounded-l-none px-5 bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 transition-all duration-200 hover:shadow-md hover:shadow-emerald-600/20 ${
                   compactMode ? 'h-9' : 'h-11'
                 }`}
@@ -994,14 +1008,22 @@ export default function Navbar() {
                               variant="outline"
                               size="sm"
                               className="w-full text-xs h-9 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors"
-                              onClick={() => { navigate('cart'); setMiniCartOpen(false) }}
+                              onClick={() => {
+                                router.push('/cart')
+                                navigate('cart')
+                                setMiniCartOpen(false)
+                              }}
                             >
                               View Cart
                             </Button>
                             <Button
                               size="sm"
                               className="w-full text-xs h-9 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-600/20 transition-all"
-                              onClick={() => { navigate('checkout'); setMiniCartOpen(false) }}
+                              onClick={() => {
+                                router.push('/checkout')
+                                navigate('checkout')
+                                setMiniCartOpen(false)
+                              }}
                             >
                               Checkout
                             </Button>
@@ -1433,13 +1455,14 @@ export default function Navbar() {
                     <Input
                       type="search"
                       placeholder="Search for products..."
+                      aria-label="Search products"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="h-10 text-sm pl-8"
                       autoFocus
                     />
                   </div>
-                  <Button type="submit" size="sm" className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white h-10 px-4">
+                  <Button type="submit" size="sm" aria-label="Submit search" className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white h-10 px-4">
                     <Search className="size-4" />
                   </Button>
                 </form>

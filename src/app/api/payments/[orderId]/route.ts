@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserIdFromRequest, getUserRoleFromRequest, isAdmin } from '@/lib/utils'
+import { sanitizeGatewayResponse } from '@/app/api/payments/route'
 
 export async function GET(
   request: NextRequest,
@@ -15,6 +16,7 @@ export async function GET(
       where: { id: orderId },
       include: {
         payment: true,
+        items: true,
         user: { select: { id: true, name: true, email: true, phone: true } },
       },
     })
@@ -33,6 +35,21 @@ export async function GET(
       )
     }
 
+    const safePayment = order.payment
+      ? {
+          id: order.payment.id,
+          transactionId: order.payment.transactionId,
+          amount: order.payment.amount,
+          method: order.payment.method,
+          gateway: order.payment.gateway,
+          status: order.payment.status,
+          paidAt: order.payment.paidAt,
+          createdAt: order.payment.createdAt,
+          updatedAt: order.payment.updatedAt,
+          gatewayResponse: sanitizeGatewayResponse(order.payment.gatewayResponse),
+        }
+      : null
+
     return NextResponse.json({
       success: true,
       data: {
@@ -42,11 +59,17 @@ export async function GET(
         paymentMethod: order.paymentMethod,
         paymentStatus: order.paymentStatus,
         orderStatus: order.orderStatus,
-        payment: order.payment,
+        guestName: order.guestName || null,
+        guestPhone: order.guestPhone || null,
+        guestEmail: order.guestEmail || null,
+        user: order.user || null,
+        itemsCount: order.items?.length || 0,
+        createdAt: order.createdAt,
+        payment: safePayment,
       },
     })
   } catch (error) {
-    console.error('Get payment error:', error)
+    console.error('Get payment details error:', error)
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }

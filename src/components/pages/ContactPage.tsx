@@ -394,43 +394,36 @@ export default function ContactPage() {
             transition={{ duration: 0.5, delay: 0.3 }}
             className="lg:col-span-2 space-y-5"
           >
-            {/* Map */}
-            <Card className="shadow-lg border-0 rounded-2xl overflow-hidden">
-              <div className="relative h-64 bg-gradient-to-br from-primary/5 via-primary/10 to-secondary/5 flex items-center justify-center">
-                <div className="absolute inset-0 opacity-20">
-                  <div className="absolute inset-0" style={{
-                    backgroundImage: 'radial-gradient(circle, #2D6A4F 1px, transparent 1px)',
-                    backgroundSize: '20px 20px',
-                  }} />
-                </div>
-                {/* Grid lines */}
-                <div className="absolute inset-0 opacity-10">
-                  <svg className="w-full h-full">
-                    {Array.from({ length: 10 }).map((_, i) => (
-                      <line key={`h${i}`} x1="0" y1={`${(i + 1) * 10}%`} x2="100%" y2={`${(i + 1) * 10}%`} stroke="#2D6A4F" strokeWidth="0.5" />
-                    ))}
-                    {Array.from({ length: 10 }).map((_, i) => (
-                      <line key={`v${i}`} x1={`${(i + 1) * 10}%`} y1="0" x2={`${(i + 1) * 10}%`} y2="100%" stroke="#2D6A4F" strokeWidth="0.5" />
-                    ))}
-                  </svg>
-                </div>
-                <div className="text-center relative z-10">
-                  <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
-                    <MapPin className="h-8 w-8 text-primary" />
+            {/* Store & Hub Location Card (Authentic & Functional) */}
+            <Card className="shadow-lg border-0 rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-50/70 to-stone-50 border border-emerald-100/60">
+              <CardContent className="p-6 space-y-4">
+                <div className="flex items-start gap-4">
+                  <div className="h-12 w-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0 shadow-sm">
+                    <MapPin className="h-6 w-6" />
                   </div>
-                  {/* Location pin animation */}
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full border-2 border-primary/20 animate-ping" style={{ animationDuration: '3s' }} />
-                  <p className="font-semibold text-primary mb-1">Our Location</p>
-                  <p className="text-sm text-muted-foreground max-w-[200px] mx-auto">
-                    {siteConfig?.address || 'Dhaka, Bangladesh'}
-                  </p>
+                  <div>
+                    <h3 className="font-bold text-base text-foreground">
+                      Office & Distribution Hub
+                    </h3>
+                    <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                      {siteConfig?.address || 'House 12, Road 4, Dhanmondi, Dhaka, Bangladesh'}
+                    </p>
+                  </div>
                 </div>
-                {/* Corner decorations */}
-                <div className="absolute top-0 left-0 w-16 h-16 border-t-4 border-l-4 border-primary/30 rounded-tl-lg" />
-                <div className="absolute bottom-0 right-0 w-16 h-16 border-b-4 border-r-4 border-primary/30 rounded-br-lg" />
-                <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-primary/20 rounded-tr-lg" />
-                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-primary/20 rounded-bl-lg" />
-              </div>
+
+                <div className="pt-2">
+                  <a
+                    href={`https://maps.google.com/?q=${encodeURIComponent(siteConfig?.address || 'Dhaka, Bangladesh')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-white px-3.5 py-2 rounded-lg border border-emerald-200 shadow-sm hover:shadow transition-all"
+                  >
+                    <Globe className="h-4 w-4 text-emerald-600" />
+                    Open in Google Maps
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+              </CardContent>
             </Card>
 
             {/* Business Hours Card */}

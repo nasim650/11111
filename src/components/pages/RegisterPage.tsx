@@ -1,17 +1,36 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { Eye, EyeOff, UserPlus, Mail, Phone, Lock, User, Check, X, AlertCircle, ChevronRight, Shield, ShieldCheck, BadgeCheck, AlertTriangle, Camera, MapPin, Heart, Sparkles, Plus } from 'lucide-react'
+import { useState, useMemo, useRef, useEffect } from 'react'
+import Link from 'next/link'
+import {
+  Eye,
+  EyeOff,
+  UserPlus,
+  Mail,
+  Phone,
+  Lock,
+  User,
+  Check,
+  AlertCircle,
+  ShieldCheck,
+  Loader2,
+  RefreshCw,
+  ArrowLeft,
+  Sparkles,
+} from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Separator } from '@/components/ui/separator'
-import { useAppStore } from '@/lib/store'
+import { useAppStore, type User as StoreUser } from '@/lib/store'
 import { toast } from 'sonner'
 
-function getPasswordStrength(password: string): { score: number; label: string; color: string; bgColor: string; icon: string } {
+function getPasswordStrength(password: string): {
+  score: number
+  label: string
+  color: string
+} {
   let score = 0
   if (password.length >= 6) score++
   if (password.length >= 8) score++
@@ -19,19 +38,17 @@ function getPasswordStrength(password: string): { score: number; label: string; 
   if (/[0-9]/.test(password)) score++
   if (/[^A-Za-z0-9]/.test(password)) score++
 
-  if (score <= 1) return { score: 20, label: 'Weak', color: 'bg-red-500', bgColor: 'bg-red-500/10', icon: '🔴' }
-  if (score <= 2) return { score: 40, label: 'Fair', color: 'bg-orange-500', bgColor: 'bg-orange-500/10', icon: '🟠' }
-  if (score <= 3) return { score: 60, label: 'Good', color: 'bg-yellow-500', bgColor: 'bg-yellow-500/10', icon: '🟡' }
-  if (score <= 4) return { score: 80, label: 'Strong', color: 'bg-emerald-500', bgColor: 'bg-emerald-500/10', icon: '🟢' }
-  return { score: 100, label: 'Very Strong', color: 'bg-emerald-600', bgColor: 'bg-emerald-600/10', icon: '💪' }
+  if (score <= 1) return { score: 20, label: 'দুর্বল (Weak)', color: 'bg-red-500' }
+  if (score <= 2) return { score: 40, label: 'মোটামুটি (Fair)', color: 'bg-amber-500' }
+  if (score <= 3) return { score: 60, label: 'ভালো (Good)', color: 'bg-yellow-500' }
+  if (score <= 4) return { score: 80, label: 'শক্তিশালী (Strong)', color: 'bg-emerald-500' }
+  return { score: 100, label: 'অত্যন্ত শক্তিশালী (Very Strong)', color: 'bg-emerald-600' }
 }
 
-type Step = 1 | 2 | 3
-
 export default function RegisterPage() {
-  const { register, navigate, siteConfig } = useAppStore()
-  const [currentStep, setCurrentStep] = useState<Step>(1)
+  const { register, navigate, setUser } = useAppStore()
 
+  // Form Fields
   const [name, setName] = useState('')
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
@@ -39,807 +56,730 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [agreeTerms, setAgreeTerms] = useState(false)
+
+  // Form States
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [formError, setFormError] = useState('')
   const [registered, setRegistered] = useState(false)
 
-  // Touched states for real-time validation
+  // Touched states for instant feedback
   const [nameTouched, setNameTouched] = useState(false)
   const [identifierTouched, setIdentifierTouched] = useState(false)
   const [passwordTouched, setPasswordTouched] = useState(false)
   const [confirmTouched, setConfirmTouched] = useState(false)
 
-  // Validation
+  // OTP Verification state
+  const [showOtpScreen, setShowOtpScreen] = useState(false)
+  const [otpPhone, setOtpPhone] = useState('')
+  const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', ''])
+  const [otpLoading, setOtpLoading] = useState(false)
+  const [otpError, setOtpError] = useState('')
+  const [resendCooldown, setResendCooldown] = useState(0)
+  const [otpSending, setOtpSending] = useState(false)
+
+  const otpInputRefs = useRef<(HTMLInputElement | null)[]>([])
+  const resendTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Clean timer on unmount
+  useEffect(() => {
+    return () => {
+      if (resendTimerRef.current) clearInterval(resendTimerRef.current)
+    }
+  }, [])
+
+  // Validation rules
   const nameValid = name.trim().length >= 2
-  const nameError = nameTouched && !nameValid ? (name.trim() ? 'Name must be at least 2 characters' : 'Name is required') : ''
+  const nameError =
+    nameTouched && !nameValid
+      ? name.trim()
+        ? 'নাম কমপক্ষে ২ অক্ষরের হতে হবে (Name must be at least 2 characters)'
+        : 'আপনার নাম লিখুন (Name is required)'
+      : ''
 
   const isEmail = identifier.includes('@')
   const identifierClean = identifier.trim()
   const phoneNormalized = identifierClean.replace(/[\s-]/g, '').replace(/^(\+?88)/, '')
   const identifierValid = isEmail
     ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifierClean)
-    : /^01[3-9]\d{8}$/.test(phoneNormalized.startsWith('01') ? phoneNormalized : '0' + phoneNormalized)
+    : /^01[3-9]\d{8}$/.test(
+        phoneNormalized.startsWith('01') ? phoneNormalized : '0' + phoneNormalized
+      )
 
-  const identifierError = identifierTouched && identifierClean
-    ? (!identifierValid
-        ? (isEmail ? 'Please enter a valid email address.' : 'Please enter a valid Bangladeshi phone number.')
-        : '')
-    : ''
+  const identifierError =
+    identifierTouched && identifierClean && !identifierValid
+      ? isEmail
+        ? 'সঠিক ইমেইল এড্রেস লিখুন (Enter a valid email address)'
+        : 'সঠিক বাংলাদেশি মোবাইল নম্বর লিখুন যেমন ০১৭১XXXXXXX'
+      : ''
 
   const passwordStrength = useMemo(() => getPasswordStrength(password), [password])
-  const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword
-  const passwordsMismatch = confirmPassword.length > 0 && password !== confirmPassword
   const passwordValid = password.length >= 6
-  const passwordError = passwordTouched && password.length > 0 && !passwordValid ? 'Password must be at least 6 characters' : ''
+  const passwordError =
+    passwordTouched && password.length > 0 && !passwordValid
+      ? 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে (At least 6 characters)'
+      : ''
 
-  const confirmError = confirmTouched && passwordsMismatch ? 'Passwords do not match' : ''
+  const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword
+  const confirmError =
+    confirmTouched && confirmPassword.length > 0 && !passwordsMatch
+      ? 'পাসওয়ার্ড মিলছে না (Passwords do not match)'
+      : ''
 
-  // Step completion checks
-  const step1Complete = nameValid
-  const step2Complete = identifierValid
-  const step3Complete = passwordValid && passwordsMatch && agreeTerms
+  const isFormValid =
+    nameValid &&
+    identifierValid &&
+    passwordValid &&
+    passwordsMatch &&
+    agreeTerms
 
-  const canProceedStep1 = step1Complete
-  const canProceedStep2 = step2Complete
-
-  const handleNextStep = () => {
-    if (currentStep === 1) {
-      setNameTouched(true)
-      if (!nameValid) return
-      setCurrentStep(2)
-    } else if (currentStep === 2) {
-      setIdentifierTouched(true)
-      if (!identifierValid) {
-        setError(isEmail ? 'Please enter a valid email address.' : 'Please enter a valid Bangladeshi phone number.')
-        return
-      }
-      setError('')
-      setCurrentStep(3)
-    }
+  // Resend OTP Countdown Timer
+  const startResendTimer = (seconds: number) => {
+    if (resendTimerRef.current) clearInterval(resendTimerRef.current)
+    setResendCooldown(seconds)
+    resendTimerRef.current = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          if (resendTimerRef.current) clearInterval(resendTimerRef.current)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
   }
 
-  const handlePrevStep = () => {
-    setError('')
-    if (currentStep === 2) setCurrentStep(1)
-    else if (currentStep === 3) setCurrentStep(2)
-  }
-
+  // Handle Form Submit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
+    if (loading) return
+
+    setNameTouched(true)
+    setIdentifierTouched(true)
+    setPasswordTouched(true)
+    setConfirmTouched(true)
+    setFormError('')
 
     if (!nameValid) {
-      setCurrentStep(1)
-      setNameTouched(true)
+      setFormError('অনুগ্রহ করে আপনার সঠিক নাম লিখুন।')
       return
     }
     if (!identifierValid) {
-      setCurrentStep(2)
-      setIdentifierTouched(true)
-      setError(isEmail ? 'Please enter a valid email address.' : 'Please enter a valid Bangladeshi phone number.')
+      setFormError(
+        isEmail
+          ? 'অনুগ্রহ করে সঠিক ইমেইল এড্রেস লিখুন।'
+          : 'অনুগ্রহ করে সঠিক বাংলাদেশি মোবাইল নম্বর দিন।'
+      )
       return
     }
     if (!passwordValid) {
-      setCurrentStep(3)
-      setPasswordTouched(true)
-      setError('Password must be at least 6 characters')
+      setFormError('পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।')
       return
     }
-    if (password !== confirmPassword) {
-      setError('Passwords do not match')
+    if (!passwordsMatch) {
+      setFormError('উভয় পাসওয়ার্ড একই হতে হবে।')
       return
     }
     if (!agreeTerms) {
-      setError('Please agree to the Terms & Conditions')
+      setFormError('আমাদের শর্তাবলী ও গোপনীয়তা নীতি মেনে নেওয়া আবশ্যক।')
       return
     }
 
     setLoading(true)
     try {
-      await register({
+      const result = await register({
         name: name.trim(),
         identifier: identifier.trim(),
         password,
       })
-      setRegistered(true)
-      toast.success('Registration successful!')
-      setTimeout(() => {
-        navigate('home')
-      }, 2500)
+
+      if (!isEmail || result?.requiresOtp) {
+        setOtpPhone(result?.phone || identifier.trim())
+        setShowOtpScreen(true)
+        startResendTimer(60)
+        toast.success(result?.message || 'আপনার মোবাইলে ভেরিফিকেশন কোড পাঠানো হয়েছে')
+      } else {
+        setRegistered(true)
+        toast.success('রেজিস্ট্রেশন সফল হয়েছে!')
+        setTimeout(() => {
+          navigate('home')
+        }, 2000)
+      }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Registration failed'
-      setError(message)
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'রেজিস্ট্রেশন সম্পন্ন করা সম্ভব হয়নি। আবার চেষ্টা করুন।'
+      setFormError(message)
+      toast.error(message)
     } finally {
       setLoading(false)
     }
   }
 
-  // Success Animation
+  // OTP Handlers
+  const handleOtpDigitChange = (index: number, val: string) => {
+    const digit = val.replace(/\D/g, '').slice(-1)
+    const next = [...otpDigits]
+    next[index] = digit
+    setOtpDigits(next)
+    setOtpError('')
+    if (digit && index < 5) {
+      otpInputRefs.current[index + 1]?.focus()
+    }
+  }
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
+      otpInputRefs.current[index - 1]?.focus()
+    }
+  }
+
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
+    e.preventDefault()
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
+    if (pasted.length > 0) {
+      const next = pasted.split('').concat(Array(6).fill('')).slice(0, 6)
+      setOtpDigits(next)
+      const focusIdx = Math.min(pasted.length, 5)
+      otpInputRefs.current[focusIdx]?.focus()
+    }
+  }
+
+  const handleVerifyOtp = async () => {
+    if (otpLoading) return
+    const otpValue = otpDigits.join('')
+    if (otpValue.length !== 6) {
+      setOtpError('অনুগ্রহ করে ৬ ডিজিটের ওটিপি কোড সম্পূর্ণ লিখুন।')
+      return
+    }
+
+    setOtpLoading(true)
+    setOtpError('')
+
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: name.trim(),
+          phone: otpPhone.trim() || identifier.trim(),
+          password,
+          otpCode: otpValue,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'ভেরিফিকেশন সম্পন্ন হয়নি')
+      }
+
+      const user = (data.data?.user || data.user) as StoreUser
+      const token = data.data?.token || data.accessToken || null
+      if (user && token) {
+        useAppStore.setState({ user, accessToken: token, isAuthenticated: true })
+        await useAppStore.getState().loadCart()
+        await useAppStore.getState().loadWishlist()
+      }
+
+      toast.success('অ্যাকাউন্ট সফলভাবে তৈরি ও যাচাই হয়েছে!')
+      setRegistered(true)
+      setTimeout(() => {
+        navigate('home')
+      }, 1500)
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'ওটিপি কোড ভুল বা মেয়াদোত্তীর্ণ হয়েছে।'
+      setOtpError(message)
+    } finally {
+      setOtpLoading(false)
+    }
+  }
+
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0 || otpSending) return
+    setOtpSending(true)
+    setOtpError('')
+
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: name.trim(),
+          phone: otpPhone.trim() || identifier.trim(),
+          password,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'ওটিপি পুনরায় পাঠানো সম্ভব হয়নি')
+      }
+      startResendTimer(60)
+      toast.success('নতুন ওটিপি কোড পাঠানো হয়েছে')
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'এসএমএস সার্ভিস সাময়িকভাবে ব্যস্ত। অনুগ্রহ করে একটু পর চেষ্টা করুন।'
+      setOtpError(message)
+    } finally {
+      setOtpSending(false)
+    }
+  }
+
+  // Registration Success View
   if (registered) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-emerald-50 relative overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none">
-          <motion.div
-            className="absolute top-[20%] left-[10%] w-48 h-48 rounded-full bg-primary/5"
-            animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.6, 0.3] }}
-            transition={{ duration: 3, repeat: Infinity }}
-          />
-          <motion.div
-            className="absolute bottom-[15%] right-[15%] w-32 h-32 rounded-full bg-secondary/5"
-            animate={{ scale: [1, 1.15, 1], opacity: [0.2, 0.5, 0.2] }}
-            transition={{ duration: 4, repeat: Infinity, delay: 1 }}
-          />
-        </div>
-        <motion.div
-          initial={{ scale: 0, rotate: -180 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-          className="text-center p-8 relative z-10"
+      <div className="min-h-[70vh] flex items-center justify-center p-4 bg-stone-50">
+        <div
+          role="status"
+          aria-live="polite"
+          className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-stone-100 p-8 text-center"
         >
-          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center mx-auto mb-6 shadow-2xl">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.3, type: 'spring', stiffness: 300 }}
-            >
-              <Check className="h-12 w-12 text-white" />
-            </motion.div>
+          <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Check className="w-8 h-8 stroke-[3]" />
           </div>
-          <motion.h2
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="text-2xl font-bold text-foreground"
-          >
-            যোগ দিন! — Welcome!
-          </motion.h2>
-          <motion.p
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7 }}
-            className="text-muted-foreground mb-6"
-          >
-            Your account has been created successfully.
-          </motion.p>
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1 }}
-            className="text-sm text-muted-foreground"
-          >
-            Redirecting you to the homepage...
-          </motion.p>
-          <div className="mt-4 flex justify-center gap-1">
-            {[0, 1, 2].map((i) => (
-              <motion.div
-                key={i}
-                className="w-2 h-2 rounded-full bg-primary"
-                animate={{ scale: [1, 1.3, 1] }}
-                transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15 }}
-              />
-            ))}
+          <h2 className="text-2xl font-bold text-stone-900 mb-2">স্বাগতম! (Welcome)</h2>
+          <p className="text-stone-600 text-sm mb-6">
+            আপনার অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে। হোমপেজে রিডাইরেক্ট করা হচ্ছে...
+          </p>
+          <div className="flex justify-center items-center gap-2 text-emerald-700 text-sm font-medium">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>অপেক্ষা করুন...</span>
           </div>
-        </motion.div>
+        </div>
       </div>
     )
   }
 
-  const steps = [
-    { num: 1, label: 'Personal Info', done: step1Complete, icon: User },
-    { num: 2, label: 'Contact', done: step2Complete, icon: Mail },
-    { num: 3, label: 'Security', done: step3Complete, icon: Lock },
-  ]
-
   return (
-    <div className="min-h-screen flex relative">
-      {/* Animated Background Pattern */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-        <svg className="absolute inset-0 w-full h-full opacity-[0.03]" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="reg-food-pattern" x="0" y="0" width="60" height="60" patternUnits="userSpaceOnUse">
-              <circle cx="30" cy="30" r="8" fill="none" stroke="#2D6A4F" strokeWidth="1.5" />
-              <path d="M30 22 L30 38 M22 30 L38 30" stroke="#2D6A4F" strokeWidth="0.5" opacity="0.5" />
-            </pattern>
-            <pattern id="reg-dot-pattern" x="0" y="0" width="30" height="30" patternUnits="userSpaceOnUse">
-              <circle cx="15" cy="15" r="1" fill="#B8860B" opacity="0.4" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#reg-food-pattern)" />
-          <rect width="100%" height="100%" fill="url(#reg-dot-pattern)" />
-        </svg>
-        <motion.div
-          className="absolute top-[10%] left-[10%] w-64 h-64 rounded-full border border-primary/10"
-          animate={{ scale: [1, 1.05, 1], opacity: [0.3, 0.6, 0.3] }}
-          transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-        />
-        <motion.div
-          className="absolute bottom-[20%] right-[10%] w-40 h-40 rounded-full border border-secondary/10"
-          animate={{ scale: [1, 1.08, 1], opacity: [0.2, 0.5, 0.2] }}
-          transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
-        />
-      </div>
-
-      {/* Decorative Left Panel */}
-      <div className="hidden lg:flex lg:w-[45%] bg-gradient-to-br from-emerald-800 via-primary to-primary relative overflow-hidden z-10">
-        {/* Animated background pattern */}
-        <div className="absolute inset-0 opacity-10">
-          <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <pattern id="leaf-reg-pattern" x="0" y="0" width="80" height="80" patternUnits="userSpaceOnUse">
-                <path d="M40 10 C50 25, 55 40, 40 70 C25 40, 30 25, 40 10Z" fill="none" stroke="white" strokeWidth="1" />
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#leaf-reg-pattern)" />
-          </svg>
-          <motion.div
-            className="absolute top-16 right-16 w-40 h-40 rounded-full border-4 border-white"
-            animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.6, 0.3] }}
-            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-          />
-          <motion.div
-            className="absolute bottom-32 left-16 w-32 h-32 rounded-full border-4 border-white"
-            animate={{ scale: [1, 1.08, 1], opacity: [0.2, 0.5, 0.2] }}
-            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
-          />
-          <motion.div
-            className="absolute top-1/2 right-1/3 w-24 h-24 rounded-full bg-white/20"
-            animate={{ y: [0, -15, 0] }}
-            transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-          />
+    <div className="min-h-[85vh] py-8 sm:py-12 px-4 flex items-center justify-center bg-stone-50/60">
+      <div className="w-full max-w-md">
+        {/* Brand Header */}
+        <div className="text-center mb-6">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 text-emerald-700 font-bold text-xl sm:text-2xl tracking-tight hover:opacity-90 transition-opacity"
+          >
+            <Sparkles className="w-6 h-6 text-amber-500" />
+            <span>খাঁটি খাদ্য (Khati Khadyo)</span>
+          </Link>
+          <p className="text-xs sm:text-sm text-stone-500 mt-1">
+            ১০০% খাঁটি ও নির্ভেজাল গ্রোসারি পণ্যের বিশ্বস্ত ঠিকানা
+          </p>
         </div>
 
-        {/* Floating food icons */}
-        <motion.div className="absolute top-24 left-12 text-5xl opacity-20" animate={{ y: [0, -8, 0], rotate: [0, 5, 0] }} transition={{ duration: 3.2, repeat: Infinity }}>🥘</motion.div>
-        <motion.div className="absolute top-1/2 right-16 text-4xl opacity-20" animate={{ y: [0, -6, 0], rotate: [0, -5, 0] }} transition={{ duration: 4, repeat: Infinity, delay: 0.8 }}>🌿</motion.div>
-        <motion.div className="absolute bottom-1/3 left-1/4 text-4xl opacity-20" animate={{ y: [0, -10, 0] }} transition={{ duration: 3.8, repeat: Infinity, delay: 1.2 }}>🍯</motion.div>
-        <motion.div className="absolute bottom-20 right-20 text-5xl opacity-20" animate={{ y: [0, -7, 0] }} transition={{ duration: 4.2, repeat: Infinity, delay: 0.3 }}>🫒</motion.div>
+        {/* Main Card */}
+        <div className="bg-white rounded-2xl shadow-lg border border-stone-200/80 p-6 sm:p-8">
+          <AnimatePresence mode="wait">
+            {!showOtpScreen ? (
+              /* Single-View Registration Form */
+              <motion.div
+                key="register-form"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="mb-6">
+                  <h1 className="text-xl sm:text-2xl font-bold text-stone-900">
+                    অ্যাকাউন্ট তৈরি করুন
+                  </h1>
+                  <p className="text-xs sm:text-sm text-stone-600 mt-1">
+                    দ্রুত অর্ডার ও রিওয়ার্ড পয়েন্ট পেতে তথ্য দিয়ে যুক্ত হোন
+                  </p>
+                </div>
 
-        <div className="relative z-10 flex flex-col justify-center items-center px-12 text-white">
-          {/* Bengali Welcome */}
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-center mb-8"
-          >
-            <motion.p
-              className="text-white/60 text-sm uppercase tracking-widest mb-2"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.5 }}
-            >
-              Join Us
-            </motion.p>
-            <h1 className="text-5xl font-bold mb-2 gradient-text-white">যোগ দিন!</h1>
-            <p className="text-white/70 text-lg text-center">
-              Create an account and start exploring authentic Bangladeshi food products
-            </p>
-          </motion.div>
-
-          {/* Logo */}
-          <motion.div
-            initial={{ scale: 0, rotate: -90 }}
-            animate={{ scale: 1, rotate: 0 }}
-            transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.3 }}
-            className="w-24 h-24 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center mb-8 shadow-2xl ring-1 ring-white/20 overflow-hidden"
-          >
-            <img
-              src="/all_logo.png"
-              alt="Khati Khadyo"
-              className="h-20 w-auto object-contain"
-            />
-          </motion.div>
-
-          {/* Registration Steps Progress with Checkmarks */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            className="w-full max-w-sm space-y-6"
-          >
-            {steps.map((step, i) => {
-              const StepIcon = step.icon
-              const isCurrent = currentStep === step.num
-              return (
-                <motion.div
-                  key={step.num}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.6 + i * 0.1 }}
-                  className="flex items-center gap-4"
-                >
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-sm font-bold transition-all duration-500 cursor-pointer ${
-                    step.done
-                      ? 'bg-secondary text-white shadow-lg shadow-secondary/30 scale-105'
-                      : isCurrent
-                      ? 'bg-white/20 backdrop-blur-sm text-white ring-2 ring-white/40'
-                      : 'bg-white/10 text-white/40'
-                  }`} onClick={() => { if (step.done || (step.num === 1) || (step.num === 2 && step1Complete)) setCurrentStep(step.num as Step) }}>
-                    {step.done ? <Check className="h-6 w-6" /> : <StepIcon className="h-5 w-5" />}
-                  </div>
-                  <div className="flex-1">
-                    <p className={`text-sm font-medium transition-colors ${step.done ? 'text-white' : isCurrent ? 'text-white' : 'text-white/40'}`}>
-                      {step.label}
-                    </p>
-                    <div className="h-2 rounded-full bg-white/10 mt-2 overflow-hidden">
-                      <motion.div
-                        className={`h-full rounded-full ${step.done ? 'bg-secondary' : isCurrent ? 'bg-white/40' : ''}`}
-                        initial={{ width: '0%' }}
-                        animate={{ width: step.done ? '100%' : isCurrent ? '50%' : '0%' }}
-                        transition={{ duration: 0.7, ease: 'easeOut' }}
-                      />
-                    </div>
-                  </div>
-                  {i < steps.length - 1 && (
-                    <ChevronRight className={`h-5 w-5 transition-colors ${step.done ? 'text-secondary' : 'text-white/20'}`} />
-                  )}
-                </motion.div>
-              )
-            })}
-          </motion.div>
-
-          {/* Trust Badges with Lucide Icons */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.9 }}
-            className="mt-12 flex items-center gap-6 text-white/60 text-xs"
-          >
-            <div className="flex items-center gap-1.5">
-              <div className="w-8 h-8 rounded-lg bg-white/10 backdrop-blur-sm flex items-center justify-center">
-                <Shield className="h-4 w-4 text-white/70" />
-              </div>
-              <span>Secure</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-8 h-8 rounded-lg bg-white/10 backdrop-blur-sm flex items-center justify-center">
-                <ShieldCheck className="h-4 w-4 text-white/70" />
-              </div>
-              <span>Private</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-8 h-8 rounded-lg bg-white/10 backdrop-blur-sm flex items-center justify-center">
-                <BadgeCheck className="h-4 w-4 text-white/70" />
-              </div>
-              <span>Verified</span>
-            </div>
-          </motion.div>
-        </div>
-      </div>
-
-      {/* Right Panel - Registration Form */}
-      <div className="w-full lg:w-[55%] flex flex-col relative z-10">
-        {/* Mobile Top Banner */}
-        <div className="lg:hidden bg-gradient-to-r from-primary to-emerald-700 p-6 text-white text-center relative overflow-hidden">
-          <div className="absolute inset-0 opacity-10">
-            <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <pattern id="mobile-reg-pattern" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
-                  <circle cx="20" cy="20" r="5" fill="none" stroke="white" strokeWidth="1" />
-                </pattern>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#mobile-reg-pattern)" />
-            </svg>
-          </div>
-          <div className="relative">
-            <div className="w-14 h-14 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center mx-auto mb-3 shadow-lg overflow-hidden">
-              <img
-                src="/all_logo.png"
-                alt="Khati Khadyo"
-                className="h-10 w-auto object-contain"
-              />
-            </div>
-            <h1 className="text-xl font-bold">যোগ দিন!</h1>
-            <p className="text-white/70 text-sm mt-1">Create your account today</p>
-          </div>
-        </div>
-
-        {/* Form Container */}
-        <div className="flex-1 flex items-center justify-center p-6 sm:p-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="w-full max-w-md"
-          >
-            {/* Glassmorphism Form Card */}
-            <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-xl ring-1 ring-white/50 p-8">
-              <div className="mb-6 text-center">
-                {siteConfig?.logo && (
-                  <div className="flex justify-center mb-4">
-                    <img
-                      src={siteConfig.logo}
-                      alt="Khati Khadyo"
-                      className="h-12 w-auto object-contain"
-                    />
+                {formError && (
+                  <div
+                    role="alert"
+                    aria-live="assertive"
+                    className="mb-5 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs sm:text-sm flex items-start gap-2.5"
+                  >
+                    <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                    <span>{formError}</span>
                   </div>
                 )}
-                <motion.h2
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-2xl font-bold text-foreground"
-                >
-                  Create Account
-                </motion.h2>
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.1 }}
-                  className="text-muted-foreground mt-1"
-                >
-                  {currentStep === 1 && 'Tell us your name to get started'}
-                  {currentStep === 2 && 'How can we reach you?'}
-                  {currentStep === 3 && 'Secure your account with a password'}
-                </motion.p>
-              </div>
 
-              {/* Step Indicator Dots (Mobile) */}
-              <div className="flex items-center justify-center gap-2 mb-6">
-                {steps.map((step) => (
-                  <div key={step.num} className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      className={`w-8 h-8 rounded-full text-xs font-bold transition-all duration-300 flex items-center justify-center ${
-                        step.done
-                          ? 'bg-primary text-primary-foreground shadow-md'
-                          : currentStep === step.num
-                          ? 'bg-primary/10 text-primary ring-2 ring-primary/30'
-                          : 'bg-muted text-muted-foreground'
-                      }`}
-                      onClick={() => {
-                        if (step.done || step.num === 1 || (step.num === 2 && step1Complete)) {
-                          setCurrentStep(step.num as Step)
-                        }
-                      }}
+                <form onSubmit={handleSubmit} noValidate className="space-y-4">
+                  {/* Full Name */}
+                  <div className="space-y-1.5">
+                    <Label
+                      htmlFor="register-name"
+                      className="text-xs sm:text-sm font-medium text-stone-700"
                     >
-                      {step.done ? <Check className="h-4 w-4" /> : step.num}
-                    </button>
-                    {step.num < 3 && (
-                      <div className={`w-8 h-0.5 rounded-full transition-colors ${step.done ? 'bg-primary' : 'bg-muted'}`} />
+                      আপনার পূর্ণ নাম <span className="text-red-500">*</span>
+                    </Label>
+                    <div className="relative">
+                      <User className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <Input
+                        id="register-name"
+                        type="text"
+                        autoComplete="name"
+                        placeholder="যেমন: মোঃ আব্দুল্লাহ"
+                        value={name}
+                        onChange={(e) => {
+                          setName(e.target.value)
+                          if (!nameTouched) setNameTouched(true)
+                        }}
+                        onBlur={() => setNameTouched(true)}
+                        aria-invalid={Boolean(nameError)}
+                        aria-describedby={nameError ? 'name-error' : undefined}
+                        className={`pl-10 h-11 text-sm rounded-xl border transition-colors ${
+                          nameError
+                            ? 'border-red-400 focus-visible:ring-red-400'
+                            : 'border-stone-300 focus-visible:ring-emerald-500'
+                        }`}
+                      />
+                    </div>
+                    {nameError && (
+                      <p id="name-error" className="text-xs text-red-600 mt-1">
+                        {nameError}
+                      </p>
                     )}
                   </div>
-                ))}
-              </div>
 
-              {/* Error Message */}
-              <AnimatePresence>
-                {error && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0, marginBottom: 0 }}
-                    animate={{ opacity: 1, height: 'auto', marginBottom: 24 }}
-                    exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                    className="overflow-hidden"
-                  >
-                    <div className="p-4 rounded-xl bg-red-50 border-2 border-red-200 flex items-start gap-3">
-                      <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-semibold text-red-800">Registration Failed</p>
-                        <p className="text-sm text-red-600 mt-0.5">{error}</p>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Step 1: Personal Info */}
-                {currentStep === 1 && (
-                  <motion.div
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="space-y-4"
-                  >
-                    {/* Profile Image Placeholder */}
-                    <div className="flex justify-center mb-4">
-                      <motion.div
-                        whileHover={{ scale: 1.05 }}
-                        className="relative w-24 h-24 rounded-full bg-gradient-to-br from-primary/10 to-primary/5 border-2 border-dashed border-primary/30 flex items-center justify-center cursor-pointer group"
-                      >
-                        <div className="text-center">
-                          <Camera className="h-6 w-6 text-primary/40 mx-auto group-hover:text-primary/60 transition-colors" />
-                          <span className="text-[9px] text-muted-foreground mt-0.5 block">Add Photo</span>
-                        </div>
-                        <div className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md">
-                          <Plus className="h-3.5 w-3.5" />
-                        </div>
-                      </motion.div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="name" className="text-sm font-medium flex items-center gap-1.5">
-                        Full Name <span className="text-red-500">*</span>
-                        {nameValid && nameTouched && <Check className="h-3.5 w-3.5 text-emerald-500" />}
-                      </Label>
-                      <div className="relative">
-                        <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          id="name"
-                          placeholder="Your full name"
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          onBlur={() => setNameTouched(true)}
-                          autoFocus
-                          className={`pl-10 h-11 transition-colors ${
-                            nameError ? 'border-red-400 ring-2 ring-red-100 focus-visible:ring-red-200' :
-                            nameValid && nameTouched ? 'border-emerald-300 focus-visible:ring-emerald-200' : 'focus-visible:ring-primary/20'
-                          }`}
-                        />
-                      </div>
-                      {nameError && (
-                        <motion.p
-                          initial={{ opacity: 0, y: -5 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="text-xs text-red-500 flex items-center gap-1"
-                        >
-                          <AlertTriangle className="h-3 w-3" /> {nameError}
-                        </motion.p>
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* Step 2: Contact Info */}
-                {currentStep === 2 && (
-                  <motion.div
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="space-y-4"
-                  >
-                    <div className="space-y-2">
-                      <Label htmlFor="reg-identifier" className="text-sm font-medium flex items-center gap-1.5">
-                        Email or Phone Number <span className="text-red-500">*</span>
-                        {identifierTouched && identifierValid && <Check className="h-3.5 w-3.5 text-emerald-500" />}
-                      </Label>
-                      <div className="relative">
-                        {isEmail ? (
-                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-all" />
-                        ) : (
-                          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-all" />
-                        )}
-                        <Input
-                          id="reg-identifier"
-                          type="text"
-                          placeholder="Enter your email or phone number"
-                          value={identifier}
-                          onChange={(e) => setIdentifier(e.target.value)}
-                          onBlur={() => setIdentifierTouched(true)}
-                          autoFocus
-                          className={`pl-10 h-11 transition-colors ${
-                            identifierError
-                              ? 'border-red-400 ring-2 ring-red-100 focus-visible:ring-red-200'
-                              : identifierTouched && identifierValid
-                              ? 'border-emerald-300 focus-visible:ring-emerald-200'
-                              : 'focus-visible:ring-primary/20'
-                          }`}
-                        />
-                      </div>
-                      {identifierError && (
-                        <motion.p
-                          initial={{ opacity: 0, y: -5 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="text-xs text-red-500 flex items-center gap-1"
-                        >
-                          <AlertTriangle className="h-3 w-3" /> {identifierError}
-                        </motion.p>
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* Step 3: Security */}
-                {currentStep === 3 && (
-                  <motion.div
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="space-y-4"
-                  >
-                    {/* Password */}
-                    <div className="space-y-2">
-                      <Label htmlFor="reg-password" className="text-sm font-medium flex items-center gap-1.5">
-                        Password <span className="text-red-500">*</span>
-                        {passwordValid && passwordTouched && <Check className="h-3.5 w-3.5 text-emerald-500" />}
-                      </Label>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          id="reg-password"
-                          type={showPassword ? 'text' : 'password'}
-                          placeholder="Min. 6 characters"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          onBlur={() => setPasswordTouched(true)}
-                          autoFocus
-                          className={`pl-10 pr-10 h-11 transition-colors ${
-                            passwordError ? 'border-red-400 ring-2 ring-red-100 focus-visible:ring-red-200' :
-                            'focus-visible:ring-primary/20'
-                          }`}
-                        />
-                        <button
-                          type="button"
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </button>
-                      </div>
-                      {passwordError && (
-                        <p className="text-xs text-red-500 flex items-center gap-1">
-                          <AlertTriangle className="h-3 w-3" /> {passwordError}
-                        </p>
-                      )}
-                      {/* Password Strength Indicator */}
-                      {password.length > 0 && (
-                        <div className="space-y-2">
-                          <div className="flex gap-1">
-                            {[20, 40, 60, 80, 100].map((level) => (
-                              <motion.div
-                                key={level}
-                                className={`h-1.5 flex-1 rounded-full ${
-                                  passwordStrength.score >= level
-                                    ? passwordStrength.color
-                                    : 'bg-gray-200'
-                                }`}
-                                initial={{ scaleX: 0 }}
-                                animate={{ scaleX: 1 }}
-                                transition={{ duration: 0.3, delay: (level / 100) * 0.3 }}
-                              />
-                            ))}
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${passwordStrength.bgColor} ${
-                              passwordStrength.label === 'Weak' ? 'text-red-600' :
-                              passwordStrength.label === 'Fair' ? 'text-orange-600' :
-                              passwordStrength.label === 'Good' ? 'text-yellow-700' :
-                              passwordStrength.label === 'Strong' ? 'text-emerald-600' :
-                              'text-emerald-700'
-                            }`}>
-                              {passwordStrength.icon} {passwordStrength.label}
-                            </span>
-                            <span className="text-xs text-muted-foreground">{password.length}/6+ chars</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Confirm Password */}
-                    <div className="space-y-2">
-                      <Label htmlFor="confirm-password" className="text-sm font-medium flex items-center gap-1.5">
-                        Confirm Password <span className="text-red-500">*</span>
-                        {passwordsMatch && <Check className="h-3.5 w-3.5 text-emerald-500" />}
-                        {passwordsMismatch && <X className="h-3.5 w-3.5 text-red-500" />}
-                      </Label>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          id="confirm-password"
-                          type={showConfirmPassword ? 'text' : 'password'}
-                          placeholder="Confirm your password"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          onBlur={() => setConfirmTouched(true)}
-                          className={`pl-10 pr-10 h-11 transition-colors ${
-                            confirmError ? 'border-red-400 ring-2 ring-red-100 focus-visible:ring-red-200' :
-                            passwordsMatch ? 'border-emerald-300 focus-visible:ring-emerald-200' :
-                            'focus-visible:ring-primary/20'
-                          }`}
-                        />
-                        <button
-                          type="button"
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        >
-                          {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </button>
-                      </div>
-                      {confirmError && (
-                        <motion.p
-                          initial={{ opacity: 0, y: -5 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="text-xs text-red-500 flex items-center gap-1"
-                        >
-                          <X className="h-3 w-3" /> {confirmError}
-                        </motion.p>
-                      )}
-                    </div>
-
-                    {/* Terms & Conditions */}
-                    <div className="flex items-start gap-2.5 pt-1">
-                      <Checkbox
-                        id="terms"
-                        checked={agreeTerms}
-                        onCheckedChange={(checked) => setAgreeTerms(checked === true)}
-                        className="mt-0.5 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-                      />
-                      <Label htmlFor="terms" className="text-sm text-muted-foreground cursor-pointer leading-relaxed">
-                        I agree to the{' '}
-                        <button
-                          type="button"
-                          className="text-primary hover:underline font-semibold"
-                          onClick={() => navigate('terms')}
-                        >
-                          Terms & Conditions
-                        </button>
-                        {' '}and{' '}
-                        <button
-                          type="button"
-                          className="text-primary hover:underline font-semibold"
-                          onClick={() => navigate('privacy')}
-                        >
-                          Privacy Policy
-                        </button>
-                      </Label>
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* Navigation Buttons */}
-                <div className="flex gap-3 pt-2">
-                  {currentStep > 1 && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="flex-1 h-12 rounded-xl font-medium"
-                      onClick={handlePrevStep}
+                  {/* Phone or Email */}
+                  <div className="space-y-1.5">
+                    <Label
+                      htmlFor="register-identifier"
+                      className="text-xs sm:text-sm font-medium text-stone-700"
                     >
-                      Back
-                    </Button>
-                  )}
-                  {currentStep < 3 ? (
-                    <Button
-                      type="button"
-                      className="flex-1 h-12 text-base font-semibold rounded-xl shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all"
-                      onClick={handleNextStep}
-                      disabled={
-                        (currentStep === 1 && !canProceedStep1) ||
-                        (currentStep === 2 && !canProceedStep2)
-                      }
-                    >
-                      Continue
-                      <ChevronRight className="h-5 w-5 ml-1" />
-                    </Button>
-                  ) : (
-                    <Button
-                      type="submit"
-                      className="flex-1 h-12 text-base font-semibold rounded-xl shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all"
-                      disabled={loading || !step3Complete}
-                    >
-                      {loading ? (
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+                      মোবাইল নম্বর অথবা ইমেইল <span className="text-red-500">*</span>
+                    </Label>
+                    <div className="relative">
+                      {isEmail ? (
+                        <Mail className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       ) : (
-                        <>
-                          <UserPlus className="h-5 w-5 mr-2" />
-                          Create Account
-                        </>
+                        <Phone className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       )}
-                    </Button>
-                  )}
-                </div>
-              </form>
+                      <Input
+                        id="register-identifier"
+                        type="text"
+                        autoComplete="username"
+                        placeholder="০১৭১XXXXXXX অথবা email@example.com"
+                        value={identifier}
+                        onChange={(e) => {
+                          setIdentifier(e.target.value)
+                          if (!identifierTouched) setIdentifierTouched(true)
+                        }}
+                        onBlur={() => setIdentifierTouched(true)}
+                        aria-invalid={Boolean(identifierError)}
+                        aria-describedby={identifierError ? 'identifier-error' : undefined}
+                        className={`pl-10 h-11 text-sm rounded-xl border transition-colors ${
+                          identifierError
+                            ? 'border-red-400 focus-visible:ring-red-400'
+                            : 'border-stone-300 focus-visible:ring-emerald-500'
+                        }`}
+                      />
+                    </div>
+                    {identifierError && (
+                      <p id="identifier-error" className="text-xs text-red-600 mt-1">
+                        {identifierError}
+                      </p>
+                    )}
+                  </div>
 
-              {/* Sign In Link */}
+                  {/* Password */}
+                  <div className="space-y-1.5">
+                    <Label
+                      htmlFor="register-password"
+                      className="text-xs sm:text-sm font-medium text-stone-700"
+                    >
+                      পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর) <span className="text-red-500">*</span>
+                    </Label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <Input
+                        id="register-password"
+                        type={showPassword ? 'text' : 'password'}
+                        autoComplete="new-password"
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => {
+                          setPassword(e.target.value)
+                          if (!passwordTouched) setPasswordTouched(true)
+                        }}
+                        onBlur={() => setPasswordTouched(true)}
+                        aria-invalid={Boolean(passwordError)}
+                        aria-describedby={passwordError ? 'password-error' : undefined}
+                        className={`pl-10 pr-10 h-11 text-sm rounded-xl border transition-colors ${
+                          passwordError
+                            ? 'border-red-400 focus-visible:ring-red-400'
+                            : 'border-stone-300 focus-visible:ring-emerald-500'
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        aria-label={showPassword ? 'পাসওয়ার্ড লুকান' : 'পাসওয়ার্ড দেখুন'}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 p-1"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    {password.length > 0 && (
+                      <div className="mt-1.5">
+                        <div className="h-1.5 w-full bg-stone-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full ${passwordStrength.color} transition-all duration-300`}
+                            style={{ width: `${passwordStrength.score}%` }}
+                          />
+                        </div>
+                        <span className="text-[11px] text-stone-500 mt-1 block">
+                          শক্তি: {passwordStrength.label}
+                        </span>
+                      </div>
+                    )}
+                    {passwordError && (
+                      <p id="password-error" className="text-xs text-red-600 mt-1">
+                        {passwordError}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Confirm Password */}
+                  <div className="space-y-1.5">
+                    <Label
+                      htmlFor="register-confirm-password"
+                      className="text-xs sm:text-sm font-medium text-stone-700"
+                    >
+                      পাসওয়ার্ড নিশ্চিত করুন <span className="text-red-500">*</span>
+                    </Label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <Input
+                        id="register-confirm-password"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        autoComplete="new-password"
+                        placeholder="••••••••"
+                        value={confirmPassword}
+                        onChange={(e) => {
+                          setConfirmPassword(e.target.value)
+                          if (!confirmTouched) setConfirmTouched(true)
+                        }}
+                        onBlur={() => setConfirmTouched(true)}
+                        aria-invalid={Boolean(confirmError)}
+                        aria-describedby={confirmError ? 'confirm-error' : undefined}
+                        className={`pl-10 pr-10 h-11 text-sm rounded-xl border transition-colors ${
+                          confirmError
+                            ? 'border-red-400 focus-visible:ring-red-400'
+                            : 'border-stone-300 focus-visible:ring-emerald-500'
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        aria-label={
+                          showConfirmPassword ? 'কনফার্ম পাসওয়ার্ড লুকান' : 'কনফার্ম পাসওয়ার্ড দেখুন'
+                        }
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 p-1"
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="w-4 h-4" />
+                        ) : (
+                          <Eye className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                    {confirmError && (
+                      <p id="confirm-error" className="text-xs text-red-600 mt-1">
+                        {confirmError}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Terms & Privacy Checkbox */}
+                  <div className="pt-1">
+                    <div className="flex items-start gap-2.5">
+                      <Checkbox
+                        id="register-terms"
+                        checked={agreeTerms}
+                        onCheckedChange={(checked) => setAgreeTerms(Boolean(checked))}
+                        className="mt-0.5 rounded border-stone-300 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                      />
+                      <Label
+                        htmlFor="register-terms"
+                        className="text-xs text-stone-600 leading-snug cursor-pointer select-none"
+                      >
+                        আমি খাঁটি খাদ্যের{' '}
+                        <Link href="/terms" className="text-emerald-700 underline font-medium">
+                          শর্তাবলী
+                        </Link>{' '}
+                        ও{' '}
+                        <Link href="/privacy" className="text-emerald-700 underline font-medium">
+                          গোপনীয়তা নীতি
+                        </Link>{' '}
+                        মেনে নিচ্ছি।
+                      </Label>
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <Button
+                    type="submit"
+                    disabled={loading || !isFormValid}
+                    className="w-full h-11 text-sm font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all disabled:opacity-50 mt-2"
+                  >
+                    {loading ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>প্রসেস করা হচ্ছে...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2">
+                        <UserPlus className="w-4 h-4" />
+                        <span>অ্যাকাউন্ট তৈরি করুন (Create Account)</span>
+                      </div>
+                    )}
+                  </Button>
+                </form>
+
+                {/* Footer Link to Login */}
+                <div className="mt-6 pt-5 border-t border-stone-200/70 text-center">
+                  <p className="text-xs sm:text-sm text-stone-600">
+                    ইতিমধ্যে অ্যাকাউন্ট আছে?{' '}
+                    <Link
+                      href="/login"
+                      className="font-semibold text-emerald-700 hover:text-emerald-800 underline underline-offset-2 ml-1"
+                    >
+                      লগইন করুন (Sign In)
+                    </Link>
+                  </p>
+                </div>
+              </motion.div>
+            ) : (
+              /* In-Place OTP Verification Screen */
               <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.5 }}
-                className="mt-6 pt-5 border-t"
+                key="otp-form"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-5"
               >
-                <p className="text-center text-sm text-muted-foreground">
-                  Already have an account?{' '}
+                <div>
                   <button
                     type="button"
-                    className="text-primary hover:underline font-semibold inline-flex items-center gap-1 group"
-                    onClick={() => navigate('login')}
+                    onClick={() => {
+                      setShowOtpScreen(false)
+                      setOtpDigits(['', '', '', '', '', ''])
+                      setOtpError('')
+                    }}
+                    className="inline-flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-800 transition-colors mb-3"
                   >
-                    Sign In
-                    <span className="inline-block group-hover:translate-x-0.5 transition-transform">&rarr;</span>
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>নম্বর পরিবর্তন করুন</span>
                   </button>
-                </p>
+                  <h2 className="text-xl font-bold text-stone-900">মোবাইল নম্বর যাচাই করুন</h2>
+                  <p className="text-xs sm:text-sm text-stone-600 mt-1">
+                    <span className="font-semibold text-stone-900">{otpPhone}</span> নম্বরে ৬
+                    ডিজিটের ওটিপি পাঠানো হয়েছে।
+                  </p>
+                </div>
+
+                {otpError && (
+                  <div
+                    role="alert"
+                    aria-live="assertive"
+                    className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs sm:text-sm flex items-start gap-2"
+                  >
+                    <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                    <span>{otpError}</span>
+                  </div>
+                )}
+
+                {/* 6 Digit Inputs */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-stone-700">
+                    ৬ ডিজিটের ওটিপি লিখুন
+                  </Label>
+                  <div
+                    className="flex justify-between gap-2 sm:gap-2.5"
+                    onPaste={handleOtpPaste}
+                  >
+                    {otpDigits.map((digit, idx) => (
+                      <input
+                        key={idx}
+                        ref={(el) => {
+                          otpInputRefs.current[idx] = el
+                        }}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={digit}
+                        aria-label={`Digit ${idx + 1}`}
+                        onChange={(e) => handleOtpDigitChange(idx, e.target.value)}
+                        onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                        className="w-11 sm:w-12 h-12 text-center text-lg font-bold rounded-xl border border-stone-300 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Verify Button */}
+                <Button
+                  type="button"
+                  onClick={handleVerifyOtp}
+                  disabled={otpLoading || otpDigits.join('').length !== 6}
+                  className="w-full h-11 text-sm font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm disabled:opacity-50 transition-all"
+                >
+                  {otpLoading ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>যাচাই হচ্ছে...</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center gap-2">
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>কোড নিশ্চিত করুন</span>
+                    </div>
+                  )}
+                </Button>
+
+                {/* Resend Timer */}
+                <div className="text-center pt-2">
+                  {resendCooldown > 0 ? (
+                    <p className="text-xs text-stone-500">
+                      পুনরায় কোড পাঠানোর সময় বাকি:{' '}
+                      <span className="font-bold text-stone-800">
+                        {String(Math.floor(resendCooldown / 60)).padStart(2, '0')}:
+                        {String(resendCooldown % 60).padStart(2, '0')}
+                      </span>
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleResendOtp}
+                      disabled={otpSending}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-800 underline underline-offset-2 transition-colors disabled:opacity-50"
+                    >
+                      {otpSending ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>পাঠানো হচ্ছে...</span>
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>পুনরায় কোড পাঠান (Resend Code)</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
               </motion.div>
-            </div>
-          </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Security Trust Footnote */}
+        <div className="mt-6 flex items-center justify-center gap-2 text-xs text-stone-500">
+          <ShieldCheck className="w-4 h-4 text-emerald-600" />
+          <span>আপনার ব্যক্তিগত তথ্য ২৫৬-বিট এনক্রিপশনে সুরক্ষিত</span>
         </div>
       </div>
     </div>

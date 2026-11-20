@@ -16,31 +16,85 @@ export async function PUT(
     }
 
     const { id } = await params
+    const review = await db.review.findUnique({
+      where: { id },
+      select: { id: true, userId: true },
+    })
 
-    // Ownership check: non-admin users can only update their own reviews
-    if (!isAdmin(authUser.role)) {
-      const review = await db.review.findUnique({ where: { id }, select: { userId: true } })
-      if (!review || review.userId !== authUser.userId) {
+    if (!review) {
+      return NextResponse.json(
+        { success: false, error: 'Review not found' },
+        { status: 404 }
+      )
+    }
+
+    const body = await request.json()
+    const isUserAdmin = isAdmin(authUser.role)
+
+    // ── Non-admin customer updating their review ──
+    if (!isUserAdmin) {
+      if (review.userId !== authUser.userId) {
         return NextResponse.json(
           { success: false, error: 'Forbidden: you can only update your own reviews' },
           { status: 403 }
         )
       }
+
+      // Customers CANNOT self-approve, self-activate, or tamper with verification
+      if (
+        body.isApproved !== undefined ||
+        body.isActive !== undefined ||
+        body.isVerified !== undefined ||
+        body.status !== undefined
+      ) {
+        return NextResponse.json(
+          { success: false, error: 'Forbidden: customers cannot modify review approval or status' },
+          { status: 403 }
+        )
+      }
+
+      const data: Record<string, unknown> = {}
+      if (typeof body.rating === 'number' && body.rating >= 1 && body.rating <= 5) {
+        data.rating = Math.round(body.rating)
+      }
+      if (typeof body.comment === 'string') {
+        data.comment = body.comment
+      }
+      // Re-editing a review resets it to unapproved pending admin moderation
+      data.isApproved = false
+
+      const updated = await db.review.update({
+        where: { id },
+        data,
+        include: { user: { select: { id: true, name: true } } },
+      })
+      return NextResponse.json({ success: true, data: updated })
     }
-    const body = await request.json()
-    const { isApproved, isActive } = body
 
+    // ── Admin / Manager Moderation ──
     const data: Record<string, unknown> = {}
-    if (isApproved !== undefined) data.isApproved = isApproved
-    if (isActive !== undefined) data.isActive = isActive
+    if (body.status === 'approved') {
+      data.isApproved = true
+      data.isActive = true
+    } else if (body.status === 'rejected') {
+      data.isApproved = false
+      data.isActive = false
+    } else if (body.status === 'pending') {
+      data.isApproved = false
+      data.isActive = true
+    }
 
-    const review = await db.review.update({
+    if (body.isApproved !== undefined) data.isApproved = Boolean(body.isApproved)
+    if (body.isActive !== undefined) data.isActive = Boolean(body.isActive)
+    if (body.isVerified !== undefined) data.isVerified = Boolean(body.isVerified)
+
+    const updatedReview = await db.review.update({
       where: { id },
       data,
       include: { user: { select: { id: true, name: true } } },
     })
 
-    return NextResponse.json({ success: true, data: review })
+    return NextResponse.json({ success: true, data: updatedReview })
   } catch (error) {
     console.error('Update review error:', error)
     return NextResponse.json(
@@ -64,11 +118,21 @@ export async function DELETE(
     }
 
     const { id } = await params
+    const review = await db.review.findUnique({
+      where: { id },
+      select: { id: true, userId: true },
+    })
+
+    if (!review) {
+      return NextResponse.json(
+        { success: false, error: 'Review not found' },
+        { status: 404 }
+      )
+    }
 
     // Ownership check: non-admin users can only delete their own reviews
     if (!isAdmin(authUser.role)) {
-      const review = await db.review.findUnique({ where: { id }, select: { userId: true } })
-      if (!review || review.userId !== authUser.userId) {
+      if (review.userId !== authUser.userId) {
         return NextResponse.json(
           { success: false, error: 'Forbidden: you can only delete your own reviews' },
           { status: 403 }

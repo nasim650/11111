@@ -44,8 +44,12 @@ export default function AdminReviewsPage() {
   const fetchReviews = useCallback(async () => {
     try {
       const params = new URLSearchParams()
-      if (statusFilter !== 'all') params.set('status', statusFilter)
-      const res = await fetch(`/api/reviews?${params.toString()}`)
+      if (statusFilter !== 'all') {
+        params.set('status', statusFilter)
+      } else {
+        params.set('status', 'all')
+      }
+      const res = await authFetch(`/api/reviews?${params.toString()}`)
       if (res.ok) {
         const data = await res.json()
         setReviews(extractItems(data))

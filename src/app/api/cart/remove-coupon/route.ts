@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getShippingSettings } from '@/lib/shipping'
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,10 +35,9 @@ export async function POST(request: NextRequest) {
       subtotal += price * item.quantity
     }
 
-    const shippingConfig = await db.siteConfig.findUnique({ where: { key: 'freeShippingThreshold' } })
-    const freeShippingThreshold = shippingConfig ? parseFloat(shippingConfig.value) : 500
-    const shippingConfigCost = await db.siteConfig.findUnique({ where: { key: 'shippingCharge' } })
-    const shippingCharge = shippingConfigCost ? parseFloat(shippingConfigCost.value) : 60
+    const shippingSettings = await getShippingSettings()
+    const freeShippingThreshold = shippingSettings.freeShippingThreshold
+    const shippingCharge = shippingSettings.standardDeliveryCharge
     const shipping = subtotal >= freeShippingThreshold ? 0 : shippingCharge
     const total = Math.round((subtotal + shipping) * 100) / 100
 

@@ -31,7 +31,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { useAppStore } from '@/lib/store'
-import { extractItems } from '@/lib/api'
+import { extractItems, authFetch } from '@/lib/api'
 import SmartAddressForm from '@/components/shared/SmartAddressForm'
 import { packSmartAddress, unpackSmartAddress, type SmartAddressData } from '@/lib/bangladesh-address'
 import { toast } from 'sonner'
@@ -50,7 +50,11 @@ interface OrderSummary {
   id: string
   orderNumber: string
   total: number
+  totalAmount?: number
   status: string
+  orderStatus?: string
+  paymentMethod?: string
+  paymentStatus?: string
   createdAt: string
   items: number
 }
@@ -186,18 +190,28 @@ export default function ProfilePage() {
       return
     }
     if (user?.id) {
-      fetch(`/api/addresses?userId=${user.id}`)
+      authFetch(`/api/addresses?userId=${user.id}`)
         .then((r) => r.json())
         .then((data) => {
           setAddresses(extractItems<Address>(data))
         })
         .catch(() => {})
 
-      fetch(`/api/orders?userId=${user.id}&limit=5`)
+      authFetch(`/api/orders?userId=${user.id}&limit=5`)
         .then((r) => r.json())
         .then((data) => {
-          const items = extractItems<OrderSummary>(data)
-          setRecentOrders(items)
+          const items = extractItems<any>(data)
+          const mapped: OrderSummary[] = items.map((o) => ({
+            id: o.id,
+            orderNumber: o.orderNumber || o.id?.slice(-8) || '',
+            total: o.totalAmount ?? o.total ?? 0,
+            status: o.orderStatus ?? o.status ?? 'pending',
+            paymentMethod: o.paymentMethod || 'cod',
+            paymentStatus: o.paymentStatus || 'pending',
+            createdAt: o.createdAt || new Date().toISOString(),
+            items: Array.isArray(o.items) ? o.items.length : (typeof o.items === 'number' ? o.items : 0),
+          }))
+          setRecentOrders(mapped)
         })
         .catch(() => {})
     }
@@ -871,7 +885,7 @@ export default function ProfilePage() {
                       animate="animate"
                       className="space-y-3"
                     >
-                      {recentOrders.slice(0, 3).map((order) => (
+                      {recentOrders.slice(0, 5).map((order) => (
                         <motion.div
                           key={order.id}
                           variants={staggerItem}
@@ -903,13 +917,13 @@ export default function ProfilePage() {
                           </div>
                         </motion.div>
                       ))}
-                      {recentOrders.length > 3 && (
+                      {recentOrders.length > 0 && (
                         <Button
                           variant="outline"
                           className="w-full rounded-xl mt-2"
                           onClick={() => navigate('orders')}
                         >
-                          View All {recentOrders.length} Orders <ChevronRight className="h-4 w-4 ml-1" />
+                          View All Orders <ChevronRight className="h-4 w-4 ml-1" />
                         </Button>
                       )}
                     </motion.div>

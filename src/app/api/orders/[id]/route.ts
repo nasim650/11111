@@ -6,20 +6,23 @@ import { createAuditLog } from '@/lib/audit'
 // Order tracking timeline steps
 const TRACKING_STEPS = [
   { key: 'pending', label: 'Order Placed', description: 'Your order has been placed successfully', step: 1 },
-  { key: 'processing', label: 'Processing', description: 'Your order is being prepared', step: 2 },
-  { key: 'shipped', label: 'Shipped', description: 'Your order has been shipped', step: 3 },
-  { key: 'out_for_delivery', label: 'Out for Delivery', description: 'Your order is out for delivery', step: 4 },
-  { key: 'delivered', label: 'Delivered', description: 'Your order has been delivered', step: 5 },
+  { key: 'confirmed', label: 'Confirmed', description: 'Your order has been confirmed', step: 2 },
+  { key: 'processing', label: 'Processing', description: 'Your order is being prepared', step: 3 },
+  { key: 'packed', label: 'Packed', description: 'Your order has been packed', step: 4 },
+  { key: 'ready_to_ship', label: 'Ready to Ship', description: 'Your order is ready for courier pickup', step: 5 },
+  { key: 'shipped', label: 'Shipped', description: 'Your order has been shipped', step: 6 },
+  { key: 'delivered', label: 'Delivered', description: 'Your order has been delivered', step: 7 },
 ] as const
 
-type OrderStatus = 'pending' | 'confirmed' | 'processing' | 'shipped' | 'out_for_delivery' | 'delivered' | 'cancelled' | 'returned'
+type OrderStatus = 'pending' | 'confirmed' | 'processing' | 'packed' | 'ready_to_ship' | 'shipped' | 'delivered' | 'cancelled' | 'returned'
 
 const ALLOWED_ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   pending: ['confirmed', 'cancelled'],
   confirmed: ['processing', 'cancelled'],
-  processing: ['shipped', 'cancelled'],
-  shipped: ['out_for_delivery', 'returned'],
-  out_for_delivery: ['delivered', 'returned'],
+  processing: ['packed', 'cancelled'],
+  packed: ['ready_to_ship', 'cancelled'],
+  ready_to_ship: ['shipped', 'cancelled'],
+  shipped: ['delivered', 'returned'],
   delivered: ['returned'],
   cancelled: [],
   returned: [],
@@ -30,9 +33,10 @@ function getOrderStep(status: string): number {
     pending: 1,
     confirmed: 1,
     processing: 2,
-    shipped: 3,
-    out_for_delivery: 4,
-    delivered: 5,
+    packed: 3,
+    ready_to_ship: 4,
+    shipped: 5,
+    delivered: 6,
     cancelled: 0,
     returned: 0,
   }
@@ -167,7 +171,7 @@ export async function GET(
     const trackingDetails = {
       currentStatus: order.orderStatus,
       currentStep: getOrderStep(order.orderStatus),
-      totalSteps: 5,
+      totalSteps: TRACKING_STEPS.length,
       timeline,
       estimatedDelivery,
       trackingNumber: order.orderNumber,
@@ -250,24 +254,49 @@ export async function PUT(
     if (paymentStatus !== undefined) data.paymentStatus = paymentStatus
     if (orderNote !== undefined) data.orderNote = orderNote
 
-    const order = await db.order.update({
-      where: { id },
-      data,
-      include: { items: true, deliveryLabel: true },
-    })
-
-    // Create status history entry when status changes
-    if (orderStatus && orderStatus !== currentOrder.orderStatus) {
-      const adminId = await getUserIdFromRequest(request)
-      await db.orderStatusHistory.create({
-        data: {
-          orderId: id,
-          status: orderStatus,
-          note: `Status changed from ${currentOrder.orderStatus} to ${orderStatus}`,
-          changedBy: adminId || null,
-        },
+    const adminId = await getUserIdFromRequest(request)
+    const order = await db.$transaction(async (tx) => {
+      const updatedOrder = await tx.order.update({
+        where: { id },
+        data,
+        include: { items: true, deliveryLabel: true },
       })
-    }
+
+      if (orderStatus && orderStatus !== currentOrder.orderStatus) {
+        await tx.orderStatusHistory.create({
+          data: {
+            orderId: id,
+            status: orderStatus,
+            note: `Status changed from ${currentOrder.orderStatus} to ${orderStatus}`,
+            changedBy: adminId || null,
+          },
+        })
+      }
+
+      if (orderStatus === 'cancelled' && currentOrder.orderStatus !== 'cancelled') {
+        for (const item of currentOrder.items) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { stock: { increment: item.quantity } },
+          })
+        }
+        if (currentOrder.couponCode) {
+          await tx.coupon.updateMany({
+            where: { code: currentOrder.couponCode, usedCount: { gt: 0 } },
+            data: { usedCount: { decrement: 1 } },
+          })
+        }
+      }
+
+      if (orderStatus && updatedOrder.deliveryLabel) {
+        await tx.deliveryLabel.update({
+          where: { orderId: id },
+          data: { paymentStatus: updatedOrder.paymentStatus },
+        })
+      }
+
+      return updatedOrder
+    })
 
     // ─── Auto-earn loyalty points when order is delivered ──────────────────
     if (orderStatus === 'delivered' && currentOrder.orderStatus !== 'delivered' && currentOrder.userId) {
@@ -347,24 +376,7 @@ export async function PUT(
       }
     }
 
-    // Restore stock when order is cancelled
-    if (orderStatus === 'cancelled' && currentOrder.orderStatus !== 'cancelled') {
-      for (const item of currentOrder.items) {
-        await db.product.update({
-          where: { id: item.productId },
-          data: { stock: { increment: item.quantity } }
-        })
-      }
-      if (currentOrder.couponCode) {
-        await db.coupon.updateMany({
-          where: { code: currentOrder.couponCode, usedCount: { gt: 0 } },
-          data: { usedCount: { decrement: 1 } },
-        })
-      }
-    }
-
     // Audit log
-    const adminId = await getUserIdFromRequest(request)
     await createAuditLog({
       adminId: adminId ?? undefined,
       action: 'update',
@@ -373,14 +385,6 @@ export async function PUT(
       newData: { orderStatus: order.orderStatus, paymentStatus: order.paymentStatus, orderNote: order.orderNote },
     })
 
-    // Update delivery label if order status changes
-    if (orderStatus && order.deliveryLabel) {
-      await db.deliveryLabel.update({
-        where: { orderId: id },
-        data: { paymentStatus: order.paymentStatus },
-      })
-    }
-
     // Build tracking details for the updated order
     const timeline = buildTimeline(order.orderStatus as OrderStatus, order.createdAt)
     const estimatedDelivery = getEstimatedDeliveryDate(order.createdAt)
@@ -388,7 +392,7 @@ export async function PUT(
     const trackingDetails = {
       currentStatus: order.orderStatus,
       currentStep: getOrderStep(order.orderStatus),
-      totalSteps: 5,
+      totalSteps: TRACKING_STEPS.length,
       timeline,
       estimatedDelivery,
       trackingNumber: order.orderNumber,

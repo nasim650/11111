@@ -39,6 +39,7 @@ export type PageName =
   | 'admin-media'
   | 'admin-payments'
   | 'admin-contact-messages'
+  | 'admin-homepage-content'
 
 export interface CartItem {
   id: string
@@ -156,7 +157,7 @@ export interface AppStore {
   isAuthenticated: boolean
   accessToken: string | null
   login: (credentials: { identifier?: string; email?: string; phone?: string; password: string }) => Promise<void>
-  register: (data: { name?: string; identifier?: string; email?: string; phone?: string; password: string }) => Promise<void>
+  register: (data: { name?: string; identifier?: string; email?: string; phone?: string; password: string; otpCode?: string }) => Promise<{ requiresOtp?: boolean; phone?: string; expiresInSeconds?: number; claimProfile?: boolean; message?: string; user?: User; token?: string } | void>
   logout: () => void
   setUser: (user: User | null) => void
   loadUser: () => void
@@ -289,6 +290,121 @@ const defaultSiteConfig: SiteConfig = {
   homepagePromoText: '100% Authentic Bangladeshi Products',
 }
 
+// ─── Router Integration ───────────────────────────────────────────────────────
+
+export type AppRouterInstance = {
+  push: (href: string) => void
+  replace?: (href: string) => void
+}
+
+let _appRouter: AppRouterInstance | null = null
+
+export function setAppRouter(router: AppRouterInstance | null) {
+  _appRouter = router
+}
+
+export function getAppRouter(): AppRouterInstance | null {
+  return _appRouter
+}
+
+export function getUrlForPage(page: PageName, params: Record<string, unknown> = {}): string {
+  switch (page) {
+    case 'home':
+      return '/'
+    case 'products': {
+      const q = new URLSearchParams()
+      if (params.category) {
+        if (params.subcategory) {
+          q.set('category', String(params.category))
+          q.set('subcategory', String(params.subcategory))
+          return `/products?${q.toString()}`
+        }
+        return `/categories/${encodeURIComponent(String(params.category))}`
+      }
+      if (params.search) {
+        q.set('search', String(params.search))
+      }
+      if (params.sort) {
+        q.set('sort', String(params.sort))
+      }
+      const qs = q.toString()
+      return qs ? `/products?${qs}` : '/products'
+    }
+    case 'product-detail': {
+      const slug = params.slug || params.id
+      return slug ? `/products/${encodeURIComponent(String(slug))}` : '/products'
+    }
+    case 'cart':
+      return '/cart'
+    case 'checkout':
+      return '/checkout'
+    case 'login':
+      return '/login'
+    case 'register':
+      return '/register'
+    case 'forgot-password':
+      return '/forgot-password'
+    case 'profile':
+      return '/profile'
+    case 'orders':
+      return '/orders'
+    case 'order-detail': {
+      const id = params.orderNumber || params.id
+      return id ? `/orders/${encodeURIComponent(String(id))}` : '/orders'
+    }
+    case 'order-confirmation': {
+      const id = params.orderNumber || params.id || params.orderId
+      return id ? `/orders/${encodeURIComponent(String(id))}?confirmed=true` : '/orders'
+    }
+    case 'order-tracking':
+      return '/orders'
+    case 'wishlist':
+      return '/wishlist'
+    case 'contact':
+      return '/contact'
+    case 'terms':
+      return '/terms'
+    case 'privacy':
+      return '/privacy'
+    case 'return-policy':
+      return '/return-policy'
+    case 'delivery-policy':
+      return '/delivery-policy'
+    case 'admin-dashboard':
+      return '/admin/dashboard'
+    case 'admin-products':
+      return '/admin/products'
+    case 'admin-categories':
+      return '/admin/categories'
+    case 'admin-orders':
+      return '/admin/orders'
+    case 'admin-customers':
+      return '/admin/customers'
+    case 'admin-reviews':
+      return '/admin/reviews'
+    case 'admin-coupons':
+      return '/admin/coupons'
+    case 'admin-banners':
+      return '/admin/banners'
+    case 'admin-policy-pages':
+      return '/admin/policy-pages'
+    case 'admin-settings':
+      return '/admin/settings'
+    case 'admin-media':
+      return '/admin/media'
+    case 'admin-payments':
+      return '/admin/payments'
+    case 'admin-contact-messages':
+      return '/admin/contact-messages'
+    case 'admin-homepage-content':
+      return '/admin/homepage-content'
+    case 'admin-flash-sale':
+      return '/admin/flash-sale'
+    default:
+      return '/'
+  }
+}
+
 // ─── Store Implementation ─────────────────────────────────────────────────────
 
 // Module-level flag to prevent persist middleware from writing before rehydration
@@ -303,8 +419,20 @@ export const useAppStore = create<AppStore>()(
 
       navigate: (page, params = {}) => {
         set({ currentPage: page, pageParams: params })
-        if (typeof window !== 'undefined') {
-          window.scrollTo({ top: 0, behavior: 'smooth' })
+        if (typeof window !== 'undefined' || _appRouter) {
+          const targetUrl = getUrlForPage(page, params)
+          const currentPath = typeof window !== 'undefined' ? window.location.pathname + window.location.search : ''
+
+          if (targetUrl && targetUrl !== currentPath) {
+            if (_appRouter) {
+              _appRouter.push(targetUrl)
+            } else if (typeof window !== 'undefined') {
+              window.location.href = targetUrl
+            }
+          }
+          if (typeof window !== 'undefined') {
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          }
         }
       },
 
@@ -345,22 +473,25 @@ export const useAppStore = create<AppStore>()(
           body: JSON.stringify(registerData),
         })
 
+        const data = await res.json()
         if (!res.ok) {
-          const data = await res.json()
           throw new Error(data.error || 'Registration failed')
         }
 
-        const data = await res.json()
+        // If Step 1 requires OTP verification, do NOT set authenticated state yet.
+        if (data.data?.requiresOtp) {
+          return data.data
+        }
+
         const user = (data.data?.user || data.user) as User
         const token = data.data?.token || data.accessToken || null
-        set({ user, accessToken: token, isAuthenticated: true })
+        if (user && token) {
+          set({ user, accessToken: token, isAuthenticated: true })
+          await get().loadCart()
+          await get().loadWishlist()
+        }
 
-        // Persist user and token for loadUser
-        // Removed manual localStorage set, Zustand persist handles this
-
-        // After registration, reload cart and wishlist
-        await get().loadCart()
-        await get().loadWishlist()
+        return data.data
       },
 
       logout: () => {
@@ -1002,11 +1133,17 @@ export const useAppStore = create<AppStore>()(
               twitter: configMap.twitter || defaultSiteConfig.socialLinks.twitter,
               youtube: configMap.youtube || defaultSiteConfig.socialLinks.youtube,
             },
-            freeShippingThreshold: Number(configMap.free_delivery_min) || defaultSiteConfig.freeShippingThreshold,
-            shippingCharge: Number(configMap.delivery_charge) || defaultSiteConfig.shippingCharge,
+            freeShippingThreshold: Number(configMap.freeShippingThreshold || configMap.free_shipping_threshold || configMap.free_delivery_min) || defaultSiteConfig.freeShippingThreshold,
+            shippingCharge: Number(configMap.shippingCharge || configMap.standard_delivery_charge || configMap.delivery_charge) || defaultSiteConfig.shippingCharge,
             taxRate: Number(configMap.taxRate) || defaultSiteConfig.taxRate,
-            enableCod: configMap.cod_enabled === 'true' || defaultSiteConfig.enableCod,
-            enableOnlinePayment: configMap.enableOnlinePayment === 'true' || defaultSiteConfig.enableOnlinePayment,
+            enableCod: (() => {
+              const val = configMap.enableCod ?? configMap.cod_enabled ?? configMap.enable_cod
+              return val !== undefined ? val === 'true' : defaultSiteConfig.enableCod
+            })(),
+            enableOnlinePayment: (() => {
+              const val = configMap.enableOnlinePayment ?? configMap.online_payment_enabled ?? configMap.enable_online_payment
+              return val !== undefined ? val === 'true' : defaultSiteConfig.enableOnlinePayment
+            })(),
             minOrderAmount: Number(configMap.minOrderAmount) || defaultSiteConfig.minOrderAmount,
             returnWindowDays: Number(configMap.returnWindowDays) || defaultSiteConfig.returnWindowDays,
             deliveryZones: configMap.deliveryZones ? configMap.deliveryZones.split(',').map((z: string) => z.trim()) : defaultSiteConfig.deliveryZones,
@@ -1075,8 +1212,6 @@ export const useAppStore = create<AppStore>()(
         isAuthenticated: state.isAuthenticated,
         cartItems: state.cartItems,
         wishlistItems: state.wishlistItems,
-        currentPage: state.currentPage,
-        pageParams: state.pageParams,
         selectedCategory: state.selectedCategory,
         compareProducts: state.compareProducts,
         recentlyViewed: state.recentlyViewed,
