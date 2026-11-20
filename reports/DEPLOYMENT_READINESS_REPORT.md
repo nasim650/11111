@@ -8,6 +8,23 @@
 **Verification date:** 2026-11-20
 **Method:** read-only browser and GET requests only. No login, registration, form submission, OTP, SMS, payment, cart mutation, database write, or Production action was performed.
 
+## Next-phase isolation verification
+
+**Verification date:** 2026-11-20
+**Scope:** isolated test-resource provisioning and safe control-plane checks only. No Production resource was reset, migrated, flushed, or overwritten.
+
+| Area | Result | Evidence |
+|---|---|---|
+| Dedicated Neon test project | PASS | Neon project `Khati_Khadyo_TEST` (`square-bird-76303064`) is separate from `Khati_Khadyo`, in AWS Asia Pacific 1 (Singapore), with a single empty `production` branch. |
+| Neon test database identity | PASS | Neon console identified the project and branch directly; the test branch showed 0 kB storage and no tables/data. |
+| Neon migration/write readiness | BLOCKED | The test branch's Postgres compute was shown as `SUSPENDED`; SQL Editor had no usable query execution state. No migration or write was attempted. |
+| Preview `REDIS_URL` scope separation | PASS | Vercel environment settings now show the previous `REDIS_URL` retained for Production and Development, plus a separate secret entry scoped to Preview branch `phase-1b-implementation`. |
+| Preview Redis target identity | BLOCKED | The Preview secret value is intentionally not exposed; the target could not be independently matched to the new Upstash resource without revealing a secret. Do not treat scope separation alone as connection proof. |
+| Dedicated Upstash test database | PASS | Upstash database `khati-khadyo-test` is separate, empty at creation, Free plan, N. Virginia (`us-east-1`). |
+| Redis command, expiry, and cleanup test | PASS | On the dedicated Upstash CLI: `SET` returned `OK`, `GET` returned the expected test value, `EXPIRE` returned `1`, `TTL` returned a positive value, and `DEL` returned `1`. No flush or shared-resource mutation was used. |
+| Redis unavailable/fallback behavior | NOT TESTED | No application Redis outage was induced. |
+| Preview redeployment after env changes | BLOCKED | Environment changes require a new deployment; no redeploy was initiated while the isolated Neon target and Preview Redis value remain unverified. |
+
 ## Preview deployment
 
 | Area | Result | Evidence |
