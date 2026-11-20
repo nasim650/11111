@@ -59,7 +59,7 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from '@/components/ui/accordion'
-import { useAppStore, type PageName } from '@/lib/store'
+import { useAppStore, setAppRouter, type PageName } from '@/lib/store'
 import { formatPrice } from '@/lib/utils'
 import { extractItems } from '@/lib/api'
 
@@ -214,8 +214,11 @@ export default function Navbar() {
   // and differ between server (0) and client (persisted). Render 0 on first paint
   // to keep SSR HTML identical to the first client render, then swap to real values.
   const [mounted, setMounted] = useState(false)
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { setMounted(true) }, [])
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true)
+    setAppRouter(router)
+  }, [router])
 
   const searchRef = useRef<HTMLDivElement>(null)
   const megaMenuTimeoutRef = useRef<NodeJS.Timeout | null>(null)

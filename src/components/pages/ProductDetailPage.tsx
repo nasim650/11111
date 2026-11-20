@@ -892,20 +892,43 @@ export default function ProductDetailPage({ initialProduct }: { initialProduct?:
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem>
-                <BreadcrumbLink onClick={() => navigate('home')} className="cursor-pointer flex items-center gap-1 text-emerald-700 dark:text-emerald-400 hover:text-emerald-800">
+                <BreadcrumbLink
+                  href="/"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    navigate('home')
+                  }}
+                  className="cursor-pointer flex items-center gap-1 text-emerald-700 dark:text-emerald-400 hover:text-emerald-800"
+                >
                   <Home className="h-3.5 w-3.5" />
                   Home
                 </BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator />
               <BreadcrumbItem>
-                <BreadcrumbLink onClick={() => navigate('products')} className="cursor-pointer text-emerald-700 dark:text-emerald-400 hover:text-emerald-800">Products</BreadcrumbLink>
+                <BreadcrumbLink
+                  href="/products"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    navigate('products')
+                  }}
+                  className="cursor-pointer text-emerald-700 dark:text-emerald-400 hover:text-emerald-800"
+                >
+                  Products
+                </BreadcrumbLink>
               </BreadcrumbItem>
               {product.category && (
                 <>
                   <BreadcrumbSeparator />
                   <BreadcrumbItem>
-                    <BreadcrumbLink onClick={() => navigate('products', { category: product.category!.slug })} className="cursor-pointer text-emerald-700 dark:text-emerald-400 hover:text-emerald-800">
+                    <BreadcrumbLink
+                      href={`/categories/${product.category.slug}`}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        navigate('products', { category: product.category!.slug })
+                      }}
+                      className="cursor-pointer text-emerald-700 dark:text-emerald-400 hover:text-emerald-800"
+                    >
                       {product.category.name}
                     </BreadcrumbLink>
                   </BreadcrumbItem>

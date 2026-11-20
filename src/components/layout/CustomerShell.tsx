@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, ReactNode } from 'react'
-import { useAppStore } from '@/lib/store'
+import { useRouter } from 'next/navigation'
+import { useAppStore, setAppRouter } from '@/lib/store'
 import Navbar from '@/components/layout/Navbar'
 import Footer from '@/components/layout/Footer'
 import CartSidebar from '@/components/shared/CartSidebar'
@@ -17,10 +18,15 @@ export interface CustomerShellProps {
  * Common Shell for customer-facing pages (Navbar, Content, Footer, Overlays, and Store Initialization).
  */
 export default function CustomerShell({ children }: CustomerShellProps) {
+  const router = useRouter()
   const loadUser = useAppStore((s) => s.loadUser)
   const loadCart = useAppStore((s) => s.loadCart)
   const loadWishlist = useAppStore((s) => s.loadWishlist)
   const loadSiteConfig = useAppStore((s) => s.loadSiteConfig)
+
+  useEffect(() => {
+    setAppRouter(router)
+  }, [router])
 
   useEffect(() => {
     loadUser()

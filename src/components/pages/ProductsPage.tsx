@@ -162,16 +162,39 @@ export default function ProductsPage({ initialCategorySlug }: { initialCategoryS
 
   // ── Initialize from page params or props ──
   useEffect(() => {
-    const categoryToSelect = initialCategorySlug || pageParams?.category
+    let categoryToSelect = initialCategorySlug || pageParams?.category
+    let subcategoryToSelect = pageParams?.subcategory
+    let sortToSelect = pageParams?.sort
+    let searchToSelect = pageParams?.search || searchQuery
+
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search)
+      if (!categoryToSelect && urlParams.get('category')) {
+        categoryToSelect = urlParams.get('category')!
+      }
+      if (!subcategoryToSelect && urlParams.get('subcategory')) {
+        subcategoryToSelect = urlParams.get('subcategory')!
+      }
+      if (!sortToSelect && urlParams.get('sort')) {
+        sortToSelect = urlParams.get('sort')!
+      }
+      if (!searchToSelect && urlParams.get('search')) {
+        searchToSelect = urlParams.get('search')!
+      }
+    }
+
     if (categoryToSelect) {
       setSelectedCategories([String(categoryToSelect)])
       setSelectedCategory(String(categoryToSelect))
     }
-    if (pageParams?.sort) {
-      setSort(String(pageParams.sort))
+    if (subcategoryToSelect) {
+      setSelectedSubcategories([String(subcategoryToSelect)])
     }
-    if (pageParams?.search || searchQuery) {
-      const q = String(pageParams.search || searchQuery)
+    if (sortToSelect) {
+      setSort(String(sortToSelect))
+    }
+    if (searchToSelect) {
+      const q = String(searchToSelect)
       setSearchInput(q)
       setSearchQuery(q)
     }

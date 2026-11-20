@@ -290,6 +290,91 @@ const defaultSiteConfig: SiteConfig = {
   homepagePromoText: '100% Authentic Bangladeshi Products',
 }
 
+// ─── Router Integration ───────────────────────────────────────────────────────
+
+export type AppRouterInstance = {
+  push: (href: string) => void
+  replace?: (href: string) => void
+}
+
+let _appRouter: AppRouterInstance | null = null
+
+export function setAppRouter(router: AppRouterInstance | null) {
+  _appRouter = router
+}
+
+export function getAppRouter(): AppRouterInstance | null {
+  return _appRouter
+}
+
+export function getUrlForPage(page: PageName, params: Record<string, unknown> = {}): string {
+  switch (page) {
+    case 'home':
+      return '/'
+    case 'products': {
+      const q = new URLSearchParams()
+      if (params.category) {
+        if (params.subcategory) {
+          q.set('category', String(params.category))
+          q.set('subcategory', String(params.subcategory))
+          return `/products?${q.toString()}`
+        }
+        return `/categories/${encodeURIComponent(String(params.category))}`
+      }
+      if (params.search) {
+        q.set('search', String(params.search))
+      }
+      if (params.sort) {
+        q.set('sort', String(params.sort))
+      }
+      const qs = q.toString()
+      return qs ? `/products?${qs}` : '/products'
+    }
+    case 'product-detail': {
+      const slug = params.slug || params.id
+      return slug ? `/products/${encodeURIComponent(String(slug))}` : '/products'
+    }
+    case 'cart':
+      return '/cart'
+    case 'checkout':
+      return '/checkout'
+    case 'login':
+      return '/login'
+    case 'register':
+      return '/register'
+    case 'forgot-password':
+      return '/forgot-password'
+    case 'profile':
+      return '/profile'
+    case 'orders':
+      return '/orders'
+    case 'order-detail': {
+      const id = params.orderNumber || params.id
+      return id ? `/orders/${encodeURIComponent(String(id))}` : '/orders'
+    }
+    case 'order-confirmation': {
+      const id = params.orderNumber || params.id || params.orderId
+      return id ? `/orders/${encodeURIComponent(String(id))}?confirmed=true` : '/orders'
+    }
+    case 'order-tracking':
+      return '/orders'
+    case 'wishlist':
+      return '/wishlist'
+    case 'contact':
+      return '/contact'
+    case 'terms':
+      return '/terms'
+    case 'privacy':
+      return '/privacy'
+    case 'return-policy':
+      return '/return-policy'
+    case 'delivery-policy':
+      return '/delivery-policy'
+    default:
+      return '/'
+  }
+}
+
 // ─── Store Implementation ─────────────────────────────────────────────────────
 
 // Module-level flag to prevent persist middleware from writing before rehydration
@@ -304,8 +389,20 @@ export const useAppStore = create<AppStore>()(
 
       navigate: (page, params = {}) => {
         set({ currentPage: page, pageParams: params })
-        if (typeof window !== 'undefined') {
-          window.scrollTo({ top: 0, behavior: 'smooth' })
+        if (typeof window !== 'undefined' || _appRouter) {
+          const targetUrl = getUrlForPage(page, params)
+          const currentPath = typeof window !== 'undefined' ? window.location.pathname + window.location.search : ''
+
+          if (targetUrl && targetUrl !== currentPath) {
+            if (_appRouter) {
+              _appRouter.push(targetUrl)
+            } else if (typeof window !== 'undefined') {
+              window.location.href = targetUrl
+            }
+          }
+          if (typeof window !== 'undefined') {
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          }
         }
       },
 
@@ -1085,8 +1182,6 @@ export const useAppStore = create<AppStore>()(
         isAuthenticated: state.isAuthenticated,
         cartItems: state.cartItems,
         wishlistItems: state.wishlistItems,
-        currentPage: state.currentPage,
-        pageParams: state.pageParams,
         selectedCategory: state.selectedCategory,
         compareProducts: state.compareProducts,
         recentlyViewed: state.recentlyViewed,

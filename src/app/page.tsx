@@ -2,7 +2,7 @@
 
 import { useEffect, lazy, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAppStore, type PageName } from '@/lib/store'
+import { useAppStore, setAppRouter, type PageName } from '@/lib/store'
 import { toast } from 'sonner'
 
 // Eagerly load HomePage for instant first paint
@@ -130,6 +130,20 @@ export default function Home() {
   const loadCart = useAppStore((s) => s.loadCart)
   const loadWishlist = useAppStore((s) => s.loadWishlist)
   const loadSiteConfig = useAppStore((s) => s.loadSiteConfig)
+
+  // Register app router for navigation synchronization
+  useEffect(() => {
+    setAppRouter(router)
+  }, [router])
+
+  // Reset currentPage to 'home' when directly accessing the root path '/' if not on admin
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.pathname === '/' && !adminPages.has(currentPage)) {
+      if (currentPage !== 'home') {
+        useAppStore.setState({ currentPage: 'home', pageParams: {} })
+      }
+    }
+  }, [currentPage])
 
   // Load initial data after mount
   useEffect(() => {
