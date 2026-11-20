@@ -392,7 +392,7 @@ export async function PUT(
     const trackingDetails = {
       currentStatus: order.orderStatus,
       currentStep: getOrderStep(order.orderStatus),
-      totalSteps: 5,
+      totalSteps: TRACKING_STEPS.length,
       timeline,
       estimatedDelivery,
       trackingNumber: order.orderNumber,

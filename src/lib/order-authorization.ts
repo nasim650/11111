@@ -89,15 +89,6 @@ export async function getOrderForUser(
                 select: { url: true, alt: true },
               },
             },
-            statusHistory: {
-              orderBy: { createdAt: 'asc' },
-              select: {
-                id: true,
-                status: true,
-                note: true,
-                createdAt: true,
-              },
-            },
           },
         },
       },
@@ -116,6 +107,15 @@ export async function getOrderForUser(
           name: true,
           email: true,
           phone: true,
+        },
+      },
+      statusHistory: {
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          status: true,
+          note: true,
+          createdAt: true,
         },
       },
     },

@@ -36,17 +36,31 @@ Customer order access is ownership-checked server-side. Guest access uses the ex
 
 The existing customer order page provides browser print/save invoice behavior, and the admin order UI provides printable delivery-label output. No separate server-generated PDF receipt endpoint was found. This remains a product limitation rather than an invented test success.
 
+## Post-fix verification
+
+- The isolated SQLite-backed checkout workflow completed all 7 `orders-create-hardening` tests:
+  authenticated COD checkout, smart address persistence, guest checkout, stock rollback, duplicate guest identity handling, guest verification rejection, and invalid-user handling.
+- The customer order authorization suite completed all 11 tests, including ownership isolation, guest access, payment callback safety, and secret filtering.
+- The focused lifecycle test completed successfully for `confirmed`, `processing`, `packed`, `ready_to_ship`, `shipped`, and `delivered`; each status was independently retrieved through the customer-facing order API.
+- The production Next.js build completed successfully.
+- Security header verification completed successfully.
+- The full test command executed its assertions successfully through the available suites, but the process did not exit because existing test files leave Prisma clients open; the timeout wrapper therefore returned exit code 142. This is a test-runner cleanup issue, not a reported assertion failure.
+
 ## Validation
 
 - TypeScript: PASS
 - ESLint on changed files: PASS
 - Prisma schema validation: PASS
 - Diff whitespace check: PASS
-- Existing order/security suites: multiple tests passed before the repository-wide command stopped producing output and was terminated.
-- Full repository test completion: BLOCKED; the command did not terminate cleanly in this environment.
-- Live PostgreSQL connectivity and write workflow: BLOCKED; no isolated database was supplied.
-- Production build and Playwright E2E: NOT RUN.
+- Checkout integration tests: PASS (7 assertions)
+- Customer order authorization tests: PASS (11 assertions)
+- Admin-to-customer lifecycle verification: PASS (6 transitions)
+- Production build: PASS
+- Security header verification: PASS
+- Repository-wide test process exit: BLOCKED by open Prisma handles in existing tests
+- Live PostgreSQL connectivity and write workflow: BLOCKED; Docker is installed but its daemon is unavailable, and no isolated PostgreSQL endpoint was supplied
+- Playwright E2E: NOT RUN; no configured Playwright test command was identified
 
 ## Deployment readiness
 
-**NOT READY FOR DEPLOYMENT** until the full test suite completes, an isolated PostgreSQL integration run passes, and exposed credentials in the local `.env` are rotated.
+**NOT READY FOR DEPLOYMENT** until an isolated PostgreSQL integration run passes and exposed credentials in the local `.env` are rotated. The application-level checkout and lifecycle checks pass against the repository's isolated SQLite test database.
