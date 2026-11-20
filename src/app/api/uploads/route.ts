@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
       // Validate file size
       if (file.size > MAX_FILE_SIZE) {
         return NextResponse.json(
-          { success: false, error: `File "${file.name}" exceeds maximum allowed size of 5MB` },
+          { success: false, error: `File "${file.name}" exceeds maximum allowed size of 50MB` },
           { status: 400 }
         )
       }
