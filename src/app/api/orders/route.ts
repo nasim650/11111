@@ -465,10 +465,46 @@ export async function POST(request: NextRequest) {
 
         // Increment coupon usage if applicable
         if (validatedCouponCode) {
-          await tx.coupon.updateMany({
-            where: { code: validatedCouponCode, isActive: true },
+          const lockedCoupon = await tx.coupon.findUnique({
+            where: { code: validatedCouponCode },
+            select: {
+              isActive: true,
+              validFrom: true,
+              validTo: true,
+              usedCount: true,
+              usageLimit: true,
+            },
+          })
+          const now = new Date()
+          if (
+            !lockedCoupon ||
+            !lockedCoupon.isActive ||
+            lockedCoupon.validFrom > now ||
+            lockedCoupon.validTo < now ||
+            (lockedCoupon.usageLimit !== null && lockedCoupon.usedCount >= lockedCoupon.usageLimit)
+          ) {
+            throw new OrderBusinessError(
+              'Coupon is no longer available',
+              400,
+              'COUPON_UNAVAILABLE'
+            )
+          }
+
+          const usageClaim = await tx.coupon.updateMany({
+            where: {
+              code: validatedCouponCode,
+              isActive: true,
+              usedCount: lockedCoupon.usedCount,
+            },
             data: { usedCount: { increment: 1 } },
           })
+          if (usageClaim.count === 0) {
+            throw new OrderBusinessError(
+              'Coupon was just used by another order',
+              409,
+              'COUPON_CONFLICT'
+            )
+          }
         }
 
         const order = await tx.order.create({
@@ -558,28 +594,38 @@ export async function POST(request: NextRequest) {
 
         // ─── Deduct loyalty points if redeemed at checkout ─────────────────
         if (loyaltyRedeemedPoints > 0 && userId) {
-          const userBalance = await tx.user.findUnique({
+          const balanceUpdate = await tx.user.updateMany({
+            where: {
+              id: userId,
+              loyaltyBalance: { gte: loyaltyRedeemedPoints },
+            },
+            data: {
+              loyaltyBalance: { decrement: loyaltyRedeemedPoints },
+            },
+          })
+
+          if (balanceUpdate.count === 0) {
+            throw new OrderBusinessError(
+              'Insufficient loyalty points',
+              400,
+              'INSUFFICIENT_LOYALTY_POINTS'
+            )
+          }
+
+          const updatedUser = await tx.user.findUniqueOrThrow({
             where: { id: userId },
             select: { loyaltyBalance: true },
           })
-
-          if (userBalance) {
-            const newBalance = userBalance.loyaltyBalance - loyaltyRedeemedPoints
-            await tx.loyaltyPoint.create({
-              data: {
-                userId,
-                points: -loyaltyRedeemedPoints,
-                balance: newBalance,
-                type: 'redeem',
-                description: `Redeemed ${loyaltyRedeemedPoints} points at checkout (৳${loyaltyRedeemedPoints} discount)`,
-                orderId: order.id,
-              },
-            })
-            await tx.user.update({
-              where: { id: userId },
-              data: { loyaltyBalance: newBalance },
-            })
-          }
+          await tx.loyaltyPoint.create({
+            data: {
+              userId,
+              points: -loyaltyRedeemedPoints,
+              balance: updatedUser.loyaltyBalance,
+              type: 'redeem',
+              description: `Redeemed ${loyaltyRedeemedPoints} points at checkout (৳${loyaltyRedeemedPoints} discount)`,
+              orderId: order.id,
+            },
+          })
         }
 
         return order

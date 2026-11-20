@@ -77,19 +77,26 @@ export default function OrderDetailView({
   // Timeline step calculation
   const timelineSteps = [
     { key: 'pending', label: 'Order Placed', desc: 'Received successfully' },
+    { key: 'confirmed', label: 'Confirmed', desc: 'Order confirmed by seller' },
     { key: 'processing', label: 'Processing', desc: 'Preparing authentic items' },
+    { key: 'packed', label: 'Packed', desc: 'Items packed and labelled' },
+    { key: 'ready_to_ship', label: 'Ready to Ship', desc: 'Ready for courier pickup' },
     { key: 'shipped', label: 'Shipped', desc: 'Handed over for delivery' },
     { key: 'delivered', label: 'Delivered', desc: 'Delivered to your address' },
   ]
 
   const getStepStatus = (stepKey: string) => {
     if (isCancelled) return 'cancelled'
-    const stepOrder = ['pending', 'confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered']
+    const stepOrder = ['pending', 'confirmed', 'processing', 'packed', 'ready_to_ship', 'shipped', 'delivered']
     const currentIndex = stepOrder.indexOf(order.orderStatus)
     const targetIndex = stepOrder.indexOf(stepKey)
     if (currentIndex >= targetIndex) return 'completed'
     return 'upcoming'
   }
+
+  const historyByStatus = new Map(
+    order.statusHistory.map((entry) => [entry.status, entry.createdAt])
+  )
 
   const itemsSubtotal = order.items.reduce(
     (sum, item) => sum + item.price * item.quantity,
@@ -223,7 +230,9 @@ export default function OrderDetailView({
                       {step.label}
                     </p>
                     <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">
-                      {step.desc}
+                      {historyByStatus.has(step.key)
+                        ? new Date(historyByStatus.get(step.key)!).toLocaleDateString('en-BD')
+                        : step.desc}
                     </p>
                   </div>
                 )

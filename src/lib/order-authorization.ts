@@ -25,6 +25,12 @@ export interface SafeOrderDetails {
   couponCode: string | null
   createdAt: string
   updatedAt: string
+  statusHistory: Array<{
+    id: string
+    status: string
+    note: string | null
+    createdAt: string
+  }>
   guestName: string | null
   guestPhone: string | null
   guestEmail: string | null
@@ -81,6 +87,15 @@ export async function getOrderForUser(
                 where: { isFeatured: true },
                 take: 1,
                 select: { url: true, alt: true },
+              },
+            },
+            statusHistory: {
+              orderBy: { createdAt: 'asc' },
+              select: {
+                id: true,
+                status: true,
+                note: true,
+                createdAt: true,
               },
             },
           },
@@ -194,6 +209,12 @@ function serializeOrder(order: any): SafeOrderDetails {
     couponCode: order.couponCode || null,
     createdAt: order.createdAt instanceof Date ? order.createdAt.toISOString() : String(order.createdAt),
     updatedAt: order.updatedAt instanceof Date ? order.updatedAt.toISOString() : String(order.updatedAt),
+    statusHistory: (order.statusHistory || []).map((entry: any) => ({
+      id: entry.id,
+      status: entry.status,
+      note: entry.note || null,
+      createdAt: entry.createdAt instanceof Date ? entry.createdAt.toISOString() : String(entry.createdAt),
+    })),
     guestName: order.guestName || null,
     guestPhone: order.guestPhone || null,
     guestEmail: order.guestEmail || null,

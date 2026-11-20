@@ -122,12 +122,6 @@ export async function POST(request: NextRequest) {
 
     const total = Math.round((subtotal + shipping - discountAmount) * 100) / 100
 
-    // Increment coupon usage
-    await db.coupon.update({
-      where: { id: coupon.id },
-      data: { usedCount: { increment: 1 } },
-    })
-
     return NextResponse.json({
       success: true,
       data: {
