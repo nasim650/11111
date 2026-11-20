@@ -2,9 +2,9 @@
 
 ## Verification scope
 
-**Preview URL:** https://11111-ehhh0xxdw-dorim.vercel.app
+**Preview URL:** https://11111-mdzy812in-dorim.vercel.app
 **Branch alias:** https://11111-git-phase-1b-implementation-dorim.vercel.app
-**Commit verified:** `35fed46` (`phase-1b-implementation`)
+**Commit verified:** `c763b59` (`phase-1b-implementation`)
 **Verification date:** 2026-11-20
 **Method:** read-only browser and GET requests only. No login, registration, form submission, OTP, SMS, payment, cart mutation, database write, or Production action was performed.
 
@@ -12,7 +12,7 @@
 
 | Area | Result | Evidence |
 |---|---|---|
-| Vercel deployment status | PASS | Vercel deployment `TmH3b7E5c7JfEZ1T1GhUFr5oWQhP` reported `Ready`; preview returned HTTP 200 for the homepage. |
+| Vercel deployment status | PASS | Vercel deployment for commit `c763b59` reported `Ready`; unique Preview returned HTTP 200 for the homepage. |
 | Application startup | PASS | Homepage rendered with title `Khati Khadyo - Authentic Bangladeshi Food Products`. |
 | Homepage | PASS | Header, footer, navigation, branding, and live catalog content rendered. |
 | Product listing | PASS | `/products` returned HTTP 200 and rendered 16 products, categories, filters, and product links. |
@@ -27,7 +27,7 @@
 | Customer orders | PASS | `/orders` returned HTTP 200 and rendered the unauthenticated login-required state. `/orders/test` redirected to login with a validated next path. |
 | Account/profile | PASS | `/account` rendered the account page; `/profile` returned the login-required UI. |
 | Policy/contact pages | PASS | `/contact`, `/delivery-policy`, `/return-policy`, `/terms`, `/privacy`, and `/privacy-policy` returned HTTP 200. |
-| Admin routes | PASS (protected) | Deployment for `35fed46` returned HTTP 200 for `/admin` and `/admin/dashboard`, then redirected unauthenticated access to `/login?next=%2Fadmin%2Fdashboard`. No admin credentials were submitted. |
+| Admin routes | PASS (protected) | Deployment for `c763b59` returned HTTP 200 for `/admin` and `/admin/dashboard`, then redirected unauthenticated access to `/login?next=%2Fadmin%2Fdashboard`. No admin credentials were submitted. |
 | Image loading | PASS | Primary catalog/product images loaded. The related-product `হিমসাগর আম (Himsagar Mango)` image loaded after its lazy-load viewport trigger (`naturalWidth=400`, `naturalHeight=400`); its asset URL returned HTTP 200. |
 | Browser console/network | BLOCKED | Repeated `https://vercel.live/_next-live/feedback/feedback.js` CSP errors are caused by the Vercel preview feedback overlay being blocked by the application's CSP. The unauthenticated API checks also produced expected 400/401/403 responses. No application 5xx was observed. |
 | Runtime/server errors | PASS | Tested page navigations returned no application 5xx responses. Unknown product/category slugs correctly returned 404 pages. |
@@ -72,7 +72,7 @@ The following changes are present only in the uncommitted local worktree and wer
 
 | Area | Result | Evidence |
 |---|---|---|
-| Canonical admin route integration | PASS | Added protected optional catch-all route for `/admin` and `/admin/dashboard` plus canonical admin URL mappings. Build and deployed Preview include `ƒ /admin/[[...slug]]`; unauthenticated access redirects to login. |
+| Canonical admin route integration | PASS | Added protected optional catch-all route for `/admin` and `/admin/dashboard` plus canonical admin URL mappings. Build and deployed Preview `c763b59` include `ƒ /admin/[[...slug]]`; unauthenticated access redirects to login. |
 | Admin regression coverage | PASS locally | `tests/navigation-and-routes.test.mjs`: 3 passed, 0 failed, natural exit code 0. |
 | Lint | PASS locally | `npm run lint`, exit code 0. |
 | TypeScript | PASS locally | `npx tsc --noEmit`, exit code 0. |
