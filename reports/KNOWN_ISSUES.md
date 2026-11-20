@@ -2,7 +2,7 @@
 
 | Issue | Status | Impact | Evidence / next action |
 |---|---|---|---|
-| Preview admin URLs return 404 | FAIL on deployed Preview | Admin cannot be reached through canonical URLs on commit `4bea600`. | Local protected catch-all route is implemented and included in the build; commit and Preview verification require explicit approval. |
+| Authenticated admin workflow not fully exercised | BLOCKED | Protected `/admin` and `/admin/dashboard` now route correctly, but no approved admin credentials were submitted for dashboard CRUD verification. | Use a safe test admin account after confirming Preview database isolation. |
 | Full test runner does not exit naturally | BLOCKED | CI/readiness cannot prove clean resource teardown. | Full forced-exit run is 167 passed, 0 failed; isolated checkout suite passes 13 tests but leaves an outbound socket after Prisma disconnect. Investigate test-loader/client lifecycle. |
 | Preview database isolation is unknown | BLOCKED | Writes cannot be safely authorized against the current Preview. | Obtain Vercel environment metadata and a dedicated isolated test database before write tests. |
 | Vercel shared environment scope | FAIL / BLOCKED | `DATABASE_URL`, `DIRECT_URL`, `REDIS_URL`, and `JWT_SECRET` are configured for `All Environments`, so Preview/Production separation is not proven. | Create dedicated Preview variables without modifying Production until an approved migration plan is ready. |

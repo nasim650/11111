@@ -52,7 +52,7 @@ The project is suitable for continued development and local verification, but it
 | Cart and COD checkout | PARTIALLY VERIFIED | Routes, transactions, inventory and coupon logic exist; isolated PostgreSQL write verification is blocked. |
 | SSLCommerz payments | PARTIALLY IMPLEMENTED / BLOCKED | Sandbox callback and signature code plus focused tests exist; no external sandbox transaction was initiated. |
 | Orders and status history | PASS locally | Customer/admin lifecycle and authorization tests pass; live database synchronization remains unverified. |
-| Admin dashboard | PASS locally / FAIL on deployed Preview | Existing SPA pages exist and the local protected route integration builds; deployed commit `4bea600` returns 404 for canonical admin URLs. |
+| Admin dashboard | PASS routing / BLOCKED workflow | Existing SPA pages and protected canonical routes are deployed in `35fed46`; authenticated CRUD and media workflows remain unverified without an isolated test account/database. |
 | Homepage/CMS/media | PARTIALLY IMPLEMENTED | Banner, homepage section, policy, FAQ, team, testimonial and media models/routes exist; Cloudinary upload/delete was not live-tested. |
 | Blog | NOT IMPLEMENTED | No blog model, App Router blog route, or blog admin page was found in the current source tree. |
 | Variants/invoices | NOT IMPLEMENTED or DEFERRED | Product variants and a dedicated invoice model/route were not found; existing order print/receipt functionality must be confirmed against the business requirement. |
