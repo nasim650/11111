@@ -14,6 +14,9 @@ const require = createRequire(import.meta.url)
 const { PrismaClient } = require('../prisma/generated/test-client')
 const testDb = new PrismaClient()
 globalThis.prisma = testDb
+test.after(async () => {
+  await testDb.$disconnect()
+})
 
 const { POST: postRegister } = await import('../src/app/api/auth/register/route.ts')
 const { setCloudSmsMockTransport, CloudSmsError } = await import('../src/lib/cloudsmsbd.ts')

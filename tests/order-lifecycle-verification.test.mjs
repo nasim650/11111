@@ -7,6 +7,9 @@ const require = createRequire(import.meta.url)
 const { PrismaClient } = require('../prisma/generated/test-client')
 const testDb = new PrismaClient()
 globalThis.prisma = testDb
+test.after(async () => {
+  await testDb.$disconnect()
+})
 
 process.env.NODE_ENV = 'test'
 process.env.APP_SECRET = 'test-secret-key-at-least-32-chars-long-for-hmac'

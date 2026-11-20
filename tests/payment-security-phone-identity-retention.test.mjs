@@ -44,6 +44,9 @@ const { PrismaClient } = require('../prisma/generated/test-client')
 const testDb = new PrismaClient()
 
 globalThis.prisma = testDb
+test.after(async () => {
+  await testDb.$disconnect()
+})
 
 // Test Environment setup
 process.env.NODE_ENV = 'test'

@@ -20,6 +20,9 @@ test('1. getUrlForPage maps all customer pages and actions to canonical routes',
   assert.equal(getUrlForPage('delivery-policy'), '/delivery-policy')
   assert.equal(getUrlForPage('return-policy'), '/return-policy')
   assert.equal(getUrlForPage('forgot-password'), '/forgot-password')
+  assert.equal(getUrlForPage('admin-dashboard'), '/admin/dashboard')
+  assert.equal(getUrlForPage('admin-products'), '/admin/products')
+  assert.equal(getUrlForPage('admin-homepage-content'), '/admin/homepage-content')
 
   // Products & Category variations
   assert.equal(getUrlForPage('products'), '/products')
@@ -88,6 +91,7 @@ test('3. Verification that required App Router pages exist on filesystem', () =>
     'contact/page.tsx',
     'wishlist/page.tsx',
     'forgot-password/page.tsx',
+    'admin/[[...slug]]/page.tsx',
   ]
 
   for (const rel of requiredRoutes) {

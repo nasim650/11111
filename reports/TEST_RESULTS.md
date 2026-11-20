@@ -12,6 +12,8 @@
 - Lifecycle test: `tests/order-lifecycle-verification.test.mjs`
 - `npm test` with a bounded timeout
 - `npm run lint`
+- `git diff --check`
+- Full test command with explicit `--test-force-exit`
 
 ## Results
 
@@ -23,11 +25,13 @@
 - Checkout integration: **PASS**, 7/7 assertions
 - Customer authorization: **PASS**, 11/11 assertions
 - Lifecycle synchronization: **PASS**, 6/6 transitions
-- Repository lint: **BLOCKED** by existing `Navbar.tsx` hook lint error
-- Full test process: **BLOCKED** by open Prisma handles in existing suites; assertions reached the available tests but the process timed out
+- Repository lint: **PASS**, exit code 0
+- Full forced-exit process: **PASS**, 167 passed, 0 failed, 0 skipped, 0 cancelled, exit code 0
+- Natural full test process: **BLOCKED**; the checkout suite passes 13/13 but remains alive after its summary because of a lingering outbound socket
 - PostgreSQL integration: **BLOCKED**; isolated Neon TEST variables are absent
 - Playwright: **BLOCKED/NOT CONFIGURED**
 
 ## Safety
 
 No production database writes, resets, destructive migrations, external payments, real SMS, or live storage deletions were performed.
+The forced-exit result records assertion success only; it is not evidence of clean resource teardown.

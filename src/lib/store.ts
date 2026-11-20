@@ -370,6 +370,36 @@ export function getUrlForPage(page: PageName, params: Record<string, unknown> = 
       return '/return-policy'
     case 'delivery-policy':
       return '/delivery-policy'
+    case 'admin-dashboard':
+      return '/admin/dashboard'
+    case 'admin-products':
+      return '/admin/products'
+    case 'admin-categories':
+      return '/admin/categories'
+    case 'admin-orders':
+      return '/admin/orders'
+    case 'admin-customers':
+      return '/admin/customers'
+    case 'admin-reviews':
+      return '/admin/reviews'
+    case 'admin-coupons':
+      return '/admin/coupons'
+    case 'admin-banners':
+      return '/admin/banners'
+    case 'admin-policy-pages':
+      return '/admin/policy-pages'
+    case 'admin-settings':
+      return '/admin/settings'
+    case 'admin-media':
+      return '/admin/media'
+    case 'admin-payments':
+      return '/admin/payments'
+    case 'admin-contact-messages':
+      return '/admin/contact-messages'
+    case 'admin-homepage-content':
+      return '/admin/homepage-content'
+    case 'admin-flash-sale':
+      return '/admin/flash-sale'
     default:
       return '/'
   }
