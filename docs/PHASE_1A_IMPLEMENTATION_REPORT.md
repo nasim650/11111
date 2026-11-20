@@ -116,7 +116,7 @@ Phase 1A was executed strictly within safety boundaries without altering custome
 ## 4. Migration & Data Risk Assessment
 
 - **Database Schema Integrity:** Zero schema changes or database migrations were run during Phase 1A. PostgreSQL schema remains 100% untouched.
-- **SQLite Data Retention:** Local SQLite files remain on the local disk and have redundant backups in `1/_archive/database-backups/`.
+- **SQLite Data Retention:** Local SQLite files remain ignored on the local disk; repository-tracked backup copies were removed during the 2026-11-20 cleanup.
 - **Environment Compatibility:** No breaking changes introduced to `.env` or application configuration contracts.
 
 ---

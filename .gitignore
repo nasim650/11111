@@ -12,6 +12,8 @@ node_modules
 
 # testing
 /coverage
+.eslintcache
+.cache/
 
 # next.js
 /.next/
@@ -23,6 +25,8 @@ node_modules
 # misc
 .DS_Store
 *.pem
+*.bak
+*.swp
 
 # debug
 npm-debug.log*

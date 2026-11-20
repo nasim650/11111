@@ -31,6 +31,8 @@ In accordance with the approved Phase 1 Inventory, historical AI-generated task/
 | 13 | `1/prisma/# Source Directory Guidelines.md` | ARCHIVE | `1/_archive/ai-generated-docs-2026-11-01/prisma/# Source Directory Guidelines.md` | Misplaced guideline file in prisma directory; archived preserving relative structure. | 2026-11-01 |
 | 14 | `1/dev.log` | DELETE | N/A | Ephemeral local crash log (untracked by Git, no active process). | 2026-11-01 |
 | 15 | `1/server.log` | DELETE | N/A | Ephemeral local server log (untracked by Git, no active process). | 2026-11-01 |
+| 16 | `1/_archive/database-backups/custom.db.bak` | DELETE | N/A | Local SQLite backup containing development data; not required by application, tests, or deployment and should not remain in Git history. | 2026-11-20 |
+| 17 | `1/_archive/database-backups/dev.db.bak` | DELETE | N/A | Local SQLite backup containing development data; not required by application, tests, or deployment and should not remain in Git history. | 2026-11-20 |
 
 ---
 
