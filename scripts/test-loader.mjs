@@ -6,6 +6,9 @@ export async function resolve(specifier, context, defaultResolve) {
   if (specifier === 'next/server') {
     return defaultResolve('next/server.js', context)
   }
+  if (specifier === 'next/cache') {
+    return defaultResolve('next/cache.js', context)
+  }
   if (specifier.startsWith('@/')) {
     const subpath = specifier.slice(2)
     const filePath = path.resolve('src', subpath + (path.extname(subpath) ? '' : '.ts'))

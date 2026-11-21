@@ -92,6 +92,19 @@ export async function DELETE(
     }
 
     const { id } = await params
+
+    const productCount = await db.product.count({ where: { categoryId: id } })
+    if (productCount > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `এই ক্যাটাগরিতে ${productCount} টি পণ্য যুক্ত আছে। ক্যাটাগরি ডিলিট করার আগে পণ্যগুলো অন্য ক্যাটাগরিতে স্থানান্তর করুন বা ডিলিট করুন। (Cannot delete category with associated products)`,
+          code: 'CATEGORY_HAS_PRODUCTS',
+        },
+        { status: 400 }
+      )
+    }
+
     const category = await db.category.findUnique({
       where: { id },
       select: {

@@ -55,6 +55,13 @@ export async function DELETE(
     }
 
     const { id } = await params
+
+    // Disassociate products from this subcategory so products remain in their parent category
+    await db.product.updateMany({
+      where: { subcategoryId: id },
+      data: { subcategoryId: null },
+    })
+
     const subcategory = await db.subcategory.findUnique({
       where: { id },
       select: { image: true },

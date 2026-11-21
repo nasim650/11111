@@ -209,6 +209,19 @@ export async function DELETE(
     }
 
     const { id } = await params
+
+    const orderItemsCount = await db.orderItem.count({ where: { productId: id } })
+    if (orderItemsCount > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `এই পণ্যটি অতীতে অর্ডারে যুক্ত থাকায় স্থায়ীভাবে ডিলিট করা সম্ভব নয়। অনুগ্রহ করে পণ্যটির স্ট্যাটাস 'inactive' করুন। (Cannot delete product with existing order history. Please set status to inactive instead.)`,
+          code: 'PRODUCT_HAS_ORDERS',
+        },
+        { status: 400 }
+      )
+    }
+
     const product = await db.product.findUnique({
       where: { id },
       select: {

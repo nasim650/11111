@@ -5,7 +5,7 @@ import { csrfGuard, rateLimitOrResponse } from '@/lib/security'
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const csrf = csrfGuard(request)
@@ -15,7 +15,7 @@ export async function PATCH(
     const limited = await rateLimitOrResponse(request, 'homepage-sections-write', 20, 60 * 1000)
     if (limited) return limited
 
-    const { id } = params
+    const { id } = await params
     const body = await request.json()
     const data: Record<string, unknown> = {}
     if (typeof body.title === 'string') data.title = body.title.trim()
@@ -45,7 +45,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const csrf = csrfGuard(request)
@@ -53,7 +53,7 @@ export async function DELETE(
     const role = await getUserRoleFromRequest(request)
     if (!isAdmin(role)) return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 })
 
-    const { id } = params
+    const { id } = await params
     await db.homepageSection.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (error) {

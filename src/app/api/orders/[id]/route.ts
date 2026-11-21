@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'crypto'
 import { db } from '@/lib/db'
 import { getUserRoleFromRequest, getUserIdFromRequest, isAdmin } from '@/lib/utils'
 import { createAuditLog } from '@/lib/audit'
@@ -156,12 +157,35 @@ export async function GET(
       )
     }
 
-    // Non-admin users can only see their own orders
-    if (!isAdmin(role) && order.userId !== userId) {
-      return NextResponse.json(
-        { success: false, error: 'Forbidden' },
-        { status: 403 }
-      )
+    // Non-admin users can only see their own orders or their authorized guest order
+    if (!isAdmin(role)) {
+      const isOwner = Boolean(userId && order.userId && order.userId === userId)
+      let isAuthorizedGuest = false
+
+      if (!isOwner && order.guestAccessTokenHash) {
+        const guestCookieToken =
+          request.cookies.get(`guest_order_${order.orderNumber}`)?.value ||
+          request.cookies.get('guest_order_access')?.value ||
+          request.headers.get('x-guest-order-token')
+
+        if (guestCookieToken) {
+          const receivedHash = crypto.createHash('sha256').update(guestCookieToken).digest('hex')
+          if (
+            receivedHash.length === order.guestAccessTokenHash.length &&
+            crypto.timingSafeEqual(Buffer.from(receivedHash), Buffer.from(order.guestAccessTokenHash)) &&
+            (!order.guestAccessExpiresAt || new Date(order.guestAccessExpiresAt) > new Date())
+          ) {
+            isAuthorizedGuest = true
+          }
+        }
+      }
+
+      if (!isOwner && !isAuthorizedGuest) {
+        return NextResponse.json(
+          { success: false, error: 'Forbidden' },
+          { status: 403 }
+        )
+      }
     }
 
     // Build tracking details

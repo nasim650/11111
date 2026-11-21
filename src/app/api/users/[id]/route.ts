@@ -285,14 +285,50 @@ export async function DELETE(
 ) {
   try {
     const role = await getUserRoleFromRequest(request)
-    if (!isAdmin(role)) {
+    const requestUserId = await getUserIdFromRequest(request)
+    const { id } = await params
+
+    // Allow user to delete their own account, or admin to delete an account
+    if (!isAdmin(role) && requestUserId !== id) {
       return NextResponse.json(
-        { success: false, error: 'Forbidden: Admin access required' },
+        { success: false, error: 'Forbidden' },
         { status: 403 }
       )
     }
 
-    const { id } = await params
+    // Protect last remaining admin from accidental deletion
+    const targetUser = await db.user.findUnique({
+      where: { id },
+      select: { id: true, role: true },
+    })
+
+    if (!targetUser) {
+      return NextResponse.json(
+        { success: false, error: 'User not found' },
+        { status: 404 }
+      )
+    }
+
+    if (targetUser.role === 'admin') {
+      const adminCount = await db.user.count({ where: { role: 'admin', isActive: true } })
+      if (adminCount <= 1) {
+        return NextResponse.json(
+          { success: false, error: 'Cannot delete the only remaining active administrator' },
+          { status: 400 }
+        )
+      }
+    }
+
+    // Preservation of order & financial records under data retention policy:
+    // If the user has orders, unlink them (userId = null) so the financial/order records are preserved.
+    const userOrdersCount = await db.order.count({ where: { userId: id } })
+    if (userOrdersCount > 0) {
+      await db.order.updateMany({
+        where: { userId: id },
+        data: { userId: null },
+      })
+    }
+
     await db.user.delete({ where: { id } })
 
     return NextResponse.json({ success: true, data: null })
